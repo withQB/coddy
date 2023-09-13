@@ -12,7 +12,7 @@ import (
 type HeaderedEvent struct {
 	xtools.PDU
 	Visibility xtools.HistoryVisibility
-	// TODO: Remove this. This is a temporary workaround to store the userID in the syncAPI.
+	// TDO: Remove this. This is a temporary workaround to store the userID in the syncAPI.
 	// 		It really should be the userKey instead.
 	UserID           spec.UserID
 	StateKeyResolved *string

@@ -69,20 +69,20 @@ func (s *Statistics) ForServer(serverName spec.ServerName) *ServerStatistics {
 		s.mutex.Unlock()
 		blacklisted, err := s.DB.IsServerBlacklisted(serverName)
 		if err != nil {
-			logrus.WithError(err).Errorf("Failed to get blacklist entry %q", serverName)
+			logrus.WithError(err).Errorf("failed to get blacklist entry %q", serverName)
 		} else {
 			server.blacklisted.Store(blacklisted)
 		}
 		assumedOffline, err := s.DB.IsServerAssumedOffline(context.Background(), serverName)
 		if err != nil {
-			logrus.WithError(err).Errorf("Failed to get assumed offline entry %q", serverName)
+			logrus.WithError(err).Errorf("failed to get assumed offline entry %q", serverName)
 		} else {
 			server.assumedOffline.Store(assumedOffline)
 		}
 
 		knownRelayServers, err := s.DB.P2PGetRelayServersForServer(context.Background(), serverName)
 		if err != nil {
-			logrus.WithError(err).Errorf("Failed to get relay server list for %q", serverName)
+			logrus.WithError(err).Errorf("failed to get relay server list for %q", serverName)
 		} else {
 			server.relayMutex.Lock()
 			server.knownRelayServers = knownRelayServers
@@ -161,7 +161,7 @@ func (s *ServerStatistics) Success(method SendMethod) {
 		s.successCounter.Inc()
 		if s.blacklisted.Load() && s.statistics.DB != nil {
 			if err := s.statistics.DB.RemoveServerFromBlacklist(s.serverName); err != nil {
-				logrus.WithError(err).Errorf("Failed to remove %q from blacklist", s.serverName)
+				logrus.WithError(err).Errorf("failed to remove %q from blacklist", s.serverName)
 			}
 		}
 
@@ -190,7 +190,7 @@ func (s *ServerStatistics) Failure() (time.Time, bool) {
 			s.assumedOffline.CompareAndSwap(false, true)
 			if s.statistics.DB != nil {
 				if err := s.statistics.DB.SetServerAssumedOffline(context.Background(), s.serverName); err != nil {
-					logrus.WithError(err).Errorf("Failed to set %q as assumed offline", s.serverName)
+					logrus.WithError(err).Errorf("failed to set %q as assumed offline", s.serverName)
 				}
 			}
 		}
@@ -199,7 +199,7 @@ func (s *ServerStatistics) Failure() (time.Time, bool) {
 			s.blacklisted.Store(true)
 			if s.statistics.DB != nil {
 				if err := s.statistics.DB.AddServerToBlacklist(s.serverName); err != nil {
-					logrus.WithError(err).Errorf("Failed to add %q to blacklist", s.serverName)
+					logrus.WithError(err).Errorf("failed to add %q to blacklist", s.serverName)
 				}
 			}
 			s.ClearBackoff()
@@ -326,7 +326,7 @@ func (s *ServerStatistics) AddRelayServers(relayServers []spec.ServerName) {
 
 	err := s.statistics.DB.P2PAddRelayServersForServer(context.Background(), s.serverName, uniqueList)
 	if err != nil {
-		logrus.WithError(err).Errorf("Failed to add relay servers for %q. Servers: %v", s.serverName, uniqueList)
+		logrus.WithError(err).Errorf("failed to add relay servers for %q. Servers: %v", s.serverName, uniqueList)
 		return
 	}
 

@@ -249,7 +249,7 @@ func (s *outputFrameEventsStatements) SelectStateInRange(
 			return nil, nil, err
 		}
 
-		// TODO: Handle redacted events
+		// TDO: Handle redacted events
 		var ev rstypes.HeaderedEvent
 		if err := json.Unmarshal(eventBytes, &ev); err != nil {
 			return nil, nil, err
@@ -498,7 +498,7 @@ func rowsToStreamEvents(rows *sql.Rows) ([]types.StreamEvent, error) {
 		if err := rows.Scan(&eventID, &streamPos, &eventBytes, &sessionID, &excludeFromSync, &txnID, &historyVisibility); err != nil {
 			return nil, err
 		}
-		// TODO: Handle redacted events
+		// TDO: Handle redacted events
 		var ev rstypes.HeaderedEvent
 		if err := json.Unmarshal(eventBytes, &ev); err != nil {
 			return nil, err

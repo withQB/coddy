@@ -40,7 +40,7 @@ type uploadResponse struct {
 // This endpoint involves uploading potentially significant amounts of data to the homeserver.
 // This implementation supports a configurable maximum file size limit in bytes. If a user tries to upload more than this, they will receive an error that their upload is too large.
 // Uploaded files are processed piece-wise to avoid DoS attacks which would starve the server of memory.
-// TODO: We should time out requests if they have not received any data within a configured timeout period.
+// TDO: We should time out requests if they have not received any data within a configured timeout period.
 func Upload(req *http.Request, cfg *config.MediaAPI, dev *userapi.Device, db storage.Database, activeThumbnailGeneration *types.ActiveThumbnailGeneration) xutil.JSONResponse {
 	r, resErr := parseAndValidateRequest(req, cfg, dev)
 	if resErr != nil {
@@ -126,7 +126,7 @@ func (r *uploadRequest) doUpload(
 	// integrity checks on the file data in the repository.
 	// Data is truncated to maxFileSizeBytes. Content-Length was reported as 0 < Content-Length <= maxFileSizeBytes so this is OK.
 	//
-	// TODO: This has a bad API shape where you either need to call:
+	// TDO: This has a bad API shape where you either need to call:
 	//   fileutils.RemoveDir(tmpDir, r.Logger)
 	// or call:
 	//   r.storeFileAndMetadata(ctx, tmpDir, ...)
@@ -149,7 +149,7 @@ func (r *uploadRequest) doUpload(
 		}).Warn("Error while transferring file")
 		return &xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.Unknown("Failed to upload"),
+			JSON: spec.Unknown("failed to upload"),
 		}
 	}
 
@@ -179,7 +179,7 @@ func (r *uploadRequest) doUpload(
 		// The file already exists. Make a new media ID up for it.
 		mediaID, merr := r.generateMediaID(ctx, db)
 		if merr != nil {
-			r.Logger.WithError(merr).Error("Failed to generate media ID for existing file")
+			r.Logger.WithError(merr).Error("failed to generate media ID for existing file")
 			return &xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.InternalServerError{},
@@ -204,7 +204,7 @@ func (r *uploadRequest) doUpload(
 		r.MediaMetadata.MediaID, err = r.generateMediaID(ctx, db)
 		if err != nil {
 			fileutils.RemoveDir(tmpDir, r.Logger)
-			r.Logger.WithError(err).Error("Failed to generate media ID for new upload")
+			r.Logger.WithError(err).Error("failed to generate media ID for new upload")
 			return &xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.InternalServerError{},
@@ -244,9 +244,9 @@ func (r *uploadRequest) Validate(maxFileSizeBytes config.FileSizeBytes) *xutil.J
 			JSON: spec.Unknown("File name must not begin with '~'."),
 		}
 	}
-	// TODO: Validate filename - what are the valid characters?
+	// TDO: Validate filename - what are the valid characters?
 	if r.MediaMetadata.UserID != "" {
-		// TODO: We should put user ID parsing code into xtools and use that instead
+		// TDO: We should put user ID parsing code into xtools and use that instead
 		//       (see https://github.com/withqb/xtools/blob/3394e7c7003312043208aa73727d2256eea3d1f6/eventcontent.go#L347 )
 		//       It should be a struct (with pointers into a single string to avoid copying) and
 		//       we should update all refs to use UserID types rather than strings.
@@ -277,10 +277,10 @@ func (r *uploadRequest) storeFileAndMetadata(
 ) *xutil.JSONResponse {
 	finalPath, duplicate, err := fileutils.MoveFileWithHashCheck(tmpDir, r.MediaMetadata, absBasePath, r.Logger)
 	if err != nil {
-		r.Logger.WithError(err).Error("Failed to move file.")
+		r.Logger.WithError(err).Error("failed to move file.")
 		return &xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.Unknown("Failed to upload"),
+			JSON: spec.Unknown("failed to upload"),
 		}
 	}
 	if duplicate {
@@ -288,7 +288,7 @@ func (r *uploadRequest) storeFileAndMetadata(
 	}
 
 	if err = db.StoreMediaMetadata(ctx, r.MediaMetadata); err != nil {
-		r.Logger.WithError(err).Warn("Failed to store metadata")
+		r.Logger.WithError(err).Warn("failed to store metadata")
 		// If the file is a duplicate (has the same hash as an existing file) then
 		// there is valid metadata in the database for that file. As such we only
 		// remove the file if it is not a duplicate.
@@ -297,7 +297,7 @@ func (r *uploadRequest) storeFileAndMetadata(
 		}
 		return &xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.Unknown("Failed to upload"),
+			JSON: spec.Unknown("failed to upload"),
 		}
 	}
 

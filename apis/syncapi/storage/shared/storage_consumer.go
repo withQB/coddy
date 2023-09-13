@@ -97,7 +97,7 @@ func (d *Database) StreamEventsToEvents(ctx context.Context, device *userapi.Dev
 			if err != nil {
 				logrus.WithFields(logrus.Fields{
 					"event_id": out[i].EventID(),
-				}).WithError(err).Warnf("Failed to add transaction ID to event")
+				}).WithError(err).Warnf("failed to add transaction ID to event")
 				continue
 			}
 			frameID, err := spec.NewFrameID(in[i].FrameID())
@@ -111,7 +111,7 @@ func (d *Database) StreamEventsToEvents(ctx context.Context, device *userapi.Dev
 			if err != nil || deviceSenderID == nil {
 				logrus.WithFields(logrus.Fields{
 					"event_id": out[i].EventID(),
-				}).WithError(err).Warnf("Failed to add transaction ID to event")
+				}).WithError(err).Warnf("failed to add transaction ID to event")
 				continue
 			}
 			if *deviceSenderID == in[i].SenderID() && device.SessionID == in[i].TransactionID.SessionID {
@@ -121,7 +121,7 @@ func (d *Database) StreamEventsToEvents(ctx context.Context, device *userapi.Dev
 				if err != nil {
 					logrus.WithFields(logrus.Fields{
 						"event_id": out[i].EventID(),
-					}).WithError(err).Warnf("Failed to add transaction ID to event")
+					}).WithError(err).Warnf("failed to add transaction ID to event")
 				}
 			}
 		}
@@ -452,9 +452,9 @@ func (d *Database) fetchMissingStateEvents(
 		return nil, err
 	}
 	if len(stateEvents) != len(missing) {
-		logrus.WithContext(ctx).Warnf("Failed to map all event IDs to events (got %d, wanted %d)", len(stateEvents), len(missing))
+		logrus.WithContext(ctx).Warnf("failed to map all event IDs to events (got %d, wanted %d)", len(stateEvents), len(missing))
 
-		// TODO: Why is this happening? It's probably the dataframe. Uncomment
+		// TDO: Why is this happening? It's probably the dataframe. Uncomment
 		// this error again when we work out what it is and fix it, otherwise we
 		// just end up returning lots of 500s to the client and that breaks
 		// pretty much everything, rather than just sending what we have.
@@ -492,7 +492,7 @@ func (d *Database) CleanSendToDeviceUpdates(
 	if err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
 		return d.SendToDevice.DeleteSendToDeviceMessages(ctx, txn, userID, deviceID, before)
 	}); err != nil {
-		logrus.WithError(err).Errorf("Failed to clean up old send-to-device messages for user %q device %q", userID, deviceID)
+		logrus.WithError(err).Errorf("failed to clean up old send-to-device messages for user %q device %q", userID, deviceID)
 		return err
 	}
 	return nil

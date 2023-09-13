@@ -59,7 +59,7 @@ func (t *SigningKeyUpdateConsumer) onMessage(ctx context.Context, msgs []*nats.M
 	msg := msgs[0] // Guaranteed to exist if onMessage is called
 	var updatePayload api.CrossSigningKeyUpdate
 	if err := json.Unmarshal(msg.Data, &updatePayload); err != nil {
-		logrus.WithError(err).Errorf("Failed to read from signing key update input topic")
+		logrus.WithError(err).Errorf("failed to read from signing key update input topic")
 		return true
 	}
 	origin := spec.ServerName(msg.Header.Get("origin"))

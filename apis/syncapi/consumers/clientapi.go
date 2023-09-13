@@ -175,7 +175,7 @@ func (s *OutputClientDataConsumer) onMessage(ctx context.Context, msgs []*nats.M
 		if err := s.db.UpdateIgnoresForUser(ctx, userID, output.IgnoredUsers); err != nil {
 			log.WithError(err).WithFields(logrus.Fields{
 				"user_id": userID,
-			}).Errorf("Failed to update ignored users")
+			}).Errorf("failed to update ignored users")
 			sentry.CaptureException(err)
 		}
 	}

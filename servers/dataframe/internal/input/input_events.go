@@ -47,7 +47,7 @@ import (
 	"github.com/withqb/coddy/servers/dataframe/types"
 )
 
-// TODO: Does this value make sense?
+// TDO: Does this value make sense?
 const MaximumMissingProcessingTime = time.Minute * 2
 
 var processFrameEventDuration = prometheus.NewHistogramVec(
@@ -70,7 +70,7 @@ var processFrameEventDuration = prometheus.NewHistogramVec(
 // TODO(#375): This should be rewritten to allow concurrent calls. The
 // difficulty is in ensuring that we correctly annotate events with the correct
 // state deltas when sending to kafka streams
-// TODO: Break up function - we should probably do transaction ID checks before calling this.
+// TDO: Break up function - we should probably do transaction ID checks before calling this.
 // nolint:gocyclo
 func (r *Inputer) processFrameEvent(
 	ctx context.Context,
@@ -154,7 +154,7 @@ func (r *Inputer) processFrameEvent(
 		case werr != nil:
 			// Something has gone wrong trying to find out if we rejected
 			// this event already.
-			logger.WithError(werr).Errorf("Failed to check if event %q is already seen", event.EventID())
+			logger.WithError(werr).Errorf("failed to check if event %q is already seen", event.EventID())
 			return werr
 		case !wasRejected:
 			// We've seen this event before and it wasn't rejected so we
@@ -448,7 +448,7 @@ func (r *Inputer) processFrameEvent(
 		return nil
 	}
 
-	// TODO: Revist this to ensure we don't replace a current state mxid_mapping with an older one.
+	// TDO: Revist this to ensure we don't replace a current state mxid_mapping with an older one.
 	if event.Version() == xtools.FrameVersionPseudoIDs && event.Type() == spec.MFrameMember {
 		mapping := xtools.MemberContent{}
 		if err = json.Unmarshal(event.Content(), &mapping); err != nil {
@@ -709,7 +709,7 @@ func (r *Inputer) fetchAuthEvents(
 		// so we'll need to filter through those in the next section.
 		res, err = r.FSAPI.GetEventAuth(ctx, virtualHost, serverName, event.Version(), event.FrameID(), event.EventID())
 		if err != nil {
-			logger.WithError(err).Warnf("Failed to get event auth from federation for %q: %s", event.EventID(), err)
+			logger.WithError(err).Warnf("failed to get event auth from federation for %q: %s", event.EventID(), err)
 			continue
 		}
 		found = true

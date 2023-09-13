@@ -2,7 +2,7 @@ package types
 
 import "github.com/withqb/xtools/spec"
 
-const MSigningKeyUpdate = "m.signing_key_update" // TODO: move to xtools
+const MSigningKeyUpdate = "m.signing_key_update" // TDO: move to xtools
 
 // A JoinedHost is a server that is joined to a coddy frame.
 type JoinedHost struct {

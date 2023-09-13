@@ -47,7 +47,7 @@ func Open(ctx context.Context, conMan *sqlutil.Connections, dbProperties *config
 	//db.Exec("PRAGMA journal_mode=WAL;")
 	//db.Exec("PRAGMA read_uncommitted = true;")
 
-	// FIXME: We are leaking connections somewhere. Setting this to 2 will eventually
+	// FXME: We are leaking connections somewhere. Setting this to 2 will eventually
 	// cause the dataframe to be unresponsive to new events because something will
 	// acquire the global mutex and never unlock it because it is waiting for a connection
 	// which it will never obtain.
@@ -74,7 +74,7 @@ func Open(ctx context.Context, conMan *sqlutil.Connections, dbProperties *config
 }
 
 func executeMigration(ctx context.Context, db *sql.DB) error {
-	// TODO: Remove when we are sure we are not having goose artefacts in the db
+	// TDO: Remove when we are sure we are not having goose artefacts in the db
 	// This forces an error, which indicates the migration is already applied, since the
 	// column event_nid was removed from the table
 	migrationName := "dataframe: state blocks refactor"
@@ -239,7 +239,7 @@ func (d *Database) prepare(db *sql.DB, writer sqlutil.Writer, cache caching.Data
 func (d *Database) SupportsConcurrentFrameInputs() bool {
 	// This isn't supported in SQLite mode yet because of issues with
 	// database locks.
-	// TODO: Look at this again - the problem is probably to do with
+	// TDO: Look at this again - the problem is probably to do with
 	// the membership updaters and latest events updaters.
 	return false
 }
@@ -247,7 +247,7 @@ func (d *Database) SupportsConcurrentFrameInputs() bool {
 func (d *Database) GetFrameUpdater(
 	ctx context.Context, frameInfo *types.FrameInfo,
 ) (*shared.FrameUpdater, error) {
-	// TODO: Do not use transactions. We should be holding open this transaction but we cannot have
+	// TDO: Do not use transactions. We should be holding open this transaction but we cannot have
 	// multiple write transactions on sqlite. The code will perform additional
 	// write transactions independent of this one which will consistently cause
 	// 'database is locked' errors. As sqlite doesn't support multi-process on the
@@ -260,7 +260,7 @@ func (d *Database) MembershipUpdater(
 	ctx context.Context, frameID, targetUserID string,
 	targetLocal bool, frameVersion xtools.FrameVersion,
 ) (*shared.MembershipUpdater, error) {
-	// TODO: Do not use transactions. We should be holding open this transaction but we cannot have
+	// TDO: Do not use transactions. We should be holding open this transaction but we cannot have
 	// multiple write transactions on sqlite. The code will perform additional
 	// write transactions independent of this one which will consistently cause
 	// 'database is locked' errors. As sqlite doesn't support multi-process on the

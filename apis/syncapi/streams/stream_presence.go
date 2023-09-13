@@ -154,7 +154,7 @@ func (p *PresenceStreamProvider) getNeededUsersFromRequest(ctx context.Context, 
 		return getPresenceForUsers, nil
 	}
 
-	// TODO: Check if this is working better than before.
+	// TDO: Check if this is working better than before.
 	if err := p.notifier.LoadFrames(ctx, p.DB, newlyJoined); err != nil {
 		return getPresenceForUsers, fmt.Errorf("unable to refresh notifier lists: %w", err)
 	}

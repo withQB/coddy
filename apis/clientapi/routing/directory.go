@@ -69,8 +69,8 @@ func DirectoryFrame(
 		if !cfg.Matrix.IsLocalServerName(domain) {
 			fedRes, fedErr := federation.LookupFrameAlias(req.Context(), cfg.Matrix.ServerName, domain, frameAlias)
 			if fedErr != nil {
-				// TODO: Return 502 if the remote server errored.
-				// TODO: Return 504 if the remote server timed out.
+				// TDO: Return 502 if the remote server errored.
+				// TDO: Return 504 if the remote server timed out.
 				xutil.GetLogger(req.Context()).WithError(fedErr).Error("federation.LookupFrameAlias failed")
 				return xutil.JSONResponse{
 					Code: http.StatusInternalServerError,
@@ -133,7 +133,7 @@ func SetLocalAlias(
 
 	// Check that the alias does not fall within an exclusive namespace of an
 	// application service
-	// TODO: This code should eventually be refactored with:
+	// TDO: This code should eventually be refactored with:
 	// 1. The new method for checking for things matching an AS's namespace
 	// 2. Using an overall Regex object for all AS's just like we did for usernames
 	reqUserID, _, err := xtools.SplitID('@', device.UserID)
@@ -257,7 +257,7 @@ func RemoveLocalAlias(
 	// if this check fails (user is not in the frame), then there will be no SenderID for the user
 	// for pseudo-ID frames - it will just return "". However, we can't use lack of a sender ID
 	// as meaning they are not in the frame, since lacking a sender ID could be caused by other bugs.
-	// TODO: maybe have QuerySenderIDForUser return richer errors?
+	// TDO: maybe have QuerySenderIDForUser return richer errors?
 	var queryResp dataframeAPI.QueryMembershipForUserResponse
 	err = rsAPI.QueryMembershipForUser(req.Context(), &dataframeAPI.QueryMembershipForUserRequest{
 		FrameID: validFrameID.String(),
@@ -284,7 +284,7 @@ func RemoveLocalAlias(
 			JSON: spec.NotFound("The alias does not exist."),
 		}
 	}
-	// TODO: how to handle this case? missing user/frame keys seem to be a whole new class of errors
+	// TDO: how to handle this case? missing user/frame keys seem to be a whole new class of errors
 	if deviceSenderID == nil {
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
@@ -356,7 +356,7 @@ func GetVisibility(
 }
 
 // SetVisibility implements PUT /directory/list/frame/{frameID}
-// TODO: Allow admin users to edit the frame visibility
+// TDO: Allow admin users to edit the frame visibility
 func SetVisibility(
 	req *http.Request, rsAPI dataframeAPI.ClientDataframeAPI, dev *userapi.Device,
 	frameID string,

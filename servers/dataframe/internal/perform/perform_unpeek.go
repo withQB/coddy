@@ -39,7 +39,7 @@ func (r *Unpeeker) PerformUnpeek(
 	ctx context.Context,
 	frameID, userID, deviceID string,
 ) error {
-	// FIXME: there's way too much duplication with performJoin
+	// FXME: there's way too much duplication with performJoin
 	_, domain, err := xtools.SplitID('@', userID)
 	if err != nil {
 		return api.ErrInvalidID{Err: fmt.Errorf("supplied user ID %q in incorrect format", userID)}
@@ -63,7 +63,7 @@ func (r *Unpeeker) performUnpeekFrameByID(
 		return api.ErrInvalidID{Err: fmt.Errorf("frame ID %q is invalid: %w", frameID, err)}
 	}
 
-	// TODO: handle federated peeks
+	// TDO: handle federated peeks
 	// By this point, if req.FrameIDOrAlias contained an alias, then
 	// it will have been overwritten with a frame ID by performPeekFrameByAlias.
 	// We should now include this in the response so that the CS API can

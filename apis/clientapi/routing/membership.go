@@ -201,7 +201,7 @@ func SendKick(
 			JSON: spec.Unknown("cannot /kick banned or left users"),
 		}
 	}
-	// TODO: should we be using SendLeave instead?
+	// TDO: should we be using SendLeave instead?
 	return sendMembership(req.Context(), profileAPI, device, frameID, spec.Leave, body.Reason, cfg, body.UserID, evTime, rsAPI, asAPI)
 }
 
@@ -257,7 +257,7 @@ func SendUnban(
 			JSON: spec.Unknown("can only /unban users that are banned"),
 		}
 	}
-	// TODO: should we be using SendLeave instead?
+	// TDO: should we be using SendLeave instead?
 	return sendMembership(req.Context(), profileAPI, device, frameID, spec.Leave, body.Reason, cfg, body.UserID, evTime, rsAPI, asAPI)
 }
 

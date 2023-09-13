@@ -645,7 +645,7 @@ func (a *UserInternalAPI) PerformAccountDeactivation(ctx context.Context, req *a
 	userID := fmt.Sprintf("@%s:%s", req.Localpart, serverName)
 	_, err := a.RSAPI.PerformAdminEvacuateUser(ctx, userID)
 	if err != nil {
-		logrus.WithError(err).WithField("userID", userID).Errorf("Failed to evacuate user after account deactivation")
+		logrus.WithError(err).WithField("userID", userID).Errorf("failed to evacuate user after account deactivation")
 	}
 
 	deviceReq := &api.PerformDeviceDeletionRequest{

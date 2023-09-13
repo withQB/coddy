@@ -222,7 +222,7 @@ func (oq *destinationQueue) getPendingFromDatabase() {
 				}
 			}
 		} else {
-			logrus.WithError(err).Errorf("Failed to get pending PDUs for %q", oq.destination)
+			logrus.WithError(err).Errorf("failed to get pending PDUs for %q", oq.destination)
 		}
 	}
 
@@ -243,7 +243,7 @@ func (oq *destinationQueue) getPendingFromDatabase() {
 				}
 			}
 		} else {
-			logrus.WithError(err).Errorf("Failed to get pending EDUs for %q", oq.destination)
+			logrus.WithError(err).Errorf("failed to get pending EDUs for %q", oq.destination)
 		}
 	}
 
@@ -447,13 +447,13 @@ func (oq *destinationQueue) nextTransaction(
 		if pduReceipts != nil {
 			//logrus.Infof("Cleaning PDUs %q", pduReceipt.String())
 			if err = oq.db.CleanPDUs(oq.process.Context(), oq.destination, pduReceipts); err != nil {
-				logrus.WithError(err).Errorf("Failed to clean PDUs for server %q", t.Destination)
+				logrus.WithError(err).Errorf("failed to clean PDUs for server %q", t.Destination)
 			}
 		}
 		if eduReceipts != nil {
 			//logrus.Infof("Cleaning EDUs %q", eduReceipt.String())
 			if err = oq.db.CleanEDUs(oq.process.Context(), oq.destination, eduReceipts); err != nil {
-				logrus.WithError(err).Errorf("Failed to clean EDUs for server %q", t.Destination)
+				logrus.WithError(err).Errorf("failed to clean EDUs for server %q", t.Destination)
 			}
 		}
 		// Reset the transaction ID.
@@ -465,7 +465,7 @@ func (oq *destinationQueue) nextTransaction(
 		// Report that we failed to send the transaction and we
 		// will retry again, subject to backoff.
 
-		// TODO: we should check for 500-ish fails vs 400-ish here,
+		// TDO: we should check for 500-ish fails vs 400-ish here,
 		// since we shouldn't queue things indefinitely in response
 		// to a 400-ish error
 		code := errResponse.Code
@@ -475,7 +475,7 @@ func (oq *destinationQueue) nextTransaction(
 		logrus.WithFields(logrus.Fields{
 			"destination":   oq.destination,
 			logrus.ErrorKey: err,
-		}).Debugf("Failed to send transaction %q", t.TransactionID)
+		}).Debugf("failed to send transaction %q", t.TransactionID)
 		return err, sendMethod
 	}
 }

@@ -96,7 +96,7 @@ func (t *KeyChangeConsumer) onDeviceKeyMessage(m api.DeviceMessage) bool {
 	_, originServerName, err := xtools.SplitID('@', m.UserID)
 	if err != nil {
 		sentry.CaptureException(err)
-		logger.WithError(err).Error("Failed to extract domain from key change event")
+		logger.WithError(err).Error("failed to extract domain from key change event")
 		return true
 	}
 	if !t.isLocalServerName(originServerName) {

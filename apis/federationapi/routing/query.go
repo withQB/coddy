@@ -103,8 +103,8 @@ func FrameAliasToID(
 					}
 				}
 			}
-			// TODO: Return 502 if the remote server errored.
-			// TODO: Return 504 if the remote server timed out.
+			// TDO: Return 502 if the remote server errored.
+			// TDO: Return 504 if the remote server timed out.
 			xutil.GetLogger(httpReq.Context()).WithError(err).Error("federation.LookupFrameAlias failed")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,

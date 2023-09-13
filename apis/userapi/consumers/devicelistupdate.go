@@ -56,7 +56,7 @@ func (t *DeviceListUpdateConsumer) onMessage(ctx context.Context, msgs []*nats.M
 	msg := msgs[0] // Guaranteed to exist if onMessage is called
 	var m xtools.DeviceListUpdateEvent
 	if err := json.Unmarshal(msg.Data, &m); err != nil {
-		logrus.WithError(err).Errorf("Failed to read from device list update input topic")
+		logrus.WithError(err).Errorf("failed to read from device list update input topic")
 		return true
 	}
 	origin := spec.ServerName(msg.Header.Get("origin"))
@@ -75,7 +75,7 @@ func (t *DeviceListUpdateConsumer) onMessage(ctx context.Context, msgs []*nats.M
 			"device_id": m.DeviceID,
 			"stream_id": m.StreamID,
 			"prev_id":   m.PrevID,
-		}).WithError(err).Errorf("Failed to update device list")
+		}).WithError(err).Errorf("failed to update device list")
 		return false
 	}
 	return true

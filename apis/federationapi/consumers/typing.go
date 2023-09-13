@@ -70,7 +70,7 @@ func (t *OutputTypingConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) 
 	// only send typing events which originated from us
 	_, typingServerName, err := xtools.SplitID('@', userID)
 	if err != nil {
-		log.WithError(err).WithField("user_id", userID).Error("Failed to extract domain from typing sender")
+		log.WithError(err).WithField("user_id", userID).Error("failed to extract domain from typing sender")
 		_ = msg.Ack()
 		return true
 	}

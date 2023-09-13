@@ -37,7 +37,7 @@ func NewServerACLs(db ServerACLDatabase) *ServerACLs {
 	// Look up all of the frames that the current state server knows about.
 	frames, err := db.GetKnownFrames(ctx)
 	if err != nil {
-		logrus.WithError(err).Fatalf("Failed to get known frames")
+		logrus.WithError(err).Fatalf("failed to get known frames")
 	}
 	// For each frame, let's see if we have a server ACL state event. If we
 	// do then we'll process it into memory so that we have the regexes to
@@ -45,7 +45,7 @@ func NewServerACLs(db ServerACLDatabase) *ServerACLs {
 	for _, frame := range frames {
 		state, err := db.GetStateEvent(ctx, frame, "m.frame.server_acl", "")
 		if err != nil {
-			logrus.WithError(err).Errorf("Failed to get server ACLs for frame %q", frame)
+			logrus.WithError(err).Errorf("failed to get server ACLs for frame %q", frame)
 			continue
 		}
 		if state != nil {
@@ -77,7 +77,7 @@ func compileACLRegex(orig string) (*regexp.Regexp, error) {
 func (s *ServerACLs) OnServerACLUpdate(state xtools.PDU) {
 	acls := &serverACL{}
 	if err := json.Unmarshal(state.Content(), &acls.ServerACL); err != nil {
-		logrus.WithError(err).Errorf("Failed to unmarshal state content for server ACLs")
+		logrus.WithError(err).Errorf("failed to unmarshal state content for server ACLs")
 		return
 	}
 	// The spec calls only for * (zero or more chars) and ? (exactly one char)
@@ -85,14 +85,14 @@ func (s *ServerACLs) OnServerACLUpdate(state xtools.PDU) {
 	// special characters and then replace * and ? with their regex counterparts.
 	for _, orig := range acls.Allowed {
 		if expr, err := compileACLRegex(orig); err != nil {
-			logrus.WithError(err).Errorf("Failed to compile allowed regex")
+			logrus.WithError(err).Errorf("failed to compile allowed regex")
 		} else {
 			acls.allowedRegexes = append(acls.allowedRegexes, expr)
 		}
 	}
 	for _, orig := range acls.Denied {
 		if expr, err := compileACLRegex(orig); err != nil {
-			logrus.WithError(err).Errorf("Failed to compile denied regex")
+			logrus.WithError(err).Errorf("failed to compile denied regex")
 		} else {
 			acls.deniedRegexes = append(acls.deniedRegexes, expr)
 		}

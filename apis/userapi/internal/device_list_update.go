@@ -77,7 +77,7 @@ type DeviceListUpdater struct {
 	process *process.ProcessContext
 	// A map from user_id to a mutex. Used when we are missing prev IDs so we don't make more than 1
 	// request to the remote server and race.
-	// TODO: Put in an LRU cache to bound growth
+	// TDO: Put in an LRU cache to bound growth
 	userIDToMutex map[string]*sync.Mutex
 	mu            *sync.Mutex // protects UserIDToMutex
 
@@ -410,7 +410,7 @@ func (u *DeviceListUpdater) processServer(serverName spec.ServerName) (time.Dura
 
 	userIDs, err := u.db.StaleDeviceLists(ctx, []spec.ServerName{serverName})
 	if err != nil {
-		logger.WithError(err).Error("Failed to load stale device lists")
+		logger.WithError(err).Error("failed to load stale device lists")
 		return waitTime, true
 	}
 
@@ -439,7 +439,7 @@ func (u *DeviceListUpdater) processServer(serverName spec.ServerName) (time.Dura
 			"succeeded": successCount,
 			"failed":    len(userIDs) - successCount,
 			"wait_time": waitTime,
-		}).Debug("Failed to query device keys for some users")
+		}).Debug("failed to query device keys for some users")
 	}
 	return waitTime, !allUsersSucceeded
 }

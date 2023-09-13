@@ -192,7 +192,7 @@ func (r *Admin) PerformAdminPurgeFrame(
 
 	logrus.WithField("frame_id", frameID).Warn("Purging frame from dataframe")
 	if err := r.DB.PurgeFrame(ctx, frameID); err != nil {
-		logrus.WithField("frame_id", frameID).WithError(err).Warn("Failed to purge frame from dataframe")
+		logrus.WithField("frame_id", frameID).WithError(err).Warn("failed to purge frame from dataframe")
 		return err
 	}
 

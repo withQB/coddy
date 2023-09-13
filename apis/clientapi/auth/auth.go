@@ -60,7 +60,7 @@ func VerifyUserFromRequest(
 		}
 	}
 	if res.Err != "" {
-		if strings.HasPrefix(strings.ToLower(res.Err), "forbidden:") { // TODO: use actual error and no string comparison
+		if strings.HasPrefix(strings.ToLower(res.Err), "forbidden:") { // TDO: use actual error and no string comparison
 			return nil, &xutil.JSONResponse{
 				Code: http.StatusForbidden,
 				JSON: spec.Forbidden(res.Err),

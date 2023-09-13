@@ -224,7 +224,7 @@ func (c *Creator) PerformCreateFrame(ctx context.Context, userID spec.UserID, fr
 	if createRequest.FrameAliasName != "" {
 		frameAlias = fmt.Sprintf("#%s:%s", createRequest.FrameAliasName, userID.Domain())
 		// check it's free
-		// TODO: This races but is better than nothing
+		// TDO: This races but is better than nothing
 		hasAliasReq := api.GetFrameIDForAliasRequest{
 			Alias:              frameAlias,
 			IncludeAppservices: false,
@@ -304,7 +304,7 @@ func (c *Creator) PerformCreateFrame(ctx context.Context, userID spec.UserID, fr
 	// This differs from Synapse slightly. Synapse would vary the ordering of 3-7
 	// depending on if those events were in "initial_state" or not. This made it
 	// harder to reason about, hence sticking to a strict static ordering.
-	// TODO: Synapse has txn/token ID on each event. Do we need to do this here?
+	// TDO: Synapse has txn/token ID on each event. Do we need to do this here?
 	eventsToMake := []xtools.FledglingEvent{
 		createEvent, membershipEvent, powerLevelEvent, joinRuleEvent, historyVisibilityEvent,
 	}
@@ -319,13 +319,13 @@ func (c *Creator) PerformCreateFrame(ctx context.Context, userID spec.UserID, fr
 		eventsToMake = append(eventsToMake, *topicEvent)
 	}
 	if aliasEvent != nil {
-		// TODO: bit of a chicken and egg problem here as the alias doesn't exist and cannot until we have made the frame.
+		// TDO: bit of a chicken and egg problem here as the alias doesn't exist and cannot until we have made the frame.
 		// This means we might fail creating the alias but say the canonical alias is something that doesn't exist.
 		eventsToMake = append(eventsToMake, *aliasEvent)
 	}
 
-	// TODO: invite events
-	// TODO: 3pid invite events
+	// TDO: invite events
+	// TDO: 3pid invite events
 
 	var builtEvents []*types.HeaderedEvent
 	authEvents := xtools.NewAuthEvents(nil)
@@ -530,8 +530,8 @@ func (c *Creator) PerformCreateFrame(ctx context.Context, userID spec.UserID, fr
 		}
 	}
 
-	// TODO: visibility/presets/raw initial state
-	// TODO: Create frame alias association
+	// TDO: visibility/presets/raw initial state
+	// TDO: Create frame alias association
 	// Make sure this doesn't fall into an application service's namespace though!
 
 	return frameAlias, nil

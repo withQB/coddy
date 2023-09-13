@@ -349,7 +349,7 @@ func (t *missingStateReq) lookupStateAfterEvent(ctx context.Context, frameVersio
 	logrus.WithContext(ctx).Warnf("State for event %s not available locally, falling back to federation (via %d servers)", eventID, len(t.servers))
 	respState, err := t.lookupStateBeforeEvent(ctx, frameVersion, frameID, eventID)
 	if err != nil {
-		logrus.WithContext(ctx).WithError(err).Errorf("Failed to look up state before event %s", eventID)
+		logrus.WithContext(ctx).WithError(err).Errorf("failed to look up state before event %s", eventID)
 		return nil, false, fmt.Errorf("t.lookupStateBeforeEvent: %w", err)
 	}
 
@@ -359,7 +359,7 @@ func (t *missingStateReq) lookupStateAfterEvent(ctx context.Context, frameVersio
 	switch e := err.(type) {
 	case xtools.EventValidationError:
 		if !e.Persistable {
-			logrus.WithContext(ctx).WithError(err).Errorf("Failed to look up event %s", eventID)
+			logrus.WithContext(ctx).WithError(err).Errorf("failed to look up event %s", eventID)
 			return nil, false, e
 		}
 		validationError = e
@@ -368,7 +368,7 @@ func (t *missingStateReq) lookupStateAfterEvent(ctx context.Context, frameVersio
 	case nil:
 		// do nothing
 	default:
-		logrus.WithContext(ctx).WithError(err).Errorf("Failed to look up event %s", eventID)
+		logrus.WithContext(ctx).WithError(err).Errorf("failed to look up event %s", eventID)
 		return nil, false, fmt.Errorf("t.lookupEvent: %w", err)
 	}
 	h = t.cacheAndReturn(h)
@@ -632,7 +632,7 @@ Event:
 		}
 	}
 	if len(newEvents) == 0 {
-		return nil, false, false, nil // TODO: error instead?
+		return nil, false, false, nil // TDO: error instead?
 	}
 
 	earliestNewEvent := newEvents[0]
@@ -819,7 +819,7 @@ func (t *missingStateReq) lookupMissingStateViaStateIDs(ctx context.Context, fra
 			default:
 				t.log.WithFields(logrus.Fields{
 					"missing_event_id": missingEventID,
-				}).WithError(herr).Warn("Failed to fetch missing event")
+				}).WithError(herr).Warn("failed to fetch missing event")
 				return
 			}
 			haveEventsMutex.Lock()
@@ -877,7 +877,7 @@ func (t *missingStateReq) createRespStateFromStateIDs(
 	}
 	// We purposefully do not do auth checks on the returned events, as they will still
 	// be processed in the exact same way, just as a 'rejected' event
-	// TODO: Add a field to HeaderedEvent to indicate if the event is rejected.
+	// TDO: Add a field to HeaderedEvent to indicate if the event is rejected.
 	return &respState, nil
 }
 
@@ -894,7 +894,7 @@ func (t *missingStateReq) lookupEvent(ctx context.Context, frameVersion xtools.F
 		// fetch from the dataframe
 		events, err := t.db.EventsFromIDs(ctx, t.frameInfo, []string{missingEventID})
 		if err != nil {
-			t.log.Warnf("Failed to query dataframe for missing event %s: %s - falling back to remote", missingEventID, err)
+			t.log.Warnf("failed to query dataframe for missing event %s: %s - falling back to remote", missingEventID, err)
 		} else if len(events) == 1 {
 			return events[0].PDU, nil
 		}
@@ -908,7 +908,7 @@ serverLoop:
 		defer cancel()
 		txn, err := t.federation.GetEvent(reqctx, t.virtualHost, serverName, missingEventID)
 		if err != nil || len(txn.PDUs) == 0 {
-			t.log.WithError(err).WithField("missing_event_id", missingEventID).Warn("Failed to get missing /event for event ID")
+			t.log.WithError(err).WithField("missing_event_id", missingEventID).Warn("failed to get missing /event for event ID")
 			if errors.Is(err, context.DeadlineExceeded) {
 				select {
 				case <-reqctx.Done(): // this server took too long
@@ -936,12 +936,12 @@ serverLoop:
 			found = true
 			break serverLoop
 		default:
-			t.log.WithError(err).WithField("missing_event_id", missingEventID).Warnf("Failed to parse event JSON of event returned from /event")
+			t.log.WithError(err).WithField("missing_event_id", missingEventID).Warnf("failed to parse event JSON of event returned from /event")
 			continue
 		}
 	}
 	if !found {
-		t.log.WithField("missing_event_id", missingEventID).Warnf("Failed to get missing /event for event ID from %d server(s)", len(t.servers))
+		t.log.WithField("missing_event_id", missingEventID).Warnf("failed to get missing /event for event ID from %d server(s)", len(t.servers))
 		return nil, fmt.Errorf("wasn't able to find event via %d server(s)", len(t.servers))
 	}
 	if err := xtools.VerifyEventSignatures(ctx, event, t.keys, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {

@@ -132,7 +132,7 @@ func (r *Inputer) startWorkerForFrame(frameID string) {
 				InactiveThreshold: inactiveThreshold,
 			},
 		); err != nil {
-			logrus.WithError(err).Errorf("Failed to create consumer for frame %q", w.frameID)
+			logrus.WithError(err).Errorf("failed to create consumer for frame %q", w.frameID)
 			return
 		}
 
@@ -148,7 +148,7 @@ func (r *Inputer) startWorkerForFrame(frameID string) {
 			nats.InactiveThreshold(inactiveThreshold),
 		)
 		if err != nil {
-			logrus.WithError(err).Errorf("Failed to subscribe to stream for frame %q", w.frameID)
+			logrus.WithError(err).Errorf("failed to subscribe to stream for frame %q", w.frameID)
 			return
 		}
 
@@ -191,7 +191,7 @@ func (r *Inputer) Start() error {
 		case consumer.Config.InactiveThreshold != inactiveThreshold:
 			consumer.Config.InactiveThreshold = inactiveThreshold
 			if _, cerr := r.JetStream.UpdateConsumer(stream, &consumer.Config); cerr != nil {
-				logrus.WithError(cerr).Warnf("Failed to update inactive threshold on consumer %q", consumer.Name)
+				logrus.WithError(cerr).Warnf("failed to update inactive threshold on consumer %q", consumer.Name)
 			}
 		}
 	}
@@ -227,7 +227,7 @@ func (w *worker) _next() {
 		// down the subscriber to free up resources. It'll get started
 		// again if new activity happens.
 		if err = w.subscription.Unsubscribe(); err != nil {
-			logrus.WithError(err).Errorf("Failed to unsubscribe to stream for frame %q", w.frameID)
+			logrus.WithError(err).Errorf("failed to unsubscribe to stream for frame %q", w.frameID)
 		}
 		w.Lock()
 		w.subscription = nil
@@ -239,9 +239,9 @@ func (w *worker) _next() {
 		// from the queue. In which case, we'll shut down the subscriber
 		// and wait to be notified about new frame activity again. Maybe
 		// the problem will be corrected by then.
-		logrus.WithError(err).Errorf("Failed to get next stream message for frame %q", w.frameID)
+		logrus.WithError(err).Errorf("failed to get next stream message for frame %q", w.frameID)
 		if err = w.subscription.Unsubscribe(); err != nil {
-			logrus.WithError(err).Errorf("Failed to unsubscribe to stream for frame %q", w.frameID)
+			logrus.WithError(err).Errorf("failed to unsubscribe to stream for frame %q", w.frameID)
 		}
 		w.Lock()
 		w.subscription = nil

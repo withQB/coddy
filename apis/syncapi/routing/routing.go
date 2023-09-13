@@ -34,7 +34,7 @@ func Setup(
 	v1unstablemux := csMux.PathPrefix("/{apiversion:(?:v1|unstable)}/").Subrouter()
 	v3mux := csMux.PathPrefix("/{apiversion:(?:r0|v3)}/").Subrouter()
 
-	// TODO: Add AS support for all handlers below.
+	// TDO: Add AS support for all handlers below.
 	v3mux.Handle("/sync", httputil.MakeAuthAPI("sync", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 		return srp.OnIncomingSyncRequest(req, device)
 	}, httputil.WithAllowGuests())).Methods(http.MethodGet, http.MethodOptions)

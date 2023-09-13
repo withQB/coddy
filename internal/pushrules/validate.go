@@ -57,7 +57,7 @@ func ValidateRule(kind Kind, rule *Rule) []error {
 
 // validRuleIDRE is a regexp for valid IDs.
 //
-// TODO: the specification doesn't seem to say what the rule ID syntax
+// TDO: the specification doesn't seem to say what the rule ID syntax
 // is. A Sytest fails if it contains a backslash.
 var validRuleIDRE = regexp.MustCompile(`^([^\\]+)$`)
 

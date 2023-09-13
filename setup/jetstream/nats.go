@@ -79,7 +79,7 @@ func (s *NATSInstance) Prepare(process *process.ProcessContext, cfg *config.JetS
 	}
 	nc, err := natsclient.Connect("", natsclient.InProcessServer(s))
 	if err != nil {
-		logrus.Fatalln("Failed to create NATS client")
+		logrus.Fatalln("failed to create NATS client")
 	}
 	js, _ := setupNATS(process, cfg, nc)
 	s.js = js

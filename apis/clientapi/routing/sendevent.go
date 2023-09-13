@@ -93,7 +93,7 @@ func SendEvent(
 			return rsAPI.QuerySenderIDForUser(req.Context(), frameID, userID)
 		})
 		if innerErr != nil {
-			// TODO: work out better logic for failure cases (e.g. sender ID not found)
+			// TDO: work out better logic for failure cases (e.g. sender ID not found)
 			xutil.GetLogger(req.Context()).WithError(innerErr).Error("synctypes.FromClientStateKey failed")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
@@ -333,7 +333,7 @@ func generateSendEvent(
 			JSON: spec.NotFound("internal server error"),
 		}
 	} else if senderID == nil {
-		// TODO: is it always the case that lack of a sender ID means they're not joined?
+		// TDO: is it always the case that lack of a sender ID means they're not joined?
 		//       And should this logic be deferred to the dataframe somehow?
 		return nil, &xutil.JSONResponse{
 			Code: http.StatusForbidden,
@@ -409,7 +409,7 @@ func generateSendEvent(
 	}); err != nil {
 		return nil, &xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden(err.Error()), // TODO: Is this error string comprehensible to the client?
+			JSON: spec.Forbidden(err.Error()), // TDO: Is this error string comprehensible to the client?
 		}
 	}
 

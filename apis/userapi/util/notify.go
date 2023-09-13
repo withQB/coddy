@@ -38,18 +38,18 @@ func NotifyUserCountsAsync(ctx context.Context, pgClient pushgateway.Client, loc
 		"pushkey":   pusherDevices[0].Device.PushKey,
 	}).Tracef("Notifying HTTP push gateway about notification counts")
 
-	// TODO: think about bounding this to one per user, and what
+	// TDO: think about bounding this to one per user, and what
 	// ordering guarantees we must provide.
 	go func() {
 		// This background processing cannot be tied to a request.
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		// TODO: we could batch all devices with the same URL, but
+		// TDO: we could batch all devices with the same URL, but
 		// Sytest requires consumers/dataframe.go to do it
 		// one-by-one, so we do the same here.
 		for _, pusherDevice := range pusherDevices {
-			// TODO: support "email".
+			// TDO: support "email".
 			if !strings.HasPrefix(pusherDevice.URL, "http") {
 				continue
 			}

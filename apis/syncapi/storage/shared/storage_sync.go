@@ -796,7 +796,7 @@ func (d *DatabaseTransaction) RelationsFor(ctx context.Context, frameID, eventID
 		entries = entries[:len(entries)-1]
 		nextBatch = fmt.Sprintf("%d", entries[len(entries)-1].Position)
 	}
-	// TODO: set prevBatch? doesn't seem to affect the tests...
+	// TDO: set prevBatch? doesn't seem to affect the tests...
 
 	// Extract all of the event IDs from the relation entries so that we can pull the
 	// events out of the database. Then go and fetch the events.

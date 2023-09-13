@@ -273,6 +273,7 @@ func (c *Metrics) Defaults(opts DefaultOpts) {
 }
 
 func (c *Metrics) Verify(configErrs *ConfigErrors) {
+	// empty
 }
 
 // ServerNotices defines the configuration used for sending server notices
@@ -298,7 +299,9 @@ func (c *ServerNotices) Defaults(opts DefaultOpts) {
 	}
 }
 
-func (c *ServerNotices) Verify(errors *ConfigErrors) {}
+func (c *ServerNotices) Verify(errors *ConfigErrors) {
+	// empty
+}
 
 type Cache struct {
 	EstimatedMaxSize DataUnit      `yaml:"max_size_estimated"`
@@ -350,6 +353,7 @@ func (c *Sentry) Defaults() {
 }
 
 func (c *Sentry) Verify(configErrs *ConfigErrors) {
+	// empty
 }
 
 type DatabaseOptions struct {
@@ -369,7 +373,9 @@ func (c *DatabaseOptions) Defaults(conns int) {
 	c.ConnMaxLifetimeSeconds = -1
 }
 
-func (c *DatabaseOptions) Verify(configErrs *ConfigErrors) {}
+func (c *DatabaseOptions) Verify(configErrs *ConfigErrors) {
+	// empty
+}
 
 // MaxIdleConns returns maximum idle connections to the DB
 func (c DatabaseOptions) MaxIdleConns() int {

@@ -52,7 +52,7 @@ func (r *Joiner) PerformJoin(
 	logger.Info("User requested to frame join")
 	frameID, joinedVia, err = r.performJoin(context.Background(), req)
 	if err != nil {
-		logger.WithError(err).Error("Failed to join frame")
+		logger.WithError(err).Error("failed to join frame")
 		sentry.CaptureException(err)
 		return "", "", err
 	}
@@ -134,7 +134,7 @@ func (r *Joiner) performJoinFrameByAlias(
 	return r.performJoinFrameByID(ctx, req)
 }
 
-// TODO: Break this function up a bit & move to GMSL
+// TDO: Break this function up a bit & move to GMSL
 // nolint:gocyclo
 func (r *Joiner) performJoinFrameByID(
 	ctx context.Context,
@@ -269,7 +269,7 @@ func (r *Joiner) performJoinFrameByID(
 	// Try to construct an actual join event from the template.
 	// If this succeeds then it is a sign that the frame already exists
 	// locally on the homeserver.
-	// TODO: Check what happens if the frame exists on the server
+	// TDO: Check what happens if the frame exists on the server
 	// but everyone has since left. I suspect it does the wrong thing.
 
 	var buildRes rsAPI.QueryLatestEventsAndStateResponse

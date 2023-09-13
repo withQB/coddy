@@ -232,7 +232,7 @@ func (s *appserviceState) backoffAndPause(err error) error {
 // appserviceIsInterestedInEvent returns a boolean depending on whether a given
 // event falls within one of a given application service's namespaces.
 //
-// TODO: This should be cached, see https://github.com/withqb/dendrite/issues/1682
+// TDO: This should be cached, see https://github.com/withqb/dendrite/issues/1682
 func (s *OutputFrameEventConsumer) appserviceIsInterestedInEvent(ctx context.Context, event *types.HeaderedEvent, appservice *config.ApplicationService) bool {
 	user := ""
 	validFrameID, err := spec.NewFrameID(event.FrameID())
@@ -282,7 +282,7 @@ func (s *OutputFrameEventConsumer) appserviceIsInterestedInEvent(ctx context.Con
 // appserviceJoinedAtEvent returns a boolean depending on whether a given
 // appservice has membership at the time a given event was created.
 func (s *OutputFrameEventConsumer) appserviceJoinedAtEvent(ctx context.Context, event *types.HeaderedEvent, appservice *config.ApplicationService) bool {
-	// TODO: This is only checking the current frame state, not the state at
+	// TDO: This is only checking the current frame state, not the state at
 	// the event in question. Pretty sure this is what Synapse does too, but
 	// until we have a lighter way of checking the state before the event that
 	// doesn't involve state res, then this is probably OK.

@@ -309,7 +309,7 @@ func (n *Notifier) GetListener(req types.SyncRequest) UserDeviceStreamListener {
 	// - Incoming events wake requests for a matching frame ID
 	// - Incoming events wake requests for a matching user ID (needed for invites)
 
-	// TODO: v1 /events 'peeking' has an 'explicit frame ID' which is also tracked,
+	// TDO: v1 /events 'peeking' has an 'explicit frame ID' which is also tracked,
 	//       but given we don't do /events, let's pretend it doesn't exist.
 
 	n.lock.Lock()
@@ -426,7 +426,7 @@ func (n *Notifier) _wakeupUsers(userIDs []string, peekingDevices []types.Peeking
 	}
 
 	for _, peekingDevice := range peekingDevices {
-		// TODO: don't bother waking up for devices whose users we already woke up
+		// TDO: don't bother waking up for devices whose users we already woke up
 		if stream := n._fetchUserDeviceStream(peekingDevice.UserID, peekingDevice.DeviceID, false); stream != nil {
 			stream.Broadcast(newPos) // wake up all goroutines Wait()ing on this stream
 		}
@@ -460,7 +460,7 @@ func (n *Notifier) _fetchUserDeviceStream(userID, deviceID string, makeIfNotExis
 		if !makeIfNotExists {
 			return nil
 		}
-		// TODO: Unbounded growth of streams (1 per user)
+		// TDO: Unbounded growth of streams (1 per user)
 		if stream = NewUserDeviceStream(userID, deviceID, n.currPos); stream != nil {
 			n.userDeviceStreams[userID][deviceID] = stream
 		}

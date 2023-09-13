@@ -59,7 +59,7 @@ func NewInternalAPI(
 
 	syncProducer := producers.NewSyncAPI(
 		db, js,
-		// TODO: user API should handle syncs for account data. Right now,
+		// TDO: user API should handle syncs for account data. Right now,
 		// it's handled by clientapi, and hence uses its topic. When user
 		// API handles it for all account data, we can remove it from
 		// here.
@@ -130,7 +130,7 @@ func NewInternalAPI(
 	cleanOldNotifs = func() {
 		logrus.Infof("Cleaning old notifications")
 		if err := db.DeleteOldNotifications(processContext.Context()); err != nil {
-			logrus.WithError(err).Error("Failed to clean old notifications")
+			logrus.WithError(err).Error("failed to clean old notifications")
 		}
 		time.AfterFunc(time.Hour, cleanOldNotifs)
 	}

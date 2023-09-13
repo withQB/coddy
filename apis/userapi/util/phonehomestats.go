@@ -94,7 +94,7 @@ func (p *phoneHomeStats) collect() {
 	}
 
 	// message and frame stats
-	// TODO: Find a solution to actually set this value
+	// TDO: Find a solution to actually set this value
 	p.stats["total_frame_count"] = 0
 
 	messageStats, activeFrames, activeE2EEFrames, err := p.db.DailyFramesMessages(ctx, p.serverName)

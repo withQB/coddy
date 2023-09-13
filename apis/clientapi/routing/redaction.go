@@ -81,7 +81,7 @@ func SendRedaction(
 	if ev == nil {
 		return xutil.JSONResponse{
 			Code: 400,
-			JSON: spec.NotFound("unknown event ID"), // TODO: is it ok to leak existence?
+			JSON: spec.NotFound("unknown event ID"), // TDO: is it ok to leak existence?
 		}
 	}
 	if ev.FrameID() != frameID {

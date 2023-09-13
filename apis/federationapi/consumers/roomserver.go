@@ -121,7 +121,7 @@ func (s *OutputFrameEventConsumer) onMessage(ctx context.Context, msgs []*nats.M
 	case api.OutputTypePurgeFrame:
 		log.WithField("frame_id", output.PurgeFrame.FrameID).Warn("Purging frame from federation API")
 		if err := s.db.PurgeFrame(ctx, output.PurgeFrame.FrameID); err != nil {
-			logrus.WithField("frame_id", output.PurgeFrame.FrameID).WithError(err).Error("Failed to purge frame from federation API")
+			logrus.WithField("frame_id", output.PurgeFrame.FrameID).WithError(err).Error("failed to purge frame from federation API")
 		} else {
 			logrus.WithField("frame_id", output.PurgeFrame.FrameID).Warn("Frame purged from federation API")
 		}
@@ -139,7 +139,7 @@ func (s *OutputFrameEventConsumer) onMessage(ctx context.Context, msgs []*nats.M
 // causing the federationapi to start sending messages to the peeking server
 func (s *OutputFrameEventConsumer) processInboundPeek(orp api.OutputNewInboundPeek) error {
 
-	// FIXME: there's a race here - we should start /sending new peeked events
+	// FXME: there's a race here - we should start /sending new peeked events
 	// atomically after the orp.LatestEventID to ensure there are no gaps between
 	// the peek beginning and the send stream beginning.
 	//
@@ -227,9 +227,9 @@ func (s *OutputFrameEventConsumer) processMessage(ore api.OutputNewFrameEvent, r
 		return err
 	}
 
-	// TODO: do housekeeping to evict unrenewed peeking hosts
+	// TDO: do housekeeping to evict unrenewed peeking hosts
 
-	// TODO: implement query to let the fedapi check whether a given peek is live or not
+	// TDO: implement query to let the fedapi check whether a given peek is live or not
 
 	// Send the event.
 	return s.queues.SendEvent(
@@ -405,7 +405,7 @@ func JoinedHostsFromEvents(ctx context.Context, evs []xtools.PDU, rsAPI api.Fede
 			if errors.As(err, new(base64.CorruptInputError)) {
 				// Fallback to using the "old" way of getting the user domain, avoids
 				// "illegal base64 data at input byte 0" errors
-				// FIXME: we should do this in QueryUserIDForSender instead
+				// FXME: we should do this in QueryUserIDForSender instead
 				_, domain, err = xtools.SplitID('@', *ev.StateKey())
 				if err != nil {
 					return nil, err

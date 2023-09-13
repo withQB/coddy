@@ -122,7 +122,7 @@ func (s *sendToDeviceStatements) SelectSendToDeviceMessages(
 		var id types.StreamPosition
 		var userID, deviceID, content string
 		if err = rows.Scan(&id, &userID, &deviceID, &content); err != nil {
-			logrus.WithError(err).Errorf("Failed to retrieve send-to-device message")
+			logrus.WithError(err).Errorf("failed to retrieve send-to-device message")
 			return
 		}
 		event := types.SendToDeviceEvent{
@@ -131,7 +131,7 @@ func (s *sendToDeviceStatements) SelectSendToDeviceMessages(
 			DeviceID: deviceID,
 		}
 		if err = json.Unmarshal([]byte(content), &event.SendToDeviceEvent); err != nil {
-			logrus.WithError(err).Errorf("Failed to unmarshal send-to-device message")
+			logrus.WithError(err).Errorf("failed to unmarshal send-to-device message")
 			continue
 		}
 		if id > lastPos {

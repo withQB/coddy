@@ -181,7 +181,7 @@ func (rp *RequestPool) updateLastSeen(req *http.Request, device *userapi.Device)
 	remoteAddr := req.RemoteAddr
 	if rp.cfg.RealIPHeader != "" {
 		if header := req.Header.Get(rp.cfg.RealIPHeader); header != "" {
-			// TODO: Maybe this isn't great but it will satisfy both X-Real-IP
+			// TDO: Maybe this isn't great but it will satisfy both X-Real-IP
 			// and X-Forwarded-For (which can be a list where the real client
 			// address is the first listed address). Make more intelligent?
 			addresses := strings.Split(header, ",")
@@ -306,7 +306,7 @@ func (rp *RequestPool) OnIncomingSyncRequest(req *http.Request, device *userapi.
 			var succeeded bool
 			snapshot, err := rp.db.NewDatabaseSnapshot(req.Context())
 			if err != nil {
-				logrus.WithError(err).Error("Failed to acquire database snapshot for sync request")
+				logrus.WithError(err).Error("failed to acquire database snapshot for sync request")
 				return from
 			}
 			defer func() {
@@ -543,7 +543,7 @@ func (rp *RequestPool) OnIncomingKeyChangeRequest(req *http.Request, device *use
 	}
 	snapshot, err := rp.db.NewDatabaseSnapshot(req.Context())
 	if err != nil {
-		logrus.WithError(err).Error("Failed to acquire database snapshot for key change")
+		logrus.WithError(err).Error("failed to acquire database snapshot for key change")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -557,7 +557,7 @@ func (rp *RequestPool) OnIncomingKeyChangeRequest(req *http.Request, device *use
 		syncReq.Response, fromToken.DeviceListPosition, toToken.DeviceListPosition,
 	)
 	if err != nil {
-		xutil.GetLogger(req.Context()).WithError(err).Error("Failed to DeviceListCatchup info")
+		xutil.GetLogger(req.Context()).WithError(err).Error("failed to DeviceListCatchup info")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},

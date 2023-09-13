@@ -75,7 +75,7 @@ func JoinFrameByIDOrAlias(
 		case nil: // success case
 			response = xutil.JSONResponse{
 				Code: http.StatusOK,
-				// TODO: Put the response struct somewhere internal.
+				// TDO: Put the response struct somewhere internal.
 				JSON: struct {
 					FrameID string `json:"frame_id"`
 				}{frameID},

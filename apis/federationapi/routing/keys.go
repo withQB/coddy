@@ -51,7 +51,7 @@ func QueryDeviceKeys(
 		UserToDevices: qkr.DeviceKeys,
 	}, &queryRes)
 	if queryRes.Error != nil {
-		xutil.GetLogger(httpReq.Context()).WithError(queryRes.Error).Error("Failed to QueryKeys")
+		xutil.GetLogger(httpReq.Context()).WithError(queryRes.Error).Error("failed to QueryKeys")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -105,7 +105,7 @@ func ClaimOneTimeKeys(
 		OneTimeKeys: cor.OneTimeKeys,
 	}, &claimRes)
 	if claimRes.Error != nil {
-		xutil.GetLogger(httpReq.Context()).WithError(claimRes.Error).Error("Failed to PerformClaimKeys")
+		xutil.GetLogger(httpReq.Context()).WithError(claimRes.Error).Error("failed to PerformClaimKeys")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -165,7 +165,7 @@ func localKeys(cfg *config.FederationAPI, serverName spec.ServerName) (*xtools.S
 				Key: spec.Base64Bytes(publicKey),
 			},
 		}
-		// TODO: Virtual hosts probably want to be able to specify old signing
+		// TDO: Virtual hosts probably want to be able to specify old signing
 		// keys too, just in case
 	}
 
@@ -185,7 +185,7 @@ func NotaryKeys(
 	fsAPI federationAPI.FederationInternalAPI,
 	req *xtools.PublicKeyNotaryLookupRequest,
 ) xutil.JSONResponse {
-	serverName := spec.ServerName(httpReq.Host) // TODO: this is not ideal
+	serverName := spec.ServerName(httpReq.Host) // TDO: this is not ideal
 	if !cfg.Matrix.IsLocalServerName(serverName) {
 		return xutil.JSONResponse{
 			Code: http.StatusNotFound,
@@ -231,7 +231,7 @@ func NotaryKeys(
 		for _, keys := range keyList {
 			j, err := json.Marshal(keys)
 			if err != nil {
-				logrus.WithError(err).Errorf("Failed to marshal %q response", serverName)
+				logrus.WithError(err).Errorf("failed to marshal %q response", serverName)
 				return xutil.JSONResponse{
 					Code: http.StatusInternalServerError,
 					JSON: spec.InternalServerError{},
@@ -242,7 +242,7 @@ func NotaryKeys(
 				string(cfg.Matrix.ServerName), cfg.Matrix.KeyID, cfg.Matrix.PrivateKey, j,
 			)
 			if err != nil {
-				logrus.WithError(err).Errorf("Failed to sign %q response", serverName)
+				logrus.WithError(err).Errorf("failed to sign %q response", serverName)
 				return xutil.JSONResponse{
 					Code: http.StatusInternalServerError,
 					JSON: spec.InternalServerError{},

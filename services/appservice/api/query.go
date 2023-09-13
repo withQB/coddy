@@ -154,7 +154,7 @@ var ErrProfileNotExists = errors.New("no known profile for given user ID")
 
 // RetrieveUserProfile is a wrapper that queries both the local database and
 // application services for a given user's profile
-// TODO: Remove this, it's called from federationapi and clientapi but is a pure function
+// TDO: Remove this, it's called from federationapi and clientapi but is a pure function
 func RetrieveUserProfile(
 	ctx context.Context,
 	userID string,

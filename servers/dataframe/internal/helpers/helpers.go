@@ -20,7 +20,7 @@ import (
 	"github.com/withqb/coddy/servers/dataframe/types"
 )
 
-// TODO: temporary package which has helper functions used by both internal/perform packages.
+// TDO: temporary package which has helper functions used by both internal/perform packages.
 // Move these to a more sensible place.
 
 func UpdateToInviteMembership(
@@ -67,7 +67,7 @@ func UpdateToInviteMembership(
 // IsServerCurrentlyInFrame checks if a server is in a given frame, based on the frame
 // memberships. If the servername is not supplied then the local server will be
 // checked instead using a faster code path.
-// TODO: This should probably be replaced by an API call.
+// TDO: This should probably be replaced by an API call.
 func IsServerCurrentlyInFrame(ctx context.Context, db storage.Database, querier api.QuerySenderIDAPI, serverName spec.ServerName, frameID string) (bool, error) {
 	info, err := db.FrameInfo(ctx, frameID)
 	if err != nil {
@@ -350,7 +350,7 @@ func slowGetHistoryVisibilityState(
 	return LoadStateEvents(ctx, db, info, filteredEntries)
 }
 
-// TODO: Remove this when we have tests to assert correctness of this function
+// TDO: Remove this when we have tests to assert correctness of this function
 func ScanEventTree(
 	ctx context.Context, db storage.Database, info *types.FrameInfo, front []string, visited map[string]bool, limit int,
 	serverName spec.ServerName, querier api.QuerySenderIDAPI,
@@ -362,7 +362,7 @@ func ScanEventTree(
 	var next []string
 	var pre string
 
-	// TODO: add tests for this function to ensure it meets the contract that callers expect (and doc what that is supposed to be)
+	// TDO: add tests for this function to ensure it meets the contract that callers expect (and doc what that is supposed to be)
 	// Currently, callers like PerformBackfill will call scanEventTree with a pre-populated `visited` map, assuming that by doing
 	// so means that the events in that map will NOT be returned from this function. That is not currently true, resulting in
 	// duplicate events being sent in response to /backfill requests.
@@ -398,7 +398,7 @@ BFSLoop:
 			ev := events[0]
 			isServerInFrame, err = IsServerCurrentlyInFrame(ctx, db, querier, serverName, ev.FrameID())
 			if err != nil {
-				xutil.GetLogger(ctx).WithError(err).Error("Failed to check if server is currently in frame, assuming not.")
+				xutil.GetLogger(ctx).WithError(err).Error("failed to check if server is currently in frame, assuming not.")
 			}
 			checkedServerInFrame = true
 		}

@@ -89,7 +89,7 @@ func Setup(
 	// multiple times from the same user and frame, otherwise
 	// a state reset can occur. This also avoids unneeded
 	// state calculations.
-	// TODO: actually fix this in the dataframe, as there are
+	// TDO: actually fix this in the dataframe, as there are
 	// 		 possibly other ways that can result in a stat reset.
 	sf := singleflight.Group{}
 
@@ -509,7 +509,7 @@ func Setup(
 	).Methods(http.MethodPut, http.MethodOptions)
 
 	// Defined outside of handler to persist between calls
-	// TODO: clear based on some criteria
+	// TDO: clear based on some criteria
 	frameHierarchyPaginationCache := NewFrameHierarchyPaginationCache()
 	v1mux.Handle("/frames/{frameID}/hierarchy",
 		httputil.MakeAuthAPI("spaces", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
@@ -667,7 +667,7 @@ func Setup(
 
 	// This is only here because sytest refers to /unstable for this endpoint
 	// rather than r0. It's an exact duplicate of the above handler.
-	// TODO: Remove this if/when sytest is fixed!
+	// TDO: Remove this if/when sytest is fixed!
 	unstableMux.Handle("/sendToDevice/{eventType}/{txnID}",
 		httputil.MakeAuthAPI("send_to_device", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
@@ -922,7 +922,7 @@ func Setup(
 	// Browsers use the OPTIONS HTTP method to check if the CORS policy allows
 	// PUT requests, so we need to allow this method
 
-	threePIDClient := base.CreateClient(dendriteCfg, nil) // TODO: Move this somewhere else, e.g. pass in as parameter
+	threePIDClient := base.CreateClient(dendriteCfg, nil) // TDO: Move this somewhere else, e.g. pass in as parameter
 
 	v3mux.Handle("/account/3pid",
 		httputil.MakeAuthAPI("account_3pid", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
@@ -1007,7 +1007,7 @@ func Setup(
 
 	v3mux.Handle("/frames/{frameID}/initialSync",
 		httputil.MakeExternalAPI("frames_initial_sync", func(req *http.Request) xutil.JSONResponse {
-			// TODO: Allow people to peek into frames.
+			// TDO: Allow people to peek into frames.
 			return xutil.JSONResponse{
 				Code: http.StatusForbidden,
 				JSON: spec.GuestAccessForbidden("Guest access not implemented"),

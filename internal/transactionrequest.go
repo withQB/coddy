@@ -206,7 +206,7 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 				Typing bool   `json:"typing"`
 			}
 			if err := json.Unmarshal(e.Content, &typingPayload); err != nil {
-				xutil.GetLogger(ctx).WithError(err).Debug("Failed to unmarshal typing event")
+				xutil.GetLogger(ctx).WithError(err).Debug("failed to unmarshal typing event")
 				continue
 			}
 			if _, serverName, err := xtools.SplitID('@', typingPayload.UserID); err != nil {
@@ -217,12 +217,12 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 				continue
 			}
 			if err := t.producer.SendTyping(ctx, typingPayload.UserID, typingPayload.FrameID, typingPayload.Typing, 30*1000); err != nil {
-				xutil.GetLogger(ctx).WithError(err).Error("Failed to send typing event to JetStream")
+				xutil.GetLogger(ctx).WithError(err).Error("failed to send typing event to JetStream")
 			}
 		case spec.MDirectToDevice:
 			var directPayload xtools.ToDeviceMessage
 			if err := json.Unmarshal(e.Content, &directPayload); err != nil {
-				xutil.GetLogger(ctx).WithError(err).Debug("Failed to unmarshal send-to-device events")
+				xutil.GetLogger(ctx).WithError(err).Debug("failed to unmarshal send-to-device events")
 				continue
 			}
 			if _, serverName, err := xtools.SplitID('@', directPayload.Sender); err != nil {
@@ -234,14 +234,14 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 			}
 			for userID, byUser := range directPayload.Messages {
 				for deviceID, message := range byUser {
-					// TODO: check that the user and the device actually exist here
+					// TDO: check that the user and the device actually exist here
 					if err := t.producer.SendToDevice(ctx, directPayload.Sender, userID, deviceID, directPayload.Type, message); err != nil {
 						sentry.CaptureException(err)
 						xutil.GetLogger(ctx).WithError(err).WithFields(logrus.Fields{
 							"sender":    directPayload.Sender,
 							"user_id":   userID,
 							"device_id": deviceID,
-						}).Error("Failed to send send-to-device event to JetStream")
+						}).Error("failed to send send-to-device event to JetStream")
 					}
 				}
 			}
@@ -254,7 +254,7 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 			payload := map[string]types.FederationReceiptMRead{}
 
 			if err := json.Unmarshal(e.Content, &payload); err != nil {
-				xutil.GetLogger(ctx).WithError(err).Debug("Failed to unmarshal receipt event")
+				xutil.GetLogger(ctx).WithError(err).Debug("failed to unmarshal receipt event")
 				continue
 			}
 
@@ -262,7 +262,7 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 				for userID, mread := range receipt.User {
 					_, domain, err := xtools.SplitID('@', userID)
 					if err != nil {
-						xutil.GetLogger(ctx).WithError(err).Debug("Failed to split domain from receipt event sender")
+						xutil.GetLogger(ctx).WithError(err).Debug("failed to split domain from receipt event sender")
 						continue
 					}
 					if t.Origin != domain {
@@ -275,7 +275,7 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 							"user_id": userID,
 							"frame_id": frameID,
 							"events":  mread.EventIDs,
-						}).Error("Failed to send receipt event to JetStream")
+						}).Error("failed to send receipt event to JetStream")
 						continue
 					}
 				}
@@ -283,12 +283,12 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 		case types.MSigningKeyUpdate:
 			if err := t.producer.SendSigningKeyUpdate(ctx, e.Content, t.Origin); err != nil {
 				sentry.CaptureException(err)
-				logrus.WithError(err).Errorf("Failed to process signing key update")
+				logrus.WithError(err).Errorf("failed to process signing key update")
 			}
 		case spec.MPresence:
 			if t.inboundPresenceEnabled {
 				if err := t.processPresence(ctx, e); err != nil {
-					logrus.WithError(err).Errorf("Failed to process presence update")
+					logrus.WithError(err).Errorf("failed to process presence update")
 				}
 			}
 		default:

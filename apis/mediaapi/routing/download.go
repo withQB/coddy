@@ -122,10 +122,10 @@ func Download(
 			})
 			return
 		}
-		// TODO: Handle the fact we might have started writing the response
+		// TDO: Handle the fact we might have started writing the response
 		dReq.jsonErrorResponse(w, xutil.JSONResponse{
 			Code: http.StatusNotFound,
-			JSON: spec.NotFound("Failed to download: " + err.Error()),
+			JSON: spec.NotFound("failed to download: " + err.Error()),
 		})
 		return
 	}
@@ -144,7 +144,7 @@ func (r *downloadRequest) jsonErrorResponse(w http.ResponseWriter, res xutil.JSO
 	// Marshal JSON response into raw bytes to send as the HTTP body
 	resBytes, err := json.Marshal(res.JSON)
 	if err != nil {
-		r.Logger.WithError(err).Error("Failed to marshal JSONResponse")
+		r.Logger.WithError(err).Error("failed to marshal JSONResponse")
 		// this should never fail to be marshalled so drop err to the floor
 		res = xutil.MessageResponse(http.StatusNotFound, "Download request failed: "+err.Error())
 		resBytes, _ = json.Marshal(res.JSON)
@@ -634,7 +634,7 @@ func (r *downloadRequest) fetchRemoteFileAndStoreMetadata(
 		"ContentType":   r.MediaMetadata.ContentType,
 	}).Debug("Storing file metadata to media repository database")
 
-	// FIXME: timeout db request
+	// FXME: timeout db request
 	if err := db.StoreMediaMetadata(ctx, r.MediaMetadata); err != nil {
 		// If the file is a duplicate (has the same hash as an existing file) then
 		// there is valid metadata in the database for that file. As such we only
@@ -679,7 +679,7 @@ func (r *downloadRequest) GetContentLengthAndReader(contentLengthHeader string, 
 		// A Content-Length header is provided. Let's try to parse it.
 		parsedLength, parseErr := strconv.ParseInt(contentLengthHeader, 10, 64)
 		if parseErr != nil {
-			r.Logger.WithError(parseErr).Warn("Failed to parse content length")
+			r.Logger.WithError(parseErr).Warn("failed to parse content length")
 			return 0, nil, fmt.Errorf("strconv.ParseInt: %w", parseErr)
 		}
 		if maxFileSizeBytes > 0 && parsedLength > int64(maxFileSizeBytes) {
@@ -734,7 +734,7 @@ func (r *downloadRequest) fetchRemoteFile(
 	}
 
 	if maxFileSizeBytes > 0 && contentLength > int64(maxFileSizeBytes) {
-		// TODO: Bubble up this as a 413
+		// TDO: Bubble up this as a 413
 		return "", false, fmt.Errorf("remote file is too large (%v > %v bytes)", contentLength, maxFileSizeBytes)
 	}
 

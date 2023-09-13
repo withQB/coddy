@@ -171,7 +171,7 @@ func (u *latestEventsUpdater) doUpdateLatestEvents() error {
 		}
 
 		// If we need to generate any output events then here's where we do it.
-		// TODO: Move this!
+		// TDO: Move this!
 		if updates, err = u.api.updateMemberships(u.ctx, u.updater, u.removed, u.added); err != nil {
 			return fmt.Errorf("u.api.updateMemberships: %w", err)
 		}
@@ -193,7 +193,7 @@ func (u *latestEventsUpdater) doUpdateLatestEvents() error {
 	// We do this inside the database transaction to ensure that we only mark an event as sent if we sent it.
 	// (n.b. this means that it's possible that the same event will be sent twice if the transaction fails but
 	//  the write to the output log succeeds)
-	// TODO: This assumes that writing the event to the output log is synchronous. It should be possible to
+	// TDO: This assumes that writing the event to the output log is synchronous. It should be possible to
 	// send the event asynchronously but we would need to ensure that 1) the events are written to the log in
 	// the correct order, 2) that pending writes are resent across restarts. In order to avoid writing all the
 	// necessary bookkeeping we'll keep the event sending synchronous for now.

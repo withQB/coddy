@@ -404,7 +404,7 @@ func NewResponse() *Response {
 	}
 
 	// Also pre-intialise empty slices or else we'll insert 'null' instead of '[]' for the value.
-	// TODO: We really shouldn't have to do all this to coerce encoding/json to Do The Right Thing. We should
+	// TDO: We really shouldn't have to do all this to coerce encoding/json to Do The Right Thing. We should
 	//       really be using our own Marshal/Unmarshal implementations otherwise this may prove to be a CPU bottleneck.
 	//       This also applies to NewJoinResponse, NewInviteResponse and NewLeaveResponse.
 	res.AccountData = &ClientEvents{}

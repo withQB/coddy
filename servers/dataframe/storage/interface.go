@@ -136,7 +136,7 @@ type Database interface {
 	// Returns whether a given frame is published or not.
 	GetPublishedFrame(ctx context.Context, frameID string) (bool, error)
 
-	// TODO: factor out - from currentstateserver
+	// TDO: factor out - from currentstateserver
 
 	// GetStateEvent returns the state event of a given type for a given frame with a given state key
 	// If no event could be found, returns nil
@@ -193,8 +193,8 @@ type UserFrameKeys interface {
 	SelectUserFramePublicKey(ctx context.Context, userID spec.UserID, frameID spec.FrameID) (key ed25519.PublicKey, err error)
 	// SelectUserIDsForPublicKeys selects all userIDs for the requested senderKeys. Returns a map from frameID -> map from publicKey to userID.
 	// If a senderKey can't be found, it is omitted in the result.
-	// TODO: Why is the result map indexed by string not public key?
-	// TODO: Shouldn't the input & result map be changed to be indexed by string instead of the FrameID struct?
+	// TDO: Why is the result map indexed by string not public key?
+	// TDO: Shouldn't the input & result map be changed to be indexed by string instead of the FrameID struct?
 	SelectUserIDsForPublicKeys(ctx context.Context, publicKeys map[spec.FrameID][]ed25519.PublicKey) (map[spec.FrameID]map[string]string, error)
 }
 

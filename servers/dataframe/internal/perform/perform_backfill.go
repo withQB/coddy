@@ -41,7 +41,7 @@ func (r *Backfiller) PerformBackfill(
 	response *api.PerformBackfillResponse,
 ) error {
 	// if we are requesting the backfill then we need to do a federation hit
-	// TODO: we could be more sensible and fetch as many events we already have then request the rest
+	// TDO: we could be more sensible and fetch as many events we already have then request the rest
 	//       which is what the syncapi does already.
 	if r.IsLocalServerName(request.ServerName) {
 		return r.backfillViaFederation(ctx, request, response)
@@ -155,7 +155,7 @@ func (r *Backfiller) backfillViaFederation(ctx context.Context, req *api.Perform
 		}
 	}
 
-	// TODO: update backwards extremities, as that should be moved from syncapi to dataframe at some point.
+	// TDO: update backwards extremities, as that should be moved from syncapi to dataframe at some point.
 
 	res.Events = make([]*types.HeaderedEvent, len(events))
 	for i := range events {
@@ -377,7 +377,7 @@ func (b *backfillRequester) StateBeforeEvent(ctx context.Context, frameVer xtool
 	events, err := b.ProvideEvents(frameVer, eventIDs)
 	if err != nil {
 		// non-fatal, fallthrough
-		logrus.WithError(err).Info("Failed to fetch events")
+		logrus.WithError(err).Info("failed to fetch events")
 	} else {
 		logrus.Infof("Fetched %d/%d events from the database", len(events), len(eventIDs))
 		if len(events) == len(eventIDs) {
@@ -520,7 +520,7 @@ func (b *backfillRequester) ProvideEvents(frameVer xtools.FrameVersion, eventIDs
 	ctx := context.Background()
 	nidMap, err := b.db.EventNIDs(ctx, eventIDs)
 	if err != nil {
-		logrus.WithError(err).WithField("event_ids", eventIDs).Error("Failed to find events")
+		logrus.WithError(err).WithField("event_ids", eventIDs).Error("failed to find events")
 		return nil, err
 	}
 	eventNIDs := make([]types.EventNID, len(nidMap))
@@ -531,7 +531,7 @@ func (b *backfillRequester) ProvideEvents(frameVer xtools.FrameVersion, eventIDs
 	}
 	eventsWithNids, err := b.db.Events(ctx, b.frameVersion, eventNIDs)
 	if err != nil {
-		logrus.WithError(err).WithField("event_nids", eventNIDs).Error("Failed to load events")
+		logrus.WithError(err).WithField("event_nids", eventNIDs).Error("failed to load events")
 		return nil, err
 	}
 	events := make([]xtools.PDU, len(eventsWithNids))
@@ -543,7 +543,7 @@ func (b *backfillRequester) ProvideEvents(frameVer xtools.FrameVersion, eventIDs
 
 // joinEventsFromHistoryVisibility returns all CURRENTLY joined members if our server can read the frame history
 //
-// TODO: Long term we probably want a history_visibility table which stores eventNID | visibility_enum so we can just
+// TDO: Long term we probably want a history_visibility table which stores eventNID | visibility_enum so we can just
 // pull all events and then filter by that table.
 func joinEventsFromHistoryVisibility(
 	ctx context.Context, db storage.FrameDatabase, querier api.QuerySenderIDAPI, frameInfo *types.FrameInfo, stateEntries []types.StateEntry,
@@ -596,7 +596,7 @@ func persistEvents(ctx context.Context, db storage.Database, querier api.QuerySe
 	for j, ev := range events {
 		nidMap, err := db.EventNIDs(ctx, ev.AuthEventIDs())
 		if err != nil { // this shouldn't happen as RequestBackfill already found them
-			logrus.WithError(err).WithField("auth_events", ev.AuthEventIDs()).Error("Failed to find one or more auth events")
+			logrus.WithError(err).WithField("auth_events", ev.AuthEventIDs()).Error("failed to find one or more auth events")
 			continue
 		}
 		authNids := make([]types.EventNID, len(nidMap))
@@ -627,7 +627,7 @@ func persistEvents(ctx context.Context, db storage.Database, querier api.QuerySe
 
 		eventNID, _, err = db.StoreEvent(ctx, ev, frameInfo, eventTypeNID, eventStateKeyNID, authNids, false)
 		if err != nil {
-			logrus.WithError(err).WithField("event_id", ev.EventID()).Error("Failed to persist event")
+			logrus.WithError(err).WithField("event_id", ev.EventID()).Error("failed to persist event")
 			continue
 		}
 
@@ -635,7 +635,7 @@ func persistEvents(ctx context.Context, db storage.Database, querier api.QuerySe
 
 		_, redactedEvent, err := db.MaybeRedactEvent(ctx, frameInfo, eventNID, ev, &resolver, querier)
 		if err != nil {
-			logrus.WithError(err).WithField("event_id", ev.EventID()).Error("Failed to redact event")
+			logrus.WithError(err).WithField("event_id", ev.EventID()).Error("failed to redact event")
 			continue
 		}
 		// If storing this event results in it being redacted, then do so.

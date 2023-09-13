@@ -68,7 +68,7 @@ func (r *FederationInternalAPI) PerformJoin(
 			Message: `{
 				"errcode": "M_LIMIT_EXCEEDED",
 				"error": "There is already a federated join to this frame in progress. Please wait for it to finish."
-			}`, // TODO: Why do none of our error types play nicely with each other?
+			}`, // TDO: Why do none of our error types play nicely with each other?
 		}
 		return
 	}
@@ -104,7 +104,7 @@ func (r *FederationInternalAPI) PerformJoin(
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"server_name": serverName,
 				"frame_id":     request.FrameID,
-			}).Warnf("Failed to join frame through server")
+			}).Warnf("failed to join frame through server")
 			lastErr = err
 			continue
 		}
@@ -222,7 +222,7 @@ func (r *FederationInternalAPI) performJoinUsingServer(
 		return fmt.Errorf("UpdatedFrame: failed to update frame with joined hosts: %s", err)
 	}
 
-	// TODO: Can I change this to not take respState but instead just take an opaque list of events?
+	// TDO: Can I change this to not take respState but instead just take an opaque list of events?
 	if err = dataframeAPI.SendEventWithState(
 		context.Background(),
 		r.rsAPI,
@@ -288,7 +288,7 @@ func (r *FederationInternalAPI) PerformOutboundPeek(
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"server_name": serverName,
 				"frame_id":     request.FrameID,
-			}).Warnf("Failed to peek frame through server")
+			}).Warnf("failed to peek frame through server")
 			lastErr = err
 			continue
 		}
@@ -459,7 +459,7 @@ func (r *FederationInternalAPI) PerformLeave(
 			request.UserID,
 		)
 		if err != nil {
-			// TODO: Check if the user was not allowed to leave the frame.
+			// TDO: Check if the user was not allowed to leave the frame.
 			logrus.WithError(err).Warnf("r.federation.MakeLeave failed")
 			r.statistics.ForServer(serverName).Failure()
 			continue

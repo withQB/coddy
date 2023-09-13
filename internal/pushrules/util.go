@@ -53,7 +53,7 @@ func BoolTweakOr(tweaks map[string]interface{}, key TweakKey, def bool) bool {
 
 // globToRegexp converts a Matrix glob-style pattern to a Regular expression.
 func globToRegexp(pattern string) (*regexp.Regexp, error) {
-	// TODO: It's unclear which glob characters are supported. The only
+	// TDO: It's unclear which glob characters are supported. The only
 	// place this is discussed is for the unrelated "m.policy.rule.*"
 	// events. Assuming, the same: /[*?]/
 	if !strings.ContainsAny(pattern, "*?") {

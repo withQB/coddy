@@ -122,7 +122,7 @@ func MakeAdminAPI(
 // MakeExternalAPI turns a xutil.JSONRequestHandler function into an http.Handler.
 // This is used for APIs that are called from the internet.
 func MakeExternalAPI(metricsName string, f func(*http.Request) xutil.JSONResponse) http.Handler {
-	// TODO: We shouldn't be directly reading env vars here, inject it in instead.
+	// TDO: We shouldn't be directly reading env vars here, inject it in instead.
 	// Refactor this when we split out config structs.
 	verbose := false
 	if os.Getenv("DENDRITE_TRACE_HTTP") == "1" {
@@ -140,7 +140,7 @@ func MakeExternalAPI(metricsName string, f func(*http.Request) xutil.JSONRespons
 				resp := rec.Result()
 				dump, err := httputil.DumpResponse(resp, true)
 				if err != nil {
-					logger.Debugf("Failed to dump outgoing response: %s", err)
+					logger.Debugf("failed to dump outgoing response: %s", err)
 				} else {
 					strSlice := strings.Split(string(dump), "\n")
 					for _, s := range strSlice {
@@ -162,7 +162,7 @@ func MakeExternalAPI(metricsName string, f func(*http.Request) xutil.JSONRespons
 			// Log incoming request
 			dump, err := httputil.DumpRequest(req, true)
 			if err != nil {
-				logger.Debugf("Failed to dump incoming request: %s", err)
+				logger.Debugf("failed to dump incoming request: %s", err)
 			} else {
 				strSlice := strings.Split(string(dump), "\n")
 				for _, s := range strSlice {

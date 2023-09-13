@@ -52,7 +52,7 @@ func (r *Peeker) performPeek(
 	ctx context.Context,
 	req *api.PerformPeekRequest,
 ) (string, error) {
-	// FIXME: there's way too much duplication with performJoin
+	// FXME: there's way too much duplication with performJoin
 	_, domain, err := xtools.SplitID('@', req.UserID)
 	if err != nil {
 		return "", api.ErrInvalidID{Err: fmt.Errorf("supplied user ID %q in incorrect format", req.UserID)}
@@ -129,7 +129,7 @@ func (r *Peeker) performPeekFrameByID(
 	}
 
 	// handle federated peeks
-	// FIXME: don't create an outbound peek if we already have one going.
+	// FXME: don't create an outbound peek if we already have one going.
 	if !r.Cfg.Matrix.IsLocalServerName(domain) {
 		// If the server name in the frame ID isn't ours then it's a
 		// possible candidate for finding the frame via federation. Add
@@ -169,10 +169,10 @@ func (r *Peeker) performPeekFrameByID(
 	}
 
 	if ev, _ := r.DB.GetStateEvent(ctx, frameID, "m.frame.encryption", ""); ev != nil {
-		return "", api.ErrNotAllowed{Err: fmt.Errorf("Cannot peek into an encrypted frame")}
+		return "", api.ErrNotAllowed{Err: fmt.Errorf("cannot peek into an encrypted frame")}
 	}
 
-	// TODO: handle federated peeks
+	// TDO: handle federated peeks
 
 	err = r.Inputer.OutputProducer.ProduceFrameEvents(frameID, []api.OutputEvent{
 		{

@@ -50,7 +50,7 @@ func (r *Leaver) PerformLeave(
 	if strings.HasPrefix(req.FrameID, "!") {
 		output, err := r.performLeaveFrameByID(context.Background(), req, res)
 		if err != nil {
-			logger.WithError(err).Error("Failed to leave frame")
+			logger.WithError(err).Error("failed to leave frame")
 		} else {
 			logger.Info("User left frame successfully")
 		}
@@ -161,7 +161,7 @@ func (r *Leaver) performLeaveFrameByID(
 
 	// We know that the user is in the frame at this point so let's build
 	// a leave event.
-	// TODO: Check what happens if the frame exists on the server
+	// TDO: Check what happens if the frame exists on the server
 	// but everyone has since left. I suspect it does the wrong thing.
 
 	validFrameID, err := spec.NewFrameID(req.FrameID)

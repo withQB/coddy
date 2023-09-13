@@ -20,7 +20,7 @@ import (
 	"github.com/withqb/xtools/spec"
 )
 
-// TODO: This logic should live in xtools
+// TDO: This logic should live in xtools
 
 // IsServerAllowed returns true if the server is allowed to see events in the frame
 // at this particular state

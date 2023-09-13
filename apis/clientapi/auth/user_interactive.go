@@ -29,7 +29,7 @@ type Type interface {
 	// The returned cleanup function must be non-nil on success, and will be called after
 	// authorization has been completed. Its argument is the final result of authorization.
 	LoginFromJSON(ctx context.Context, reqBytes []byte) (login *Login, cleanup LoginCleanupFunc, errRes *xutil.JSONResponse)
-	// TODO: Extend to support Register() flow
+	// TDO: Extend to support Register() flow
 	// Register(ctx context.Context, sessionID string, req interface{})
 }
 
@@ -125,7 +125,7 @@ func (u *UserInteractive) IsSingleStageFlow(authType string) bool {
 
 func (u *UserInteractive) AddCompletedStage(sessionID, authType string) {
 	u.Lock()
-	// TODO: Handle multi-stage flows
+	// TDO: Handle multi-stage flows
 	delete(u.Sessions, sessionID)
 	u.Unlock()
 }
@@ -134,7 +134,7 @@ type Challenge struct {
 	Completed []string              `json:"completed"`
 	Flows     []userInteractiveFlow `json:"flows"`
 	Session   string                `json:"session"`
-	// TODO: Return any additional `params`
+	// TDO: Return any additional `params`
 	Params map[string]interface{} `json:"params"`
 }
 
@@ -204,7 +204,7 @@ func (u *UserInteractive) ResponseWithChallenge(sessionID string, response inter
 // `bodyBytes` is the HTTP request body which must contain an `auth` key.
 // Returns the login that was verified for additional checks if required.
 func (u *UserInteractive) Verify(ctx context.Context, bodyBytes []byte, device *api.Device) (*Login, *xutil.JSONResponse) {
-	// TODO: rate limit
+	// TDO: rate limit
 
 	// "A client should first make a request with no auth parameter. The homeserver returns an HTTP 401 response, with a JSON body"
 	hasResponse := gjson.GetBytes(bodyBytes, "auth").Exists()
@@ -250,6 +250,6 @@ func (u *UserInteractive) Verify(ctx context.Context, bodyBytes []byte, device *
 
 	u.AddCompletedStage(sessionID, authType)
 	cleanup(ctx, nil)
-	// TODO: Check if there's more stages to go and return an error
+	// TDO: Check if there's more stages to go and return an error
 	return login, nil
 }

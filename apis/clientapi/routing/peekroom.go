@@ -34,7 +34,7 @@ func PeekFrameByIDOrAlias(
 ) xutil.JSONResponse {
 	// if this is a remote frameIDOrAlias, we have to ask the dataframe (or federation sender?) to
 	// to call /peek and /state on the remote server.
-	// TODO: in future we could skip this if we know we're already participating in the frame,
+	// TDO: in future we could skip this if we know we're already participating in the frame,
 	// but this is fiddly in case we stop participating in the frame.
 
 	// then we create a local peek.
@@ -74,7 +74,7 @@ func PeekFrameByIDOrAlias(
 		}
 	case nil:
 	default:
-		logrus.WithError(err).WithField("frameID", frameIDOrAlias).Errorf("Failed to peek frame")
+		logrus.WithError(err).WithField("frameID", frameIDOrAlias).Errorf("failed to peek frame")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -91,7 +91,7 @@ func PeekFrameByIDOrAlias(
 
 	return xutil.JSONResponse{
 		Code: http.StatusOK,
-		// TODO: Put the response struct somewhere internal.
+		// TDO: Put the response struct somewhere internal.
 		JSON: struct {
 			FrameID string `json:"frame_id"`
 		}{frameID},
@@ -113,7 +113,7 @@ func UnpeekFrameByID(
 		}
 	case nil:
 	default:
-		logrus.WithError(err).WithField("frameID", frameID).Errorf("Failed to un-peek frame")
+		logrus.WithError(err).WithField("frameID", frameID).Errorf("failed to un-peek frame")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},

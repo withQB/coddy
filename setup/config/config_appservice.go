@@ -34,7 +34,7 @@ const UnixSocketPrefix = "unix://"
 
 type AppServiceAPI struct {
 	Matrix  *Global  `yaml:"-"`
-	Derived *Derived `yaml:"-"` // TODO: Nuke Derived from orbit
+	Derived *Derived `yaml:"-"` // TDO: Nuke Derived from orbit
 
 	// DisableTLSValidation disables the validation of X.509 TLS certs
 	// on appservice endpoints. This is not recommended in production!
@@ -44,9 +44,11 @@ type AppServiceAPI struct {
 }
 
 func (c *AppServiceAPI) Defaults(opts DefaultOpts) {
+	// empty
 }
 
 func (c *AppServiceAPI) Verify(configErrs *ConfigErrors) {
+	// empty
 }
 
 // ApplicationServiceNamespace is the namespace that a specific application
@@ -373,11 +375,11 @@ func checkErrors(config *AppServiceAPI, derived *Derived) (err error) {
 		idMap[appservice.ID] = true
 		tokenMap[appservice.ASToken] = true
 
-		// TODO: Remove once rate_limited is implemented
+		// TDO: Remove once rate_limited is implemented
 		if appservice.RateLimited {
 			log.Warn("WARNING: Application service option rate_limited is currently unimplemented")
 		}
-		// TODO: Remove once protocols is implemented
+		// TDO: Remove once protocols is implemented
 		if len(appservice.Protocols) > 0 {
 			log.Warn("WARNING: Application service option protocols is currently unimplemented")
 		}
@@ -404,7 +406,7 @@ func validateNamespace(
 
 	// Check if GroupID for the users namespace is in the correct format
 	if key == "users" && namespace.GroupID != "" {
-		// TODO: Remove once group_id is implemented
+		// TDO: Remove once group_id is implemented
 		log.Warn("WARNING: Application service option group_id is currently unimplemented")
 
 		correctFormat := groupIDRegexp.MatchString(namespace.GroupID)

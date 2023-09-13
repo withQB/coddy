@@ -405,7 +405,7 @@ func currentFrameStateRowsToStreamEvents(rows *sql.Rows) ([]types.StreamEvent, e
 		if err := rows.Scan(&eventID, &streamPos, &eventBytes, &historyVisibility); err != nil {
 			return nil, err
 		}
-		// TODO: Handle redacted events
+		// TDO: Handle redacted events
 		var ev rstypes.HeaderedEvent
 		if err := json.Unmarshal(eventBytes, &ev); err != nil {
 			return nil, err
@@ -430,7 +430,7 @@ func rowsToEvents(rows *sql.Rows) ([]*rstypes.HeaderedEvent, error) {
 		if err := rows.Scan(&eventID, &eventBytes); err != nil {
 			return nil, err
 		}
-		// TODO: Handle redacted events
+		// TDO: Handle redacted events
 		var ev rstypes.HeaderedEvent
 		if err := json.Unmarshal(eventBytes, &ev); err != nil {
 			return nil, err

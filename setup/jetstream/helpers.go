@@ -30,7 +30,7 @@ func JetStreamConsumer(
 		// "Pull" suffixed to their name.
 		if _, err := js.ConsumerInfo(subj, durable); err == nil {
 			if err := js.DeleteConsumer(subj, durable); err != nil {
-				logrus.WithContext(ctx).Warnf("Failed to clean up old consumer %q", durable)
+				logrus.WithContext(ctx).Warnf("failed to clean up old consumer %q", durable)
 			}
 		}
 	}()
@@ -48,7 +48,7 @@ func JetStreamConsumer(
 			select {
 			case <-ctx.Done():
 				if err := sub.Unsubscribe(); err != nil {
-					logrus.WithContext(ctx).Warnf("Failed to unsubscribe %q", durable)
+					logrus.WithContext(ctx).Warnf("failed to unsubscribe %q", durable)
 				}
 				return
 			default:

@@ -52,14 +52,14 @@ func UploadKeys(req *http.Request, keyAPI api.ClientKeyAPI, device *api.Device) 
 		return xutil.ErrorResponse(err)
 	}
 	if uploadRes.Error != nil {
-		xutil.GetLogger(req.Context()).WithError(uploadRes.Error).Error("Failed to PerformUploadKeys")
+		xutil.GetLogger(req.Context()).WithError(uploadRes.Error).Error("failed to PerformUploadKeys")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
 	}
 	if len(uploadRes.KeyErrors) > 0 {
-		xutil.GetLogger(req.Context()).WithField("key_errors", uploadRes.KeyErrors).Error("Failed to upload one or more keys")
+		xutil.GetLogger(req.Context()).WithField("key_errors", uploadRes.KeyErrors).Error("failed to upload one or more keys")
 		return xutil.JSONResponse{
 			Code: 400,
 			JSON: uploadRes.KeyErrors,
@@ -105,7 +105,7 @@ func QueryKeys(req *http.Request, keyAPI api.ClientKeyAPI, device *api.Device) x
 		UserID:        device.UserID,
 		UserToDevices: r.DeviceKeys,
 		Timeout:       r.GetTimeout(),
-		// TODO: Token?
+		// TDO: Token?
 	}, &queryRes)
 	return xutil.JSONResponse{
 		Code: 200,

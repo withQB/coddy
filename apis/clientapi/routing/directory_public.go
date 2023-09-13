@@ -35,7 +35,7 @@ type PublicFrameReq struct {
 
 type filter struct {
 	SearchTerms string   `json:"generic_search_term,omitempty"`
-	FrameTypes   []string `json:"frame_types,omitempty"` // TODO: Implement filter on this
+	FrameTypes   []string `json:"frame_types,omitempty"` // TDO: Implement filter on this
 }
 
 // GetPostPublicFrames implements GET and POST /publicFrames
@@ -241,7 +241,7 @@ func refreshPublicFrameCache(
 		extraFrames = extFramesProvider.Frames()
 	}
 
-	// TODO: this is only here to make Sytest happy, for now.
+	// TDO: this is only here to make Sytest happy, for now.
 	ns := strings.Split(request.NetworkID, "|")
 	if len(ns) == 2 {
 		request.NetworkID = ns[1]

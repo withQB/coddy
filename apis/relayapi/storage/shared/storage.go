@@ -133,7 +133,7 @@ func (d *Database) GetTransaction(
 
 	transaction := &xtools.Transaction{}
 	if _, ok := txns[firstNID]; !ok {
-		return nil, nil, fmt.Errorf("Failed retrieving json blob for transaction: %d", firstNID)
+		return nil, nil, fmt.Errorf("failed retrieving json blob for transaction: %d", firstNID)
 	}
 
 	err = json.Unmarshal(txns[firstNID], transaction)

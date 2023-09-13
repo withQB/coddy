@@ -230,7 +230,7 @@ func federatedEventRelationship(
 	}, &queryRes)
 	if err != nil {
 		// they may already have the auth events so don't fail this request
-		xutil.GetLogger(ctx).WithError(err).Error("Failed to QueryAuthChain")
+		xutil.GetLogger(ctx).WithError(err).Error("failed to QueryAuthChain")
 	}
 	res.AuthChain = make(xtools.EventJSONs, len(queryRes.AuthChain))
 	for i := range queryRes.AuthChain {
@@ -476,7 +476,7 @@ func walkThread(
 	}
 	limited, err := eventWalker.WalkFrom(rc.req.EventID)
 	if err != nil {
-		xutil.GetLogger(ctx).WithError(err).Errorf("Failed to WalkFrom %s", rc.req.EventID)
+		xutil.GetLogger(ctx).WithError(err).Errorf("failed to WalkFrom %s", rc.req.EventID)
 	}
 	return result, limited
 }
@@ -493,7 +493,7 @@ func (rc *reqCtx) MSC2836EventRelationships(eventID string, srv spec.ServerName,
 		RecentFirst: rc.req.RecentFirst,
 	}, ver)
 	if err != nil {
-		xutil.GetLogger(rc.ctx).WithError(err).Error("Failed to call MSC2836EventRelationships")
+		xutil.GetLogger(rc.ctx).WithError(err).Error("failed to call MSC2836EventRelationships")
 		return nil, err
 	}
 	mscRes := &MSC2836EventRelationshipsResponse{
@@ -527,8 +527,8 @@ func (rc *reqCtx) authorisedToSeeEvent(event *types.HeaderedEvent) bool {
 	}
 	// make sure the user is in this frame
 	// Allow events if the member is in the frame
-	// TODO: This does not honour history_visibility
-	// TODO: This does not honour m.frame.create content
+	// TDO: This does not honour history_visibility
+	// TDO: This does not honour m.frame.create content
 	var queryMembershipRes dataframe.QueryMembershipForUserResponse
 	err := rc.rsAPI.QueryMembershipForUser(rc.ctx, &dataframe.QueryMembershipForUserRequest{
 		FrameID: event.FrameID(),
@@ -687,20 +687,20 @@ func (rc *reqCtx) addChildMetadata(ev *types.HeaderedEvent) {
 	}
 	err := ev.SetUnsignedField("children_hash", spec.Base64Bytes(hash))
 	if err != nil {
-		xutil.GetLogger(rc.ctx).WithError(err).Warn("Failed to set children_hash")
+		xutil.GetLogger(rc.ctx).WithError(err).Warn("failed to set children_hash")
 	}
 	err = ev.SetUnsignedField("children", map[string]int{
 		constRelType: count,
 	})
 	if err != nil {
-		xutil.GetLogger(rc.ctx).WithError(err).Warn("Failed to set children count")
+		xutil.GetLogger(rc.ctx).WithError(err).Warn("failed to set children count")
 	}
 }
 
 func (rc *reqCtx) getChildMetadata(eventID string) (count int, hash []byte) {
 	children, err := rc.db.ChildrenForParent(rc.ctx, eventID, constRelType, false)
 	if err != nil {
-		xutil.GetLogger(rc.ctx).WithError(err).Warn("Failed to get ChildrenForParent for getting child metadata")
+		xutil.GetLogger(rc.ctx).WithError(err).Warn("failed to get ChildrenForParent for getting child metadata")
 		return
 	}
 	if len(children) == 0 {

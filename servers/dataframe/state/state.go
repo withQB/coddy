@@ -572,7 +572,7 @@ func (v *StateResolution) loadStateAfterEventsForNumericTuples(
 
 	// Slow path for more that one event.
 	// Load the entire state so that we can do conflict resolution if we need to.
-	// TODO: The are some optimistations we could do here:
+	// TDO: The are some optimistations we could do here:
 	//    1) We only need to do conflict resolution if there is a conflict in the
 	//       requested tuples so we might try loading just those tuples and then
 	//       checking for conflicts.
@@ -580,7 +580,7 @@ func (v *StateResolution) loadStateAfterEventsForNumericTuples(
 	//       needed to do conflict resolution which would save us having to load
 	//       the full state.
 
-	// TODO: Add metrics for this as it could take a long time for big frames
+	// TDO: Add metrics for this as it could take a long time for big frames
 	// with large conflicts.
 	fullState, _, _, err := v.calculateStateAfterManyEvents(ctx, v.frameInfo.FrameVersion, prevStates)
 	if err != nil {
@@ -794,7 +794,7 @@ func (v *StateResolution) CalculateAndStoreStateAfterEvents(
 // Increasing this number means that we can encode more of the state changes as simple deltas which means that
 // we need fewer entries in the state data table. However making this number bigger will increase the size of
 // the rows in the state table itself and will require more index lookups when retrieving a snapshot.
-// TODO: Tune this to get the right balance between size and lookup performance.
+// TDO: Tune this to get the right balance between size and lookup performance.
 const maxStateBlockNIDs = 64
 
 // calculateAndStoreStateAfterManyEvents finds the frame state after the given events.
@@ -816,7 +816,7 @@ func (v *StateResolution) calculateAndStoreStateAfterManyEvents(
 		return metrics.stop(0, fmt.Errorf("v.calculateStateAfterManyEvents: %w", err))
 	}
 
-	// TODO: Check if we can encode the new state as a delta against the
+	// TDO: Check if we can encode the new state as a delta against the
 	// previous state.
 	metrics.conflictLength = conflictLength
 	metrics.fullStateLength = len(state)

@@ -46,16 +46,16 @@ func (r *Upgrader) performFrameUpgrade(
 	}
 	senderID, err := r.URSAPI.QuerySenderIDForUser(ctx, *fullFrameID, userID)
 	if err != nil {
-		xutil.GetLogger(ctx).WithError(err).Error("Failed getting senderID for user")
+		xutil.GetLogger(ctx).WithError(err).Error("failed getting senderID for user")
 		return "", err
 	} else if senderID == nil {
 		xutil.GetLogger(ctx).WithField("userID", userID).WithField("frameID", *fullFrameID).Error("No senderID for user")
-		return "", fmt.Errorf("No sender ID for %s in %s", userID, *fullFrameID)
+		return "", fmt.Errorf("no sender ID for %s in %s", userID, *fullFrameID)
 	}
 
 	// 1. Check if the user is authorized to actually perform the upgrade (can send m.frame.tombstone)
 	if !r.userIsAuthorized(ctx, *senderID, frameID) {
-		return "", api.ErrNotAllowed{Err: fmt.Errorf("You don't have permission to upgrade the frame, power level too low.")}
+		return "", api.ErrNotAllowed{Err: fmt.Errorf("you don't have permission to upgrade the frame, power level too low")}
 	}
 
 	// TODO (#267): Check frame ID doesn't clash with an existing one, and we
@@ -68,7 +68,7 @@ func (r *Upgrader) performFrameUpgrade(
 	}
 	oldFrameRes := &api.QueryLatestEventsAndStateResponse{}
 	if err := r.URSAPI.QueryLatestEventsAndState(ctx, oldFrameReq, oldFrameRes); err != nil {
-		return "", fmt.Errorf("Failed to get latest state: %s", err)
+		return "", fmt.Errorf("failed to get latest state: %s", err)
 	}
 
 	// Make the tombstone event
@@ -166,10 +166,10 @@ func moveLocalAliases(ctx context.Context,
 	aliasReq := api.GetAliasesForFrameIDRequest{FrameID: frameID}
 	aliasRes := api.GetAliasesForFrameIDResponse{}
 	if err = URSAPI.GetAliasesForFrameID(ctx, &aliasReq, &aliasRes); err != nil {
-		return fmt.Errorf("Failed to get old frame aliases: %w", err)
+		return fmt.Errorf("failed to get old frame aliases: %w", err)
 	}
 
-	// TODO: this should be spec.FrameID further up the call stack
+	// TDO: this should be spec.FrameID further up the call stack
 	parsedNewFrameID, err := spec.NewFrameID(newFrameID)
 	if err != nil {
 		return err
@@ -178,18 +178,18 @@ func moveLocalAliases(ctx context.Context,
 	for _, alias := range aliasRes.Aliases {
 		aliasFound, aliasRemoved, err := URSAPI.RemoveFrameAlias(ctx, senderID, alias)
 		if err != nil {
-			return fmt.Errorf("Failed to remove old frame alias: %w", err)
+			return fmt.Errorf("failed to remove old frame alias: %w", err)
 		} else if !aliasFound {
-			return fmt.Errorf("Failed to remove old frame alias: alias not found, possible race")
+			return fmt.Errorf("failed to remove old frame alias: alias not found, possible race")
 		} else if !aliasRemoved {
-			return fmt.Errorf("Failed to remove old alias")
+			return fmt.Errorf("failed to remove old alias")
 		}
 
 		aliasAlreadyExists, err := URSAPI.SetFrameAlias(ctx, senderID, *parsedNewFrameID, alias)
 		if err != nil {
-			return fmt.Errorf("Failed to set new frame alias: %w", err)
+			return fmt.Errorf("failed to set new frame alias: %w", err)
 		} else if aliasAlreadyExists {
-			return fmt.Errorf("Failed to set new frame alias: alias exists when it should have just been removed")
+			return fmt.Errorf("failed to set new frame alias: alias exists when it should have just been removed")
 		}
 	}
 	return nil
@@ -318,7 +318,7 @@ func (r *Upgrader) generateInitialEvents(ctx context.Context, oldFrame *api.Quer
 			}
 		}
 		// skip events that rely on a specific user being present
-		// TODO: What to do here for pseudoIDs? It's checking non-member events for state keys with userIDs.
+		// TDO: What to do here for pseudoIDs? It's checking non-member events for state keys with userIDs.
 		sKey := *event.StateKey()
 		if event.Type() != spec.MFrameMember && len(sKey) > 0 && sKey[:1] == "@" {
 			continue
@@ -386,7 +386,7 @@ func (r *Upgrader) generateInitialEvents(ctx context.Context, oldFrame *api.Quer
 	powerLevelContent, err := oldPowerLevelsEvent.PowerLevels()
 	if err != nil {
 		xutil.GetLogger(ctx).WithError(err).Error()
-		return nil, fmt.Errorf("Power level event content was invalid")
+		return nil, fmt.Errorf("power level event content was invalid")
 	}
 
 	tempPowerLevelsEvent, powerLevelsOverridden := createTemporaryPowerLevels(powerLevelContent, senderID)
@@ -434,7 +434,7 @@ func (r *Upgrader) generateInitialEvents(ctx context.Context, oldFrame *api.Quer
 			StateKey: tuple.StateKey,
 		}
 		if err = json.Unmarshal(event.Content(), &newEvent.Content); err != nil {
-			logrus.WithError(err).Error("Failed to unmarshal old event")
+			logrus.WithError(err).Error("failed to unmarshal old event")
 			continue
 		}
 		eventsToMake = append(eventsToMake, newEvent)
@@ -493,7 +493,7 @@ func (r *Upgrader) sendInitialEvents(ctx context.Context, evTime time.Time, send
 		if err = xtools.Allowed(event, &authEvents, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
 			return r.URSAPI.QueryUserIDForSender(ctx, frameID, senderID)
 		}); err != nil {
-			return fmt.Errorf("Failed to auth new %q event: %w", builder.Type, err)
+			return fmt.Errorf("failed to auth new %q event: %w", builder.Type, err)
 		}
 
 		// Add the event to the list of auth events
@@ -574,7 +574,7 @@ func (r *Upgrader) makeHeaderedEvent(ctx context.Context, evTime time.Time, send
 	if err = xtools.Allowed(headeredEvent.PDU, &provider, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
 		return r.URSAPI.QueryUserIDForSender(ctx, frameID, senderID)
 	}); err != nil {
-		return nil, api.ErrNotAllowed{Err: fmt.Errorf("failed to auth new %q event: %w", proto.Type, err)} // TODO: Is this error string comprehensible to the client?
+		return nil, api.ErrNotAllowed{Err: fmt.Errorf("failed to auth new %q event: %w", proto.Type, err)} // TDO: Is this error string comprehensible to the client?
 	}
 
 	return headeredEvent, nil

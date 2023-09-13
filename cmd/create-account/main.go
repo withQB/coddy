@@ -99,7 +99,7 @@ func main() {
 
 	accessToken, err := sharedSecretRegister(cfg.ClientAPI.RegistrationSharedSecret, *serverURL, *username, pass, *isAdmin)
 	if err != nil {
-		logrus.Fatalln("Failed to create the account:", err.Error())
+		logrus.Fatalln("failed to create the account:", err.Error())
 	}
 
 	logrus.Infof("Created account: %s (AccessToken: %s)", *username, accessToken)

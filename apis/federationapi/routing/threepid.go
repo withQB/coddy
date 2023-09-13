@@ -82,7 +82,7 @@ func CreateInvitesFrom3PIDInvites(
 		rsAPI,
 		api.KindNew,
 		evs,
-		cfg.Matrix.ServerName, // TODO: which virtual host?
+		cfg.Matrix.ServerName, // TDO: which virtual host?
 		"TODO",
 		cfg.Matrix.ServerName,
 		nil,

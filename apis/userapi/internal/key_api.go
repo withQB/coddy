@@ -149,7 +149,7 @@ func (a *UserInternalAPI) claimRemoteKeys(
 func (a *UserInternalAPI) PerformDeleteKeys(ctx context.Context, req *api.PerformDeleteKeysRequest, res *api.PerformDeleteKeysResponse) error {
 	if err := a.KeyDatabase.DeleteDeviceKeys(ctx, req.UserID, req.KeyIDs); err != nil {
 		res.Error = &api.KeyError{
-			Err: fmt.Sprintf("Failed to delete device keys: %s", err),
+			Err: fmt.Sprintf("failed to delete device keys: %s", err),
 		}
 	}
 	return nil
@@ -159,7 +159,7 @@ func (a *UserInternalAPI) QueryOneTimeKeys(ctx context.Context, req *api.QueryOn
 	count, err := a.KeyDatabase.OneTimeKeysCount(ctx, req.UserID, req.DeviceID)
 	if err != nil {
 		res.Error = &api.KeyError{
-			Err: fmt.Sprintf("Failed to query OTK counts: %s", err),
+			Err: fmt.Sprintf("failed to query OTK counts: %s", err),
 		}
 		return nil
 	}
@@ -250,7 +250,7 @@ func (a *UserInternalAPI) QueryKeys(ctx context.Context, req *api.QueryKeysReque
 				DeviceIDs: dids,
 			}, &queryRes)
 			if err != nil {
-				xutil.GetLogger(ctx).Warnf("Failed to QueryDeviceInfos for device IDs, display names will be missing")
+				xutil.GetLogger(ctx).Warnf("failed to QueryDeviceInfos for device IDs, display names will be missing")
 			}
 
 			if res.DeviceKeys[userID] == nil {
@@ -302,7 +302,7 @@ func (a *UserInternalAPI) QueryKeys(ctx context.Context, req *api.QueryKeysReque
 	a.crossSigningKeysFromDatabase(ctx, req, res)
 
 	// Finally, append signatures that we know about
-	// TODO: This is horrible because we need to round-trip the signature from
+	// TDO: This is horrible because we need to round-trip the signature from
 	// JSON, add the signatures and marshal it again, for some reason?
 
 	for targetUserID, masterKey := range res.MasterKeys {
@@ -458,7 +458,7 @@ func (a *UserInternalAPI) queryRemoteKeys(
 			res.SelfSigningKeys[userID] = body
 		}
 
-		// TODO: do we want to persist these somewhere now
+		// TDO: do we want to persist these somewhere now
 		// that we have fetched them?
 	}
 
@@ -505,7 +505,7 @@ func (a *UserInternalAPI) queryRemoteKeysOnServer(
 				logrus.ErrorKey: err,
 				"user_id":       userID,
 				"server":        serverName,
-			}).Error("Failed to manually update device lists for user")
+			}).Error("failed to manually update device lists for user")
 			// try to do it via /keys/query
 			devKeys[userID] = []string{}
 			continue
@@ -518,7 +518,7 @@ func (a *UserInternalAPI) queryRemoteKeysOnServer(
 				logrus.ErrorKey: err,
 				"user_id":       userID,
 				"server":        serverName,
-			}).Error("Failed to manually update device lists for user")
+			}).Error("failed to manually update device lists for user")
 			// try to do it via /keys/query
 			devKeys[userID] = []string{}
 			continue
@@ -631,7 +631,7 @@ func (a *UserInternalAPI) uploadLocalDeviceKeys(ctx context.Context, req *api.Pe
 
 	if len(toClean) > 0 {
 		if err = a.KeyDatabase.DeleteDeviceKeys(ctx, req.UserID, toClean); err != nil {
-			logrus.WithField("user_id", req.UserID).WithError(err).Errorf("Failed to clean up %d stale keyserver device key entries", len(toClean))
+			logrus.WithField("user_id", req.UserID).WithError(err).Errorf("failed to clean up %d stale keyserver device key entries", len(toClean))
 		} else {
 			logrus.WithField("user_id", req.UserID).Debugf("Cleaned up %d stale keyserver device key entries", len(toClean))
 		}
@@ -699,7 +699,7 @@ func (a *UserInternalAPI) uploadLocalDeviceKeys(ctx context.Context, req *api.Pe
 	}
 	err = emitDeviceKeyChanges(a.KeyChangeProducer, existingKeys, keysToStore, req.OnlyDisplayNameUpdates)
 	if err != nil {
-		xutil.GetLogger(ctx).Errorf("Failed to emitDeviceKeyChanges: %s", err)
+		xutil.GetLogger(ctx).Errorf("failed to emitDeviceKeyChanges: %s", err)
 	}
 }
 

@@ -35,7 +35,7 @@ func Peek(
 	frameID, peekID string,
 	remoteVersions []xtools.FrameVersion,
 ) xutil.JSONResponse {
-	// TODO: check if we're just refreshing an existing peek by querying the federationapi
+	// TDO: check if we're just refreshing an existing peek by querying the federationapi
 	frameVersion, err := rsAPI.QueryFrameVersionForFrame(httpReq.Context(), frameID)
 	if err != nil {
 		return xutil.JSONResponse{
@@ -62,7 +62,7 @@ func Peek(
 		}
 	}
 
-	// TODO: Check history visibility
+	// TDO: Check history visibility
 
 	// tell the peeking server to renew every hour
 	renewalInterval := int64(60 * 60 * 1000 * 1000)

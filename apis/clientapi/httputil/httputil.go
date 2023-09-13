@@ -35,7 +35,7 @@ func UnmarshalJSON(body []byte, iface interface{}) *xutil.JSONResponse {
 	}
 
 	if err := json.Unmarshal(body, iface); err != nil {
-		// TODO: We may want to suppress the Error() return in production? It's useful when
+		// TDO: We may want to suppress the Error() return in production? It's useful when
 		// debugging because an error will be produced for both invalid/malformed JSON AND
 		// valid JSON with incorrect types for values.
 		return &xutil.JSONResponse{

@@ -142,7 +142,7 @@ func createFrame(
 
 	logger := xutil.GetLogger(ctx)
 
-	// TODO: Check frame ID doesn't clash with an existing one, and we
+	// TDO: Check frame ID doesn't clash with an existing one, and we
 	//       probably shouldn't be using pseudo-random strings, maybe GUIDs?
 	frameID, err := spec.NewFrameID(fmt.Sprintf("!%s:%s", xutil.RandomString(16), userID.Domain()))
 	if err != nil {

@@ -94,6 +94,7 @@ func (c *Proxy) Defaults() {
 }
 
 func (c *Proxy) Verify(configErrs *ConfigErrors) {
+	// empty
 }
 
 // KeyPerspectives are used to configure perspective key servers for

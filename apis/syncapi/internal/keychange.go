@@ -95,7 +95,7 @@ func DeviceListCatchup(
 		}
 	}
 	// Finally, add in users who have joined or left.
-	// TODO: This is sub-optimal because we will add users to `changed` even if we already shared a frame with them.
+	// TDO: This is sub-optimal because we will add users to `changed` even if we already shared a frame with them.
 	for _, userID := range joinUserIDs {
 		if !userSet[userID] && sharedUsersMap[userID] > 0 {
 			res.DeviceLists.Changed = append(res.DeviceLists.Changed, userID)

@@ -233,7 +233,7 @@ type authDict struct {
 
 	// Recaptcha
 	Response string `json:"response"`
-	// TODO: Lots of custom keys depending on the type
+	// TDO: Lots of custom keys depending on the type
 }
 
 type userInteractiveResponse struct {
@@ -615,7 +615,7 @@ func handleGuestRegistration(
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
-			JSON: spec.Unknown("Failed to generate access token"),
+			JSON: spec.Unknown("failed to generate access token"),
 		}
 	}
 	//we don't allow guests to specify their own device_id
@@ -656,13 +656,13 @@ func handleRegistrationFlow(
 	accessToken string,
 	accessTokenErr error,
 ) xutil.JSONResponse {
-	// TODO: Enable registration config flag
-	// TODO: Guest account upgrading
+	// TDO: Enable registration config flag
+	// TDO: Guest account upgrading
 
-	// TODO: Handle loading of previous session parameters from database.
-	// TODO: Handle mapping registrationRequest parameters into session parameters
+	// TDO: Handle loading of previous session parameters from database.
+	// TDO: Handle mapping registrationRequest parameters into session parameters
 
-	// TODO: email / msisdn auth types.
+	// TDO: email / msisdn auth types.
 
 	// Appservices are special and are not affected by disabled
 	// registration or user exclusivity. We'll go onto the appservice
@@ -883,7 +883,7 @@ func completeRegistration(
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
-			JSON: spec.Unknown("Failed to generate access token"),
+			JSON: spec.Unknown("failed to generate access token"),
 		}
 	}
 

@@ -41,7 +41,7 @@ func Login(
 	cfg *config.ClientAPI,
 ) xutil.JSONResponse {
 	if req.Method == http.MethodGet {
-		// TODO: support other forms of login other than password, depending on config options
+		// TDO: support other forms of login other than password, depending on config options
 		return xutil.JSONResponse{
 			Code: http.StatusOK,
 			JSON: passwordLogin(),

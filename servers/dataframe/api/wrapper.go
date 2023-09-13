@@ -102,7 +102,7 @@ func GetEvent(ctx context.Context, rsAPI QueryEventsAPI, frameID, eventID string
 		EventIDs: []string{eventID},
 	}, &res)
 	if err != nil {
-		xutil.GetLogger(ctx).WithError(err).Error("Failed to QueryEventsByID")
+		xutil.GetLogger(ctx).WithError(err).Error("failed to QueryEventsByID")
 		return nil
 	}
 	if len(res.Events) != 1 {
@@ -119,7 +119,7 @@ func GetStateEvent(ctx context.Context, rsAPI QueryEventsAPI, frameID string, tu
 		StateTuples: []xtools.StateKeyTuple{tuple},
 	}, &res)
 	if err != nil {
-		xutil.GetLogger(ctx).WithError(err).Error("Failed to QueryCurrentState")
+		xutil.GetLogger(ctx).WithError(err).Error("failed to QueryCurrentState")
 		return nil
 	}
 	ev, ok := res.StateEvents[tuple]
@@ -137,7 +137,7 @@ func IsServerBannedFromFrame(ctx context.Context, rsAPI FederationDataframeAPI, 
 	}
 	res := &QueryServerBannedFromFrameResponse{}
 	if err := rsAPI.QueryServerBannedFromFrame(ctx, req, res); err != nil {
-		xutil.GetLogger(ctx).WithError(err).Error("Failed to QueryServerBannedFromFrame")
+		xutil.GetLogger(ctx).WithError(err).Error("failed to QueryServerBannedFromFrame")
 		return true
 	}
 	return res.Banned

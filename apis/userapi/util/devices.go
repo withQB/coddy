@@ -34,7 +34,7 @@ func GetPushDevices(ctx context.Context, localpart string, serverName spec.Serve
 			url = "mailto:"
 
 		case api.HTTPKind:
-			// TODO: The spec says only event_id_only is supported,
+			// TDO: The spec says only event_id_only is supported,
 			// but Sytests assume "" means "full notification".
 			fmtIface := pusher.Data["format"]
 			var ok bool

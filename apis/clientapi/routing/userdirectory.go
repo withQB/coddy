@@ -93,7 +93,7 @@ knownUsersLoop:
 				}
 				continue
 			}
-			// TODO: We should probably cache/store this
+			// TDO: We should probably cache/store this
 			fedProfile, fedErr := federation.LookupProfile(ctx, localServerName, serverName, userID, "")
 			if fedErr != nil {
 				if x, ok := fedErr.(xcore.HTTPError); ok {

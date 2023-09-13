@@ -166,7 +166,7 @@ func OnIncomingMessagesRequest(
 			fromStream = &streamToken
 			from, err = snapshot.StreamToTopologicalPosition(req.Context(), frameID, streamToken.PDUPosition, backwardOrdering)
 			if err != nil {
-				logrus.WithError(err).Errorf("Failed to get topological position for streaming token %v", streamToken)
+				logrus.WithError(err).Errorf("failed to get topological position for streaming token %v", streamToken)
 				return xutil.JSONResponse{
 					Code: http.StatusInternalServerError,
 					JSON: spec.InternalServerError{},
@@ -191,7 +191,7 @@ func OnIncomingMessagesRequest(
 			} else {
 				to, err = snapshot.StreamToTopologicalPosition(req.Context(), frameID, streamToken.PDUPosition, !backwardOrdering)
 				if err != nil {
-					logrus.WithError(err).Errorf("Failed to get topological position for streaming token %v", streamToken)
+					logrus.WithError(err).Errorf("failed to get topological position for streaming token %v", streamToken)
 					return xutil.JSONResponse{
 						Code: http.StatusInternalServerError,
 						JSON: spec.InternalServerError{},
@@ -212,7 +212,7 @@ func OnIncomingMessagesRequest(
 		wasToProvided = false
 	}
 
-	// TODO: Implement filtering (#587)
+	// TDO: Implement filtering (#587)
 
 	// Check the frame ID's format.
 	if _, _, err = xtools.SplitID('!', frameID); err != nil {
@@ -566,7 +566,7 @@ func (r *messagesReq) backfill(frameID string, backwardsExtremities map[string][
 	}
 	xutil.GetLogger(r.ctx).WithField("new_events", len(res.Events)).Info("Storing new events from backfill")
 
-	// TODO: we should only be inserting events into the database from the dataframe's kafka output stream.
+	// TDO: we should only be inserting events into the database from the dataframe's kafka output stream.
 	// Currently, this can race with live events for the frame and cause problems. It's also just a bit unclear
 	// when you have multiple entry points to write events.
 

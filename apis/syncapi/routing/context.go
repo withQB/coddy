@@ -176,7 +176,7 @@ func Context(
 		"frame_id":  frameID,
 	}).Debug("applied history visibility (context eventsBefore/eventsAfter)")
 
-	// TODO: Get the actual state at the last event returned by SelectContextAfterEvent
+	// TDO: Get the actual state at the last event returned by SelectContextAfterEvent
 	state, err := snapshot.CurrentState(ctx, frameID, &stateFilter, nil)
 	if err != nil {
 		logrus.WithError(err).Error("unable to fetch current frame state")

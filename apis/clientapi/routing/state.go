@@ -26,7 +26,7 @@ type stateEventInStateResp struct {
 // request. It will fetch all the state events from the specified frame and will
 // append the necessary keys to them if applicable before returning them.
 // Returns an error if something went wrong in the process.
-// TODO: Check if the user is in the frame. If not, check if the frame's history
+// TDO: Check if the user is in the frame. If not, check if the frame's history
 // is publicly visible. Current behaviour is returning an empty array if the
 // user cannot see the frame's history.
 func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI api.ClientDataframeAPI, frameID string) xutil.JSONResponse {
@@ -98,7 +98,7 @@ func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI a
 			UserID: *userID,
 		}, &membershipRes)
 		if err != nil {
-			xutil.GetLogger(ctx).WithError(err).Error("Failed to QueryMembershipForUser")
+			xutil.GetLogger(ctx).WithError(err).Error("failed to QueryMembershipForUser")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.InternalServerError{},
@@ -151,7 +151,7 @@ func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI a
 			StateToFetch: []xtools.StateKeyTuple{},
 		}, &stateAfterRes)
 		if err != nil {
-			xutil.GetLogger(ctx).WithError(err).Error("Failed to QueryMembershipForUser")
+			xutil.GetLogger(ctx).WithError(err).Error("failed to QueryMembershipForUser")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.InternalServerError{},
@@ -224,7 +224,7 @@ func OnIncomingStateTypeRequest(
 			return rsAPI.QuerySenderIDForUser(ctx, frameID, userID)
 		})
 		if err != nil {
-			// TODO: work out better logic for failure cases (e.g. sender ID not found)
+			// TDO: work out better logic for failure cases (e.g. sender ID not found)
 			xutil.GetLogger(ctx).WithError(err).Error("synctypes.FromClientStateKey failed")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
@@ -310,7 +310,7 @@ func OnIncomingStateTypeRequest(
 			UserID: *userID,
 		}, &membershipRes)
 		if err != nil {
-			xutil.GetLogger(ctx).WithError(err).Error("Failed to QueryMembershipForUser")
+			xutil.GetLogger(ctx).WithError(err).Error("failed to QueryMembershipForUser")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.InternalServerError{},
@@ -368,7 +368,7 @@ func OnIncomingStateTypeRequest(
 			},
 		}, &stateAfterRes)
 		if err != nil {
-			xutil.GetLogger(ctx).WithError(err).Error("Failed to QueryMembershipForUser")
+			xutil.GetLogger(ctx).WithError(err).Error("failed to QueryMembershipForUser")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.InternalServerError{},

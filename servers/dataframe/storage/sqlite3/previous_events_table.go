@@ -28,7 +28,7 @@ import (
 	"github.com/withqb/coddy/servers/dataframe/types"
 )
 
-// TODO: previous_reference_sha256 was NOT NULL before but it broke sytest because
+// TDO: previous_reference_sha256 was NOT NULL before but it broke sytest because
 // sytest sends no SHA256 sums in the prev_events references in the soft-fail tests.
 // In Postgres an empty BYTEA field is not NULL so it's fine there. In SQLite it
 // seems to care that it's empty and therefore hits a NOT NULL constraint on insert.

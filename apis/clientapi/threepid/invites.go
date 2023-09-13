@@ -197,8 +197,8 @@ func queryIDServerLookup(ctx context.Context, body *MembershipRequest) (*idServe
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		// TODO: Log the error supplied with the identity server?
-		errMgs := fmt.Sprintf("Failed to ask %s to store an invite for %s", body.IDServer, body.Address)
+		// TDO: Log the error supplied with the identity server?
+		errMgs := fmt.Sprintf("failed to ask %s to store an invite for %s", body.IDServer, body.Address)
 		return nil, errors.New(errMgs)
 	}
 
@@ -239,7 +239,7 @@ func queryIDServerStoreInvite(
 	data.Add("frame_id", frameID)
 	data.Add("sender", device.UserID)
 	data.Add("sender_display_name", profile.DisplayName)
-	// TODO: Also send:
+	// TDO: Also send:
 	//      - The frame name (frame_name)
 	//      - The frame's avatar url (frame_avatar_url)
 	//      See https://github.com/withqb/sydent/blob/master/sydent/http/servlets/store_invite_servlet.py#L82-L91

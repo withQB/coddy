@@ -102,14 +102,14 @@ func NewOutgoingQueues(
 				serverNames[serverName] = struct{}{}
 			}
 		} else {
-			log.WithError(err).Error("Failed to get PDU server names for destination queue hydration")
+			log.WithError(err).Error("failed to get PDU server names for destination queue hydration")
 		}
 		if names, err := db.GetPendingEDUServerNames(process.Context()); err == nil {
 			for _, serverName := range names {
 				serverNames[serverName] = struct{}{}
 			}
 		} else {
-			log.WithError(err).Error("Failed to get EDU server names for destination queue hydration")
+			log.WithError(err).Error("failed to get EDU server names for destination queue hydration")
 		}
 		offset, step := time.Second*5, time.Second
 		if max := len(serverNames); max > 120 {

@@ -80,7 +80,7 @@ func SetupPprof() {
 	if hostPort := os.Getenv("PPROFLISTEN"); hostPort != "" {
 		logrus.Warn("Starting pprof on ", hostPort)
 		go func() {
-			logrus.WithError(http.ListenAndServe(hostPort, nil)).Error("Failed to setup pprof listener")
+			logrus.WithError(http.ListenAndServe(hostPort, nil)).Error("failed to setup pprof listener")
 		}()
 	}
 }

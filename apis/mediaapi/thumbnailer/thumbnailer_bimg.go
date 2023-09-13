@@ -30,7 +30,7 @@ func GenerateThumbnails(
 ) (busy bool, errorReturn error) {
 	buffer, err := bimg.Read(string(src))
 	if err != nil {
-		logger.WithError(err).WithField("src", src).Error("Failed to read src file")
+		logger.WithError(err).WithField("src", src).Error("failed to read src file")
 		return false, err
 	}
 	img := bimg.NewImage(buffer)
@@ -41,7 +41,7 @@ func GenerateThumbnails(
 			maxThumbnailGenerators, db, logger,
 		)
 		if err != nil {
-			logger.WithError(err).WithField("src", src).Error("Failed to generate thumbnails")
+			logger.WithError(err).WithField("src", src).Error("failed to generate thumbnails")
 			return false, err
 		}
 		if busy {
@@ -66,7 +66,7 @@ func GenerateThumbnail(
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"src": src,
-		}).Error("Failed to read src file")
+		}).Error("failed to read src file")
 		return false, err
 	}
 	img := bimg.NewImage(buffer)
@@ -78,7 +78,7 @@ func GenerateThumbnail(
 	if err != nil {
 		logger.WithError(err).WithFields(log.Fields{
 			"src": src,
-		}).Error("Failed to generate thumbnails")
+		}).Error("failed to generate thumbnails")
 		return false, err
 	}
 	if busy {
@@ -176,7 +176,7 @@ func createThumbnail(
 		logger.WithError(err).WithFields(log.Fields{
 			"ActualWidth":  width,
 			"ActualHeight": height,
-		}).Error("Failed to store thumbnail metadata in database.")
+		}).Error("failed to store thumbnail metadata in database.")
 		return false, err
 	}
 
@@ -229,7 +229,7 @@ func resize(dst types.Path, inImage *bimg.Image, w, h int, crop bool, logger *lo
 	}
 
 	if err = bimg.Write(string(dst), newImage); err != nil {
-		logger.WithError(err).Error("Failed to resize image")
+		logger.WithError(err).Error("failed to resize image")
 		return -1, -1, err
 	}
 

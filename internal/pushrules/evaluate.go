@@ -55,7 +55,7 @@ func NewRuleSetEvaluator(ec EvaluationContext, ruleSet *RuleSet) *RuleSetEvaluat
 // MatchEvent returns the first matching rule. Returns nil if there
 // was no match rule.
 func (rse *RuleSetEvaluator) MatchEvent(event xtools.PDU, userIDForSender spec.UserIDForSender) (*Rule, error) {
-	// TODO: server-default rules have lower priority than user rules,
+	// TDO: server-default rules have lower priority than user rules,
 	// but they are stored together with the user rules. It's a bit
 	// unclear what the specification (11.14.1.4 Predefined rules)
 	// means the ordering should be.
@@ -103,7 +103,7 @@ func ruleMatches(rule *Rule, kind Kind, event xtools.PDU, ec EvaluationContext, 
 		return true, nil
 
 	case ContentKind:
-		// TODO: "These configure behaviour for (unencrypted) messages
+		// TDO: "These configure behaviour for (unencrypted) messages
 		// that match certain patterns." - Does that mean "content.body"?
 		if rule.Pattern == nil {
 			return false, nil

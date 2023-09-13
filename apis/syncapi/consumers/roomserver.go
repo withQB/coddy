@@ -120,7 +120,7 @@ func (s *OutputFrameEventConsumer) onMessage(ctx context.Context, msgs []*nats.M
 	case api.OutputTypePurgeFrame:
 		err = s.onPurgeFrame(s.ctx, *output.PurgeFrame)
 		if err != nil {
-			logrus.WithField("frame_id", output.PurgeFrame.FrameID).WithError(err).Error("Failed to purge frame from sync API")
+			logrus.WithField("frame_id", output.PurgeFrame.FrameID).WithError(err).Error("failed to purge frame from sync API")
 			return true // non-fatal, as otherwise we end up in a loop of trying to purge the frame
 		}
 	default:
@@ -157,7 +157,7 @@ func (s *OutputFrameEventConsumer) onRedactEvent(
 			"frame_id":           msg.RedactedBecause.FrameID(),
 			"event_id":          msg.RedactedBecause.EventID(),
 			"redacted_event_id": msg.RedactedEventID,
-		}).WithError(err).Warn("Failed to redact relations")
+		}).WithError(err).Warn("failed to redact relations")
 		return err
 	}
 
@@ -280,7 +280,7 @@ func (s *OutputFrameEventConsumer) onNewFrameEvent(
 	}
 
 	if pduPos, err = s.notifyJoinedPeeks(ctx, ev, pduPos); err != nil {
-		log.WithError(err).Errorf("Failed to notifyJoinedPeeks for PDU pos %d", pduPos)
+		log.WithError(err).Errorf("failed to notifyJoinedPeeks for PDU pos %d", pduPos)
 		return err
 	}
 
@@ -288,7 +288,7 @@ func (s *OutputFrameEventConsumer) onNewFrameEvent(
 		log.WithFields(log.Fields{
 			"event_id": ev.EventID(),
 			"type":     ev.Type(),
-		}).WithError(err).Warn("Failed to update relations")
+		}).WithError(err).Warn("failed to update relations")
 		return err
 	}
 
@@ -303,7 +303,7 @@ func (s *OutputFrameEventConsumer) onOldFrameEvent(
 ) error {
 	ev := msg.Event
 
-	// TODO: The state key check when excluding from sync is designed
+	// TDO: The state key check when excluding from sync is designed
 	// to stop us from lying to clients with old state, whilst still
 	// allowing normal timeline events through. This is an absolute
 	// hack but until we have some better strategy for dealing with
@@ -344,12 +344,12 @@ func (s *OutputFrameEventConsumer) onOldFrameEvent(
 			"frame_id":  ev.FrameID(),
 			"event_id": ev.EventID(),
 			"type":     ev.Type(),
-		}).WithError(err).Warn("Failed to update relations")
+		}).WithError(err).Warn("failed to update relations")
 		return err
 	}
 
 	if pduPos, err = s.notifyJoinedPeeks(ctx, ev, pduPos); err != nil {
-		log.WithError(err).Errorf("Failed to notifyJoinedPeeks for PDU pos %d", pduPos)
+		log.WithError(err).Errorf("failed to notifyJoinedPeeks for PDU pos %d", pduPos)
 		return err
 	}
 
@@ -367,7 +367,7 @@ func (s *OutputFrameEventConsumer) notifyJoinedPeeks(ctx context.Context, ev *rs
 	if err != nil {
 		return sp, fmt.Errorf("ev.Membership: %w", err)
 	}
-	// TODO: check that it's a join and not a profile change (means unmarshalling prev_content)
+	// TDO: check that it's a join and not a profile change (means unmarshalling prev_content)
 	if membership == spec.Join {
 		// check it's a local join
 		if ev.StateKey() == nil {
@@ -493,7 +493,7 @@ func (s *OutputFrameEventConsumer) onNewPeek(
 	}
 
 	// tell the notifier about the new peek so it knows to wake up new devices
-	// TODO: This only works because the peeks table is reusing the same
+	// TDO: This only works because the peeks table is reusing the same
 	// index as PDUs, but we should fix this
 	s.pduStream.Advance(sp)
 	s.notifier.OnNewPeek(msg.FrameID, msg.UserID, msg.DeviceID, types.StreamingToken{PDUPosition: sp})
@@ -512,7 +512,7 @@ func (s *OutputFrameEventConsumer) onRetirePeek(
 	}
 
 	// tell the notifier about the new peek so it knows to wake up new devices
-	// TODO: This only works because the peeks table is reusing the same
+	// TDO: This only works because the peeks table is reusing the same
 	// index as PDUs, but we should fix this
 	s.pduStream.Advance(sp)
 	s.notifier.OnRetirePeek(msg.FrameID, msg.UserID, msg.DeviceID, types.StreamingToken{PDUPosition: sp})
@@ -524,7 +524,7 @@ func (s *OutputFrameEventConsumer) onPurgeFrame(
 	logrus.WithField("frame_id", req.FrameID).Warn("Purging frame from sync API")
 
 	if err := s.db.PurgeFrame(ctx, req.FrameID); err != nil {
-		logrus.WithField("frame_id", req.FrameID).WithError(err).Error("Failed to purge frame from sync API")
+		logrus.WithField("frame_id", req.FrameID).WithError(err).Error("failed to purge frame from sync API")
 		return err
 	} else {
 		logrus.WithField("frame_id", req.FrameID).Warn("Frame purged from sync API")

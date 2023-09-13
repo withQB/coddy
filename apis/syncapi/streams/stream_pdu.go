@@ -101,7 +101,7 @@ func (p *PDUStreamProvider) CompleteSync(
 	for _, frameID := range joinedFrameIDs {
 		events := recentEvents[frameID]
 		// Invalidate the lazyLoadCache, otherwise we end up with missing displaynames/avatars
-		// TODO: This might be inefficient, when joined to many and/or large frames.
+		// TDO: This might be inefficient, when joined to many and/or large frames.
 		joinedUsers := p.notifier.JoinedUsers(frameID)
 		for _, sharedUser := range joinedUsers {
 			p.lazyLoadCache.InvalidateLazyLoadedUser(req.Device, frameID, sharedUser)
@@ -261,7 +261,7 @@ func (p *PDUStreamProvider) addFrameDeltaToResponse(
 	originalLimit := eventFilter.Limit
 	// If we're going backwards, grep at least X events, this is mostly to satisfy Sytest
 	if r.Backwards && originalLimit < recentEventBackwardsLimit {
-		eventFilter.Limit = recentEventBackwardsLimit // TODO: Figure out a better way
+		eventFilter.Limit = recentEventBackwardsLimit // TDO: Figure out a better way
 		diff := r.From - r.To
 		if diff > 0 && diff < recentEventBackwardsLimit {
 			eventFilter.Limit = int(diff)
@@ -437,7 +437,7 @@ func (p *PDUStreamProvider) addFrameDeltaToResponse(
 	case spec.Peek:
 		jr := types.NewJoinResponse()
 		jr.Timeline.PrevBatch = &prevBatch
-		// TODO: Apply history visibility on peeked frames
+		// TDO: Apply history visibility on peeked frames
 		jr.Timeline.Events = synctypes.ToClientEvents(xtools.ToPDUs(recentEvents), eventFormat, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
 			return p.rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 		})
@@ -611,7 +611,7 @@ func (p *PDUStreamProvider) getJoinResponseForCompleteSync(
 	eventFormat synctypes.ClientEventFormat,
 ) (jr *types.JoinResponse, err error) {
 	jr = types.NewJoinResponse()
-	// TODO: When filters are added, we may need to call this multiple times to get enough events.
+	// TDO: When filters are added, we may need to call this multiple times to get enough events.
 	//       See: https://github.com/withqb/synapse/blob/v0.19.3/synapse/handlers/sync.py#L316
 
 	// Work our way through the timeline events and pick out the event IDs
@@ -829,7 +829,7 @@ func removeDuplicates[T xtools.PDU](stateEvents, recentEvents []T) []T {
 		if recentEv.StateKey() == nil {
 			continue // not a state event
 		}
-		// TODO: This is a linear scan over all the current state events in this frame. This will
+		// TDO: This is a linear scan over all the current state events in this frame. This will
 		//       be slow for big frames. We should instead sort the state events by event ID  (ORDER BY)
 		//       then do a binary search to find matching events, similar to what dataframe does.
 		for j := 0; j < len(stateEvents); j++ {

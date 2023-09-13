@@ -134,7 +134,7 @@ func PutPushRuleByRuleID(ctx context.Context, scope, kind, ruleID, afterRuleID, 
 	if i >= 0 && afterRuleID == "" && beforeRuleID == "" {
 		// Modify rule at the same index.
 
-		// TODO: The spec does not say what to do in this case, but
+		// TDO: The spec does not say what to do in this case, but
 		// this feels reasonable.
 		*((*rulesPtr)[i]) = newRule
 		xutil.GetLogger(ctx).Infof("Modified existing push rule at %d", i)
@@ -146,7 +146,7 @@ func PutPushRuleByRuleID(ctx context.Context, scope, kind, ruleID, afterRuleID, 
 		} else {
 			// SPEC: When creating push rules, they MUST be enabled by default.
 			//
-			// TODO: it's unclear if we must reject disabled rules, or force
+			// TDO: it's unclear if we must reject disabled rules, or force
 			// the value to true. Sytests fail if we don't force it.
 			newRule.Enabled = true
 		}

@@ -68,7 +68,7 @@ func (s *FederationInternalAPI) FetchKeys(
 		if err := s.handleFetcherKeys(ctx, now, fetcher, requests, results); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"fetcher_name": fetcher.FetcherName(),
-			}).Errorf("Failed to retrieve %d key(s)", len(requests))
+			}).Errorf("failed to retrieve %d key(s)", len(requests))
 			continue
 		}
 	}
@@ -80,7 +80,7 @@ func (s *FederationInternalAPI) FetchKeys(
 			// The results don't contain anything for this specific request, so
 			// we've failed to satisfy it from local keys, database keys or from
 			// all of the fetchers. Report an error.
-			logrus.Warnf("Failed to retrieve key %q for server %q", req.KeyID, req.ServerName)
+			logrus.Warnf("failed to retrieve key %q for server %q", req.KeyID, req.ServerName)
 		}
 	}
 
@@ -235,7 +235,7 @@ func (s *FederationInternalAPI) handleFetcherKeys(
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"fetcher_name":  fetcher.FetcherName(),
 			"database_name": s.keyRing.KeyDatabase.FetcherName(),
-		}).Errorf("Failed to store keys in the database")
+		}).Errorf("failed to store keys in the database")
 		return fmt.Errorf("server key API failed to store retrieved keys: %w", err)
 	}
 

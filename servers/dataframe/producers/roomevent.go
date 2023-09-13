@@ -66,7 +66,7 @@ func (r *FrameEventProducer) ProduceFrameEvents(frameID string, updates []api.Ou
 		}
 		logger.Tracef("Producing to topic '%s'", r.Topic)
 		if _, err := r.JetStream.PublishMsg(msg); err != nil {
-			logger.WithError(err).Errorf("Failed to produce to topic '%s': %s", r.Topic, err)
+			logger.WithError(err).Errorf("failed to produce to topic '%s': %s", r.Topic, err)
 			return err
 		}
 	}

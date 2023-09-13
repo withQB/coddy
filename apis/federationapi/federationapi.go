@@ -159,7 +159,7 @@ func NewInternalAPI(
 	cleanExpiredEDUs = func() {
 		logrus.Infof("Cleaning expired EDUs")
 		if err := federationDB.DeleteExpiredEDUs(processContext.Context()); err != nil {
-			logrus.WithError(err).Error("Failed to clean expired EDUs")
+			logrus.WithError(err).Error("failed to clean expired EDUs")
 		}
 		time.AfterFunc(time.Hour, cleanExpiredEDUs)
 	}

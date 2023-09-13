@@ -67,7 +67,7 @@ type Dendrite struct {
 	Derived Derived `yaml:"-"`
 }
 
-// TODO: Kill Derived
+// TDO: Kill Derived
 type Derived struct {
 	Registration struct {
 		// Flows is a slice of flows, which represent one possible way that the client can authenticate a request.
@@ -269,8 +269,8 @@ func (config *Dendrite) Derive() error {
 
 	config.Derived.Registration.Params = make(map[string]interface{})
 
-	// TODO: Add email auth type
-	// TODO: Add MSISDN auth type
+	// TDO: Add email auth type
+	// TDO: Add MSISDN auth type
 
 	if config.ClientAPI.RecaptchaEnabled {
 		config.Derived.Registration.Params[authtypes.LoginTypeRecaptcha] = map[string]string{"public_key": config.ClientAPI.RecaptchaPublicKey}

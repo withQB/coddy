@@ -343,7 +343,7 @@ func (s *OutputFrameEventConsumer) processMessage(ctx context.Context, event *rs
 
 	}
 
-	// TODO: run in parallel with localFrameMembers.
+	// TDO: run in parallel with localFrameMembers.
 	frameName, err := s.frameName(ctx, event)
 	if err != nil {
 		return fmt.Errorf("s.frameName: %w", err)
@@ -359,7 +359,7 @@ func (s *OutputFrameEventConsumer) processMessage(ctx context.Context, event *rs
 	// Notification.UserIsTarget is a per-member field, so we
 	// cannot group all users in a single request.
 	//
-	// TODO: does it have to be set? It's not required, and
+	// TDO: does it have to be set? It's not required, and
 	// removing it means we can send all notifications to
 	// e.g. Element's Push gateway in one go.
 	for _, mem := range members {
@@ -528,7 +528,7 @@ func (s *OutputFrameEventConsumer) notifyLocal(ctx context.Context, event *rstyp
 	if err != nil {
 		return fmt.Errorf("pushrules.ActionsToTweaks: %w", err)
 	}
-	// TODO: support coalescing.
+	// TDO: support coalescing.
 	if a != pushrules.NotifyAction && a != pushrules.CoalesceAction {
 		log.WithFields(log.Fields{
 			"event_id":  event.EventID(),
@@ -567,7 +567,7 @@ func (s *OutputFrameEventConsumer) notifyLocal(ctx context.Context, event *rstyp
 		// fields seem to match. frame_id should be missing, which
 		// matches the behaviour of FormatSync.
 		Event: synctypes.ToClientEvent(event, synctypes.FormatSync, sender.String(), sk, event.Unsigned()),
-		// TODO: this is per-device, but it's not part of the primary
+		// TDO: this is per-device, but it's not part of the primary
 		// key. So inserting one notification per profile tag doesn't
 		// make sense. What is this supposed to be? Sytests require it
 		// to "work", but they only use a single device.
@@ -602,7 +602,7 @@ func (s *OutputFrameEventConsumer) notifyLocal(ctx context.Context, event *rstyp
 	// receives a goroutine now that all internal API calls have been
 	// made.
 	//
-	// TODO: think about bounding this to one per user, and what
+	// TDO: think about bounding this to one per user, and what
 	// ordering guarantees we must provide.
 	go func() {
 		// This background processing cannot be tied to a request.
@@ -612,7 +612,7 @@ func (s *OutputFrameEventConsumer) notifyLocal(ctx context.Context, event *rstyp
 		var rejected []*pushgateway.Device
 		for url, fmts := range devicesByURLAndFormat {
 			for format, devices := range fmts {
-				// TODO: support "email".
+				// TDO: support "email".
 				if !strings.HasPrefix(url, "http") {
 					continue
 				}
@@ -804,7 +804,7 @@ func (s *OutputFrameEventConsumer) notifyHTTP(ctx context.Context, event *rstype
 		}
 		sender, err := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, event.SenderID())
 		if err != nil {
-			logger.WithError(err).Errorf("Failed to get userID for sender %s", event.SenderID())
+			logger.WithError(err).Errorf("failed to get userID for sender %s", event.SenderID())
 			return nil, err
 		}
 		req = pushgateway.NotifyRequest{
@@ -827,7 +827,7 @@ func (s *OutputFrameEventConsumer) notifyHTTP(ctx context.Context, event *rstype
 		}
 		userID, err := spec.NewUserID(fmt.Sprintf("@%s:%s", localpart, s.cfg.Matrix.ServerName), true)
 		if err != nil {
-			logger.WithError(err).Errorf("Failed to convert local user to userID %s", localpart)
+			logger.WithError(err).Errorf("failed to convert local user to userID %s", localpart)
 			return nil, err
 		}
 		frameID, err := spec.NewFrameID(event.FrameID())
@@ -838,10 +838,10 @@ func (s *OutputFrameEventConsumer) notifyHTTP(ctx context.Context, event *rstype
 
 		localSender, err := s.rsAPI.QuerySenderIDForUser(ctx, *frameID, *userID)
 		if err != nil {
-			logger.WithError(err).Errorf("Failed to get local user senderID for frame %s: %s", userID.String(), event.FrameID())
+			logger.WithError(err).Errorf("failed to get local user senderID for frame %s: %s", userID.String(), event.FrameID())
 			return nil, err
 		} else if localSender == nil {
-			logger.WithError(err).Errorf("Failed to get local user senderID for frame %s: %s", userID.String(), event.FrameID())
+			logger.WithError(err).Errorf("failed to get local user senderID for frame %s: %s", userID.String(), event.FrameID())
 			return nil, fmt.Errorf("no sender ID for user %s in %s", userID.String(), frameID.String())
 		}
 		if event.StateKey() != nil && *event.StateKey() == string(*localSender) {
@@ -852,7 +852,7 @@ func (s *OutputFrameEventConsumer) notifyHTTP(ctx context.Context, event *rstype
 	logger.Tracef("Notifying push gateway %s", url)
 	var res pushgateway.NotifyResponse
 	if err := s.pgClient.Notify(ctx, url, &req, &res); err != nil {
-		logger.WithError(err).Errorf("Failed to notify push gateway %s", url)
+		logger.WithError(err).Errorf("failed to notify push gateway %s", url)
 		return nil, err
 	}
 	logger.WithField("num_rejected", len(res.Rejected)).Trace("Push gateway result")

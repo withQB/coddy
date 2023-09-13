@@ -274,7 +274,7 @@ func (d *Database) addState(
 		// Check to see if the event already appears in any of the existing state
 		// blocks. If it does then we should not add it again, as this will just
 		// result in excess state blocks and snapshots.
-		// TODO: Investigate why this is happening - probably input_events.go!
+		// TDO: Investigate why this is happening - probably input_events.go!
 		blocks, berr := d.StateBlockTable.BulkSelectStateBlockEntries(ctx, txn, stateBlockNIDs)
 		if berr != nil {
 			return 0, fmt.Errorf("d.StateBlockTable.BulkSelectStateBlockEntries: %w", berr)
@@ -1477,7 +1477,7 @@ func (d *Database) GetBulkStateContent(ctx context.Context, frameIDs []string, t
 
 	var eventNIDs []types.EventNID
 	eventNIDToVer := make(map[types.EventNID]xtools.FrameVersion)
-	// TODO: This feels like this is going to be really slow...
+	// TDO: This feels like this is going to be really slow...
 	for _, frameID := range frameIDs {
 		frameInfo, err2 := d.frameInfo(ctx, nil, frameID)
 		if err2 != nil {
@@ -1758,7 +1758,7 @@ func (d *Database) InsertUserFramePublicKey(ctx context.Context, userID spec.Use
 // SelectUserFramePrivateKey queries the users frame private key.
 // If no key exists, returns no key and no error. Otherwise returns
 // the key and a database error, if any.
-// TODO: Cache this?
+// TDO: Cache this?
 func (d *Database) SelectUserFramePrivateKey(ctx context.Context, userID spec.UserID, frameID spec.FrameID) (key ed25519.PrivateKey, err error) {
 	uID := userID.String()
 	stateKeyNIDMap, sErr := d.eventStateKeyNIDs(ctx, nil, []string{uID})
@@ -1868,7 +1868,7 @@ func (d *Database) SelectUserIDsForPublicKeys(ctx context.Context, publicKeys ma
 	return result, err
 }
 
-// FIXME TODO: Remove all this - horrible dupe with dataframe/state. Can't use the original impl because of circular loops
+// FXME TDO: Remove all this - horrible dupe with dataframe/state. Can't use the original impl because of circular loops
 // it should live in this package!
 
 func (d *Database) loadStateAtSnapshot(

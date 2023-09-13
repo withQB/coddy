@@ -48,7 +48,7 @@ func AdminCreateNewRegistrationToken(req *http.Request, cfg *config.ClientAPI, u
 	if err := json.NewDecoder(req.Body).Decode(&request); err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON(fmt.Sprintf("Failed to decode request body: %s", err)),
+			JSON: spec.BadJSON(fmt.Sprintf("failed to decode request body: %s", err)),
 		}
 	}
 
@@ -223,7 +223,7 @@ func AdminUpdateRegistrationToken(req *http.Request, cfg *config.ClientAPI, user
 	if err = json.NewDecoder(req.Body).Decode(&request); err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON(fmt.Sprintf("Failed to decode request body: %s", err)),
+			JSON: spec.BadJSON(fmt.Sprintf("failed to decode request body: %s", err)),
 		}
 	}
 	newAttributes := make(map[string]interface{})
@@ -281,7 +281,7 @@ func AdminEvacuateFrame(req *http.Request, rsAPI dataframeAPI.ClientDataframeAPI
 			JSON: spec.NotFound(err.Error()),
 		}
 	default:
-		logrus.WithError(err).WithField("frameID", vars["frameID"]).Error("Failed to evacuate frame")
+		logrus.WithError(err).WithField("frameID", vars["frameID"]).Error("failed to evacuate frame")
 		return xutil.ErrorResponse(err)
 	}
 	return xutil.JSONResponse{
@@ -300,7 +300,7 @@ func AdminEvacuateUser(req *http.Request, rsAPI dataframeAPI.ClientDataframeAPI)
 
 	affected, err := rsAPI.PerformAdminEvacuateUser(req.Context(), vars["userID"])
 	if err != nil {
-		logrus.WithError(err).WithField("userID", vars["userID"]).Error("Failed to evacuate user")
+		logrus.WithError(err).WithField("userID", vars["userID"]).Error("failed to evacuate user")
 		return xutil.MessageResponse(http.StatusBadRequest, err.Error())
 	}
 
@@ -371,7 +371,7 @@ func AdminResetPassword(req *http.Request, cfg *config.ClientAPI, device *api.De
 	if err = json.NewDecoder(req.Body).Decode(&request); err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.Unknown("Failed to decode request body: " + err.Error()),
+			JSON: spec.Unknown("failed to decode request body: " + err.Error()),
 		}
 	}
 	if request.Password == "" {
@@ -395,7 +395,7 @@ func AdminResetPassword(req *http.Request, cfg *config.ClientAPI, device *api.De
 	if err := userAPI.PerformPasswordUpdate(req.Context(), updateReq, updateRes); err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.Unknown("Failed to perform password update: " + err.Error()),
+			JSON: spec.Unknown("failed to perform password update: " + err.Error()),
 		}
 	}
 	return xutil.JSONResponse{
@@ -448,7 +448,7 @@ func AdminMarkAsStale(req *http.Request, cfg *config.ClientAPI, keyAPI api.Clien
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
-			JSON: spec.Unknown(fmt.Sprintf("Failed to mark device list as stale: %s", err)),
+			JSON: spec.Unknown(fmt.Sprintf("failed to mark device list as stale: %s", err)),
 		}
 	}
 	return xutil.JSONResponse{

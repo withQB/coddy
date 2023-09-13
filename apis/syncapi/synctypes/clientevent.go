@@ -76,7 +76,7 @@ func ToClientEvents(serverEvs []xtools.PDU, format ClientEventFormat, userIDForS
 	evs := make([]ClientEvent, 0, len(serverEvs))
 	for _, se := range serverEvs {
 		if se == nil {
-			continue // TODO: shouldn't happen?
+			continue // TDO: shouldn't happen?
 		}
 		if format == FormatSyncFederation {
 			evs = append(evs, ToClientEvent(se, format, string(se.SenderID()), se.StateKey(), spec.RawJSON(se.Unsigned())))
@@ -113,12 +113,12 @@ func ToClientEvents(serverEvs []xtools.PDU, format ClientEventFormat, userIDForS
 				if err != nil {
 					errString = err.Error()
 				}
-				logrus.Warnf("Failed to find userID for prev_sender in ClientEvent: %s", errString)
+				logrus.Warnf("failed to find userID for prev_sender in ClientEvent: %s", errString)
 				// NOTE: Not much can be done here, so leave the previous value in place.
 			}
 			unsigned, err = json.Marshal(prev)
 			if err != nil {
-				logrus.Errorf("Failed to marshal unsigned content for ClientEvent: %s", err.Error())
+				logrus.Errorf("failed to marshal unsigned content for ClientEvent: %s", err.Error())
 				continue
 			}
 		}
@@ -149,7 +149,7 @@ func ToClientEvent(se xtools.PDU, format ClientEventFormat, sender string, state
 		ce.AuthEvents = se.AuthEventIDs()
 		ce.PrevEvents = se.PrevEventIDs()
 		ce.Depth = se.Depth()
-		// TODO: Set Signatures & Hashes fields
+		// TDO: Set Signatures & Hashes fields
 	}
 
 	if format != FormatSyncFederation {
@@ -189,7 +189,7 @@ func ToClientEventDefault(userIDQuery spec.UserIDForSender, event xtools.PDU) Cl
 //
 // # This function either returns the state key that should be used, or an error
 //
-// TODO: handle failure cases better (e.g. no sender ID)
+// TDO: handle failure cases better (e.g. no sender ID)
 func FromClientStateKey(frameID spec.FrameID, stateKey string, senderIDQuery spec.SenderIDForUser) (*string, error) {
 	if len(stateKey) >= 1 && stateKey[0] == '@' {
 		parsedStateKey, err := spec.NewUserID(stateKey, true)
@@ -199,7 +199,7 @@ func FromClientStateKey(frameID spec.FrameID, stateKey string, senderIDQuery spe
 		}
 		senderID, err := senderIDQuery(frameID, *parsedStateKey)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to query sender ID: %s", err.Error())
+			return nil, fmt.Errorf("failed to query sender ID: %s", err.Error())
 		}
 		if senderID == nil {
 			// If no sender ID, then there is no associated state event.

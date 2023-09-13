@@ -622,7 +622,7 @@ func (r *Queryer) QueryStateAndAuthChain(
 
 	// handle this entirely separately to the other case so we don't have to pull out
 	// the entire current state of the frame
-	// TODO: this probably means it should be a different query operation...
+	// TDO: this probably means it should be a different query operation...
 	if request.OnlyFetchAuthChain {
 		var authEvents []xtools.PDU
 		authEvents, err = GetAuthChain(ctx, r.DB.EventsFromIDs, info, request.AuthEventIDs)
@@ -999,7 +999,7 @@ func (r *Queryer) JoinedUserCount(ctx context.Context, frameID string) (int, err
 		return 0, nil
 	}
 
-	// TODO: this can be further optimised by just using a SELECT COUNT query
+	// TDO: this can be further optimised by just using a SELECT COUNT query
 	nids, err := r.DB.GetMembershipEventNIDsForFrame(ctx, info.FrameNID, true, false)
 	return len(nids), err
 }

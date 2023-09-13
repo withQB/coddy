@@ -45,18 +45,18 @@ func main() {
 	if *unixSocket == "" {
 		http, err := config.HTTPAddress("http://" + *httpBindAddr)
 		if err != nil {
-			logrus.WithError(err).Fatalf("Failed to parse http address")
+			logrus.WithError(err).Fatalf("failed to parse http address")
 		}
 		httpAddr = http
 		https, err := config.HTTPAddress("https://" + *httpsBindAddr)
 		if err != nil {
-			logrus.WithError(err).Fatalf("Failed to parse https address")
+			logrus.WithError(err).Fatalf("failed to parse https address")
 		}
 		httpsAddr = https
 	} else {
 		socket, err := config.UnixSocketAddress(*unixSocket, *unixSocketPermission)
 		if err != nil {
-			logrus.WithError(err).Fatalf("Failed to parse unix socket")
+			logrus.WithError(err).Fatalf("failed to parse unix socket")
 		}
 		httpAddr = socket
 	}
@@ -67,7 +67,7 @@ func main() {
 		for _, err := range *configErrors {
 			logrus.Errorf("Configuration error: %s", err)
 		}
-		logrus.Fatalf("Failed to start due to configuration errors")
+		logrus.Fatalf("failed to start due to configuration errors")
 	}
 	processCtx := process.NewProcessContext()
 
@@ -171,7 +171,7 @@ func main() {
 
 	if len(cfg.MSCs.MSCs) > 0 {
 		if err := mscs.Enable(cfg, cm, routers, &monolith, caches); err != nil {
-			logrus.WithError(err).Fatalf("Failed to enable MSCs")
+			logrus.WithError(err).Fatalf("failed to enable MSCs")
 		}
 	}
 

@@ -81,7 +81,7 @@ func Relations(
 
 	snapshot, err := syncDB.NewDatabaseSnapshot(req.Context())
 	if err != nil {
-		logrus.WithError(err).Error("Failed to get snapshot for relations")
+		logrus.WithError(err).Error("failed to get snapshot for relations")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},

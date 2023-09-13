@@ -430,7 +430,7 @@ func (d *Device) UserDomain() spec.ServerName {
 		// This really is catastrophic because it means that someone
 		// managed to forge a malformed user ID for a device during
 		// login.
-		// TODO: Is there a better way to deal with this than panic?
+		// TDO: Is there a better way to deal with this than panic?
 		panic(err)
 	}
 	return domain
@@ -443,7 +443,7 @@ type Account struct {
 	ServerName   spec.ServerName
 	AppServiceID string
 	AccountType  AccountType
-	// TODO: Associations (e.g. with application services)
+	// TDO: Associations (e.g. with application services)
 }
 
 // OpenIDToken represents an OpenID token

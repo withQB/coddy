@@ -48,7 +48,7 @@ func (k Kind) String() string {
 const DoNotSendToOtherServers = ""
 
 // InputFrameEvent is a coddy frame event to add to the frame server database.
-// TODO: Implement UnmarshalJSON/MarshalJSON in a way that does something sensible with the event JSON.
+// TDO: Implement UnmarshalJSON/MarshalJSON in a way that does something sensible with the event JSON.
 type InputFrameEvent struct {
 	// Whether this event is new, backfilled or an outlier.
 	// This controls how the event is processed.

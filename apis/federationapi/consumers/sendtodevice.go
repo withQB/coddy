@@ -66,7 +66,7 @@ func (t *OutputSendToDeviceConsumer) onMessage(ctx context.Context, msgs []*nats
 	_, originServerName, err := xtools.SplitID('@', sender)
 	if err != nil {
 		sentry.CaptureException(err)
-		log.WithError(err).WithField("user_id", sender).Error("Failed to extract domain from send-to-device sender")
+		log.WithError(err).WithField("user_id", sender).Error("failed to extract domain from send-to-device sender")
 		return true
 	}
 	if !t.isLocalServerName(originServerName) {
@@ -83,7 +83,7 @@ func (t *OutputSendToDeviceConsumer) onMessage(ctx context.Context, msgs []*nats
 	_, destServerName, err := xtools.SplitID('@', ote.UserID)
 	if err != nil {
 		sentry.CaptureException(err)
-		log.WithError(err).WithField("user_id", ote.UserID).Error("Failed to extract domain from send-to-device destination")
+		log.WithError(err).WithField("user_id", ote.UserID).Error("failed to extract domain from send-to-device destination")
 		return true
 	}
 
