@@ -15,14 +15,14 @@ import (
 	"github.com/withqb/coddy/setup/process"
 	"github.com/withqb/xtools/fclient"
 
-	"github.com/withqb/coddy/appservice"
-	"github.com/withqb/coddy/federationapi"
-	"github.com/withqb/coddy/roomserver"
+	"github.com/withqb/coddy/apis/federationapi"
+	"github.com/withqb/coddy/apis/userapi"
+	"github.com/withqb/coddy/servers/roomserver"
+	"github.com/withqb/coddy/services/appservice"
 	"github.com/withqb/coddy/setup"
 	basepkg "github.com/withqb/coddy/setup/base"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/mscs"
-	"github.com/withqb/coddy/userapi"
 )
 
 var (

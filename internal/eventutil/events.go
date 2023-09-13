@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/withqb/coddy/roomserver/api"
-	"github.com/withqb/coddy/roomserver/types"
-	"github.com/withqb/coddy/syncapi/synctypes"
+	"github.com/withqb/coddy/apis/syncapi/synctypes"
+	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/roomserver/types"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
 

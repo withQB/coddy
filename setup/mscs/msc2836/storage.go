@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 
 	"github.com/withqb/coddy/internal/sqlutil"
-	"github.com/withqb/coddy/roomserver/types"
+	"github.com/withqb/coddy/servers/roomserver/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"

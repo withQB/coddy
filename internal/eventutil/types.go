@@ -3,7 +3,7 @@ package eventutil
 import (
 	"strconv"
 
-	"github.com/withqb/coddy/syncapi/types"
+	"github.com/withqb/coddy/apis/syncapi/types"
 )
 
 // AccountData represents account data sent from the client API server to the

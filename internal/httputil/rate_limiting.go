@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/setup/config"
-	userapi "github.com/withqb/coddy/userapi/api"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
 )

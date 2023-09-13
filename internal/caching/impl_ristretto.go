@@ -13,7 +13,7 @@ import (
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
 
-	"github.com/withqb/coddy/roomserver/types"
+	"github.com/withqb/coddy/servers/roomserver/types"
 	"github.com/withqb/coddy/setup/config"
 )
 

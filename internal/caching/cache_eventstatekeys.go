@@ -1,6 +1,6 @@
 package caching
 
-import "github.com/withqb/coddy/roomserver/types"
+import "github.com/withqb/coddy/servers/roomserver/types"
 
 // EventStateKeyCache contains the subset of functions needed for
 // a room event state key cache.

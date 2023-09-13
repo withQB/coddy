@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"github.com/withqb/coddy/clientapi/auth/authtypes"
+	"github.com/withqb/coddy/apis/clientapi/auth/authtypes"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/spec"
 	"golang.org/x/crypto/ed25519"
