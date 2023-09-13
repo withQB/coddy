@@ -1,7 +1,7 @@
 package caching
 
 import (
-	userapi "github.com/withqb/coddy/apis/userapi/api"
+	userapi "github.com/withqb/coddy/services/userapi/api"
 )
 
 type lazyLoadingCacheKey struct {

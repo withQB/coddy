@@ -6,7 +6,7 @@ import (
 )
 
 type ClientAPI struct {
-	Matrix  *Global  `yaml:"-"`
+	Coddy  *Global  `yaml:"-"`
 	Derived *Derived `yaml:"-"` // TDO: Nuke Derived from orbit
 
 	// If set disables new users from registering (except via shared

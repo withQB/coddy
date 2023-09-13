@@ -1,7 +1,7 @@
 package config
 
 type RelayAPI struct {
-	Matrix *Global `yaml:"-"`
+	Coddy *Global `yaml:"-"`
 
 	// The database stores information used by the relay queue to
 	// forward transactions to remote servers.
@@ -17,7 +17,7 @@ func (c *RelayAPI) Defaults(opts DefaultOpts) {
 }
 
 func (c *RelayAPI) Verify(configErrs *ConfigErrors) {
-	if c.Matrix.DatabaseOptions.ConnectionString == "" {
+	if c.Coddy.DatabaseOptions.ConnectionString == "" {
 		checkNotEmpty(configErrs, "relay_api.database.connection_string", string(c.Database.ConnectionString))
 	}
 }

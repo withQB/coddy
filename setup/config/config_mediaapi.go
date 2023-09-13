@@ -5,7 +5,7 @@ import (
 )
 
 type MediaAPI struct {
-	Matrix *Global `yaml:"-"`
+	Coddy *Global `yaml:"-"`
 
 	// The MediaAPI database stores information about files uploaded and downloaded
 	// by local users. It is only accessed by the MediaAPI.
@@ -73,7 +73,7 @@ func (c *MediaAPI) Verify(configErrs *ConfigErrors) {
 		checkPositive(configErrs, fmt.Sprintf("media_api.thumbnail_sizes[%d].height", i), int64(size.Height))
 	}
 
-	if c.Matrix.DatabaseOptions.ConnectionString == "" {
+	if c.Coddy.DatabaseOptions.ConnectionString == "" {
 		checkNotEmpty(configErrs, "media_api.database.connection_string", string(c.Database.ConnectionString))
 	}
 }

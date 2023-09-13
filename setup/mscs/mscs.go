@@ -1,4 +1,4 @@
-// Package mscs implements Matrix Spec Changes from https://github.com/withqb/coddy-doc
+// Package mscs implements Coddy Spec Changes from https://github.com/withqb/coddy-doc
 package mscs
 
 import (

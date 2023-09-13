@@ -1,6 +1,6 @@
 package caching
 
-import "github.com/withqb/coddy/servers/dataframe/types"
+import "github.com/withqb/coddy/services/dataframe/types"
 
 // EventStateKeyCache contains the subset of functions needed for
 // a frame event state key cache.

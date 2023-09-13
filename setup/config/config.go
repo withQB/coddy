@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"github.com/withqb/coddy/apis/clientapi/auth/authtypes"
+	"github.com/withqb/coddy/services/clientapi/auth/authtypes"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/spec"
 	"golang.org/x/crypto/ed25519"
@@ -187,7 +187,7 @@ func loadConfig(
 	}
 
 	privateKeyPath := absPath(basePath, c.Global.PrivateKeyPath)
-	if c.Global.KeyID, c.Global.PrivateKey, err = LoadMatrixKey(privateKeyPath, readFile); err != nil {
+	if c.Global.KeyID, c.Global.PrivateKey, err = LoadCoddyKey(privateKeyPath, readFile); err != nil {
 		return nil, fmt.Errorf("failed to load private_key: %w", err)
 	}
 
@@ -201,7 +201,7 @@ func loadConfig(
 			continue
 		}
 		privateKeyPath := absPath(basePath, v.PrivateKeyPath)
-		if v.KeyID, v.PrivateKey, err = LoadMatrixKey(privateKeyPath, readFile); err != nil {
+		if v.KeyID, v.PrivateKey, err = LoadCoddyKey(privateKeyPath, readFile); err != nil {
 			return nil, fmt.Errorf("failed to load private_key for virtualhost %s: %w", v.ServerName, err)
 		}
 	}
@@ -254,7 +254,7 @@ func loadConfig(
 	return &c, nil
 }
 
-func LoadMatrixKey(privateKeyPath string, readFile func(string) ([]byte, error)) (xtools.KeyID, ed25519.PrivateKey, error) {
+func LoadCoddyKey(privateKeyPath string, readFile func(string) ([]byte, error)) (xtools.KeyID, ed25519.PrivateKey, error) {
 	privateKeyData, err := readFile(privateKeyPath)
 	if err != nil {
 		return "", nil, err
@@ -329,17 +329,17 @@ func (c *Dendrite) Verify(configErrs *ConfigErrors) {
 }
 
 func (c *Dendrite) Wiring() {
-	c.Global.JetStream.Matrix = &c.Global
-	c.ClientAPI.Matrix = &c.Global
-	c.FederationAPI.Matrix = &c.Global
-	c.KeyServer.Matrix = &c.Global
-	c.MediaAPI.Matrix = &c.Global
-	c.DataFrame.Matrix = &c.Global
-	c.SyncAPI.Matrix = &c.Global
-	c.UserAPI.Matrix = &c.Global
-	c.AppServiceAPI.Matrix = &c.Global
-	c.RelayAPI.Matrix = &c.Global
-	c.MSCs.Matrix = &c.Global
+	c.Global.JetStream.Coddy = &c.Global
+	c.ClientAPI.Coddy = &c.Global
+	c.FederationAPI.Coddy = &c.Global
+	c.KeyServer.Coddy = &c.Global
+	c.MediaAPI.Coddy = &c.Global
+	c.DataFrame.Coddy = &c.Global
+	c.SyncAPI.Coddy = &c.Global
+	c.UserAPI.Coddy = &c.Global
+	c.AppServiceAPI.Coddy = &c.Global
+	c.RelayAPI.Coddy = &c.Global
+	c.MSCs.Coddy = &c.Global
 
 	c.ClientAPI.Derived = &c.Derived
 	c.AppServiceAPI.Derived = &c.Derived

@@ -1,7 +1,7 @@
 package caching
 
 import (
-	"github.com/withqb/coddy/servers/dataframe/types"
+	"github.com/withqb/coddy/services/dataframe/types"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
 )

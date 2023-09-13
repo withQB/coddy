@@ -3,7 +3,7 @@ package config
 import "golang.org/x/crypto/bcrypt"
 
 type UserAPI struct {
-	Matrix *Global `yaml:"-"`
+	Coddy *Global `yaml:"-"`
 
 	// The cost when hashing passwords.
 	BCryptCost int `yaml:"bcrypt_cost"`
@@ -37,7 +37,7 @@ func (c *UserAPI) Defaults(opts DefaultOpts) {
 
 func (c *UserAPI) Verify(configErrs *ConfigErrors) {
 	checkPositive(configErrs, "user_api.openid_token_lifetime_ms", c.OpenIDTokenLifetimeMS)
-	if c.Matrix.DatabaseOptions.ConnectionString == "" {
+	if c.Coddy.DatabaseOptions.ConnectionString == "" {
 		checkNotEmpty(configErrs, "user_api.account_database.connection_string", string(c.AccountDatabase.ConnectionString))
 	}
 }

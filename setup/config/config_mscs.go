@@ -1,7 +1,7 @@
 package config
 
 type MSCs struct {
-	Matrix *Global `yaml:"-"`
+	Coddy *Global `yaml:"-"`
 
 	// The MSCs to enable. Supported MSCs include:
 	// 'msc2444': Peeking over federation - https://github.com/withqb/coddy-doc/pull/2444
@@ -31,7 +31,7 @@ func (c *MSCs) Enabled(msc string) bool {
 }
 
 func (c *MSCs) Verify(configErrs *ConfigErrors) {
-	if c.Matrix.DatabaseOptions.ConnectionString == "" {
+	if c.Coddy.DatabaseOptions.ConnectionString == "" {
 		checkNotEmpty(configErrs, "mscs.database.connection_string", string(c.Database.ConnectionString))
 	}
 }

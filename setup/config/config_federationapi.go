@@ -6,7 +6,7 @@ import (
 )
 
 type FederationAPI struct {
-	Matrix *Global `yaml:"-"`
+	Coddy *Global `yaml:"-"`
 
 	// The database stores information used by the federation destination queues to
 	// send transactions to remote servers.
@@ -69,7 +69,7 @@ func (c *FederationAPI) Defaults(opts DefaultOpts) {
 }
 
 func (c *FederationAPI) Verify(configErrs *ConfigErrors) {
-	if c.Matrix.DatabaseOptions.ConnectionString == "" {
+	if c.Coddy.DatabaseOptions.ConnectionString == "" {
 		checkNotEmpty(configErrs, "federation_api.database.connection_string", string(c.Database.ConnectionString))
 	}
 }

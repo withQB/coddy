@@ -33,7 +33,7 @@ import (
 const UnixSocketPrefix = "unix://"
 
 type AppServiceAPI struct {
-	Matrix  *Global  `yaml:"-"`
+	Coddy  *Global  `yaml:"-"`
 	Derived *Derived `yaml:"-"` // TDO: Nuke Derived from orbit
 
 	// DisableTLSValidation disables the validation of X.509 TLS certs
@@ -70,7 +70,7 @@ type ApplicationServiceNamespace struct {
 	RegexpObject *regexp.Regexp
 }
 
-// ApplicationService represents a Matrix application service.
+// ApplicationService represents a Coddy application service.
 type ApplicationService struct {
 	// User-defined, unique, persistent ID of the application service
 	ID string `yaml:"id"`
@@ -244,7 +244,7 @@ func setupRegexps(asAPI *AppServiceAPI, derived *Derived) (err error) {
 		}
 		appservice.NamespaceMap["users"] = append(users, ApplicationServiceNamespace{
 			Exclusive: true,
-			Regex:     regexp.QuoteMeta(fmt.Sprintf("@%s:%s", appservice.SenderLocalpart, asAPI.Matrix.ServerName)),
+			Regex:     regexp.QuoteMeta(fmt.Sprintf("@%s:%s", appservice.SenderLocalpart, asAPI.Coddy.ServerName)),
 		})
 
 		for key, namespaceSlice := range appservice.NamespaceMap {

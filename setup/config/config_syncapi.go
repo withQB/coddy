@@ -1,7 +1,7 @@
 package config
 
 type SyncAPI struct {
-	Matrix *Global `yaml:"-"`
+	Coddy *Global `yaml:"-"`
 
 	Database DatabaseOptions `yaml:"database,omitempty"`
 
@@ -21,7 +21,7 @@ func (c *SyncAPI) Defaults(opts DefaultOpts) {
 
 func (c *SyncAPI) Verify(configErrs *ConfigErrors) {
 	c.Fulltext.Verify(configErrs)
-	if c.Matrix.DatabaseOptions.ConnectionString == "" {
+	if c.Coddy.DatabaseOptions.ConnectionString == "" {
 		checkNotEmpty(configErrs, "sync_api.database", string(c.Database.ConnectionString))
 	}
 }

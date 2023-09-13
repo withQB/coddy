@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/withqb/coddy/apis/syncapi/synctypes"
-	"github.com/withqb/coddy/servers/dataframe/api"
-	"github.com/withqb/coddy/servers/dataframe/types"
+	"github.com/withqb/coddy/services/dataframe/api"
+	"github.com/withqb/coddy/services/dataframe/types"
+	"github.com/withqb/coddy/services/syncapi/synctypes"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
 
@@ -29,7 +29,7 @@ func (e ErrFrameNoExists) Unwrap() error {
 	return errFrameNoExists
 }
 
-// QueryAndBuildEvent builds a Matrix event using the event builder and dataframe query
+// QueryAndBuildEvent builds a Coddy event using the event builder and dataframe query
 // API client provided. If also fills dataframe query API response (if provided)
 // in case the function calling FillBuilder needs to use it.
 // Returns ErrFrameNoExists if the state of the frame could not be retrieved because
@@ -53,7 +53,7 @@ func QueryAndBuildEvent(
 	return BuildEvent(ctx, proto, identity, evTime, eventsNeeded, queryRes)
 }
 
-// BuildEvent builds a Matrix event from the builder and QueryLatestEventsAndStateResponse
+// BuildEvent builds a Coddy event from the builder and QueryLatestEventsAndStateResponse
 // provided.
 func BuildEvent(
 	ctx context.Context,

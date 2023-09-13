@@ -5,7 +5,7 @@ import (
 )
 
 type JetStream struct {
-	Matrix *Global `yaml:"-"`
+	Coddy *Global `yaml:"-"`
 
 	// Persistent directory to store JetStream streams in.
 	StoragePath Path `yaml:"storage_path"`

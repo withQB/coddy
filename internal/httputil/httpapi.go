@@ -16,9 +16,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/withqb/xutil"
 
-	"github.com/withqb/coddy/apis/clientapi/auth"
-	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal"
+	"github.com/withqb/coddy/services/clientapi/auth"
+	userapi "github.com/withqb/coddy/services/userapi/api"
 	"github.com/withqb/xtools/spec"
 )
 
