@@ -1,6 +1,3 @@
-//go:build !wasm && !windows
-// +build !wasm,!windows
-
 package util
 
 import (

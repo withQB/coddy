@@ -1,6 +1,3 @@
-//go:build !wasm && !cgo
-// +build !wasm,!cgo
-
 package sqlutil
 
 import (

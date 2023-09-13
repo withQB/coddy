@@ -12,7 +12,6 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/kardianos/minwinsvc v1.0.2
 	github.com/lib/pq v1.10.9
-	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/nats-io/nats-server/v2 v2.9.22
 	github.com/nats-io/nats.go v1.29.0
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
@@ -70,6 +69,7 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/mattn/go-sqlite3 v1.14.17 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
