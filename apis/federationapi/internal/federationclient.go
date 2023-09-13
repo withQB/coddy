@@ -15,11 +15,11 @@ const defaultTimeout = time.Second * 30
 // client.
 
 func (a *FederationInternalAPI) MakeJoin(
-	ctx context.Context, origin, s spec.ServerName, roomID, userID string,
+	ctx context.Context, origin, s spec.ServerName, frameID, userID string,
 ) (res xtools.MakeJoinResponse, err error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
-	ires, err := a.federation.MakeJoin(ctx, origin, s, roomID, userID)
+	ires, err := a.federation.MakeJoin(ctx, origin, s, frameID, userID)
 	if err != nil {
 		return &fclient.RespMakeJoin{}, err
 	}
@@ -40,12 +40,12 @@ func (a *FederationInternalAPI) SendJoin(
 
 func (a *FederationInternalAPI) GetEventAuth(
 	ctx context.Context, origin, s spec.ServerName,
-	roomVersion xtools.RoomVersion, roomID, eventID string,
+	frameVersion xtools.FrameVersion, frameID, eventID string,
 ) (res fclient.RespEventAuth, err error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 	ires, err := a.doRequestIfNotBlacklisted(s, func() (interface{}, error) {
-		return a.federation.GetEventAuth(ctx, origin, s, roomVersion, roomID, eventID)
+		return a.federation.GetEventAuth(ctx, origin, s, frameVersion, frameID, eventID)
 	})
 	if err != nil {
 		return fclient.RespEventAuth{}, err
@@ -94,12 +94,12 @@ func (a *FederationInternalAPI) QueryKeys(
 }
 
 func (a *FederationInternalAPI) Backfill(
-	ctx context.Context, origin, s spec.ServerName, roomID string, limit int, eventIDs []string,
+	ctx context.Context, origin, s spec.ServerName, frameID string, limit int, eventIDs []string,
 ) (res xtools.Transaction, err error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 	ires, err := a.doRequestIfNotBlacklisted(s, func() (interface{}, error) {
-		return a.federation.Backfill(ctx, origin, s, roomID, limit, eventIDs)
+		return a.federation.Backfill(ctx, origin, s, frameID, limit, eventIDs)
 	})
 	if err != nil {
 		return xtools.Transaction{}, err
@@ -108,12 +108,12 @@ func (a *FederationInternalAPI) Backfill(
 }
 
 func (a *FederationInternalAPI) LookupState(
-	ctx context.Context, origin, s spec.ServerName, roomID, eventID string, roomVersion xtools.RoomVersion,
+	ctx context.Context, origin, s spec.ServerName, frameID, eventID string, frameVersion xtools.FrameVersion,
 ) (res xtools.StateResponse, err error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 	ires, err := a.doRequestIfNotBlacklisted(s, func() (interface{}, error) {
-		return a.federation.LookupState(ctx, origin, s, roomID, eventID, roomVersion)
+		return a.federation.LookupState(ctx, origin, s, frameID, eventID, frameVersion)
 	})
 	if err != nil {
 		return &fclient.RespState{}, err
@@ -123,12 +123,12 @@ func (a *FederationInternalAPI) LookupState(
 }
 
 func (a *FederationInternalAPI) LookupStateIDs(
-	ctx context.Context, origin, s spec.ServerName, roomID, eventID string,
+	ctx context.Context, origin, s spec.ServerName, frameID, eventID string,
 ) (res xtools.StateIDResponse, err error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 	ires, err := a.doRequestIfNotBlacklisted(s, func() (interface{}, error) {
-		return a.federation.LookupStateIDs(ctx, origin, s, roomID, eventID)
+		return a.federation.LookupStateIDs(ctx, origin, s, frameID, eventID)
 	})
 	if err != nil {
 		return fclient.RespStateIDs{}, err
@@ -137,13 +137,13 @@ func (a *FederationInternalAPI) LookupStateIDs(
 }
 
 func (a *FederationInternalAPI) LookupMissingEvents(
-	ctx context.Context, origin, s spec.ServerName, roomID string,
-	missing fclient.MissingEvents, roomVersion xtools.RoomVersion,
+	ctx context.Context, origin, s spec.ServerName, frameID string,
+	missing fclient.MissingEvents, frameVersion xtools.FrameVersion,
 ) (res fclient.RespMissingEvents, err error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
 	ires, err := a.doRequestIfNotBlacklisted(s, func() (interface{}, error) {
-		return a.federation.LookupMissingEvents(ctx, origin, s, roomID, missing, roomVersion)
+		return a.federation.LookupMissingEvents(ctx, origin, s, frameID, missing, frameVersion)
 	})
 	if err != nil {
 		return fclient.RespMissingEvents{}, err
@@ -181,12 +181,12 @@ func (a *FederationInternalAPI) LookupServerKeys(
 
 func (a *FederationInternalAPI) MSC2836EventRelationships(
 	ctx context.Context, origin, s spec.ServerName, r fclient.MSC2836EventRelationshipsRequest,
-	roomVersion xtools.RoomVersion,
+	frameVersion xtools.FrameVersion,
 ) (res fclient.MSC2836EventRelationshipsResponse, err error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	ires, err := a.doRequestIfNotBlacklisted(s, func() (interface{}, error) {
-		return a.federation.MSC2836EventRelationships(ctx, origin, s, r, roomVersion)
+		return a.federation.MSC2836EventRelationships(ctx, origin, s, r, frameVersion)
 	})
 	if err != nil {
 		return res, err
@@ -194,16 +194,16 @@ func (a *FederationInternalAPI) MSC2836EventRelationships(
 	return ires.(fclient.MSC2836EventRelationshipsResponse), nil
 }
 
-func (a *FederationInternalAPI) RoomHierarchies(
-	ctx context.Context, origin, s spec.ServerName, roomID string, suggestedOnly bool,
-) (res fclient.RoomHierarchyResponse, err error) {
+func (a *FederationInternalAPI) FrameHierarchies(
+	ctx context.Context, origin, s spec.ServerName, frameID string, suggestedOnly bool,
+) (res fclient.FrameHierarchyResponse, err error) {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	ires, err := a.doRequestIfNotBlacklisted(s, func() (interface{}, error) {
-		return a.federation.RoomHierarchy(ctx, origin, s, roomID, suggestedOnly)
+		return a.federation.FrameHierarchy(ctx, origin, s, frameID, suggestedOnly)
 	})
 	if err != nil {
 		return res, err
 	}
-	return ires.(fclient.RoomHierarchyResponse), nil
+	return ires.(fclient.FrameHierarchyResponse), nil
 }

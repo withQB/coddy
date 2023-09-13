@@ -24,7 +24,7 @@ import (
 	"github.com/withqb/xtools/spec"
 
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	appserviceAPI "github.com/withqb/coddy/services/appservice/api"
 	"github.com/withqb/coddy/services/appservice/consumers"
 	"github.com/withqb/coddy/services/appservice/query"
@@ -38,7 +38,7 @@ func NewInternalAPI(
 	cfg *config.Dendrite,
 	natsInstance *jetstream.NATSInstance,
 	userAPI userapi.AppserviceUserAPI,
-	rsAPI roomserverAPI.RoomserverInternalAPI,
+	rsAPI dataframeAPI.DataframeInternalAPI,
 ) appserviceAPI.AppServiceInternalAPI {
 
 	// Create appserivce query API with an HTTP client that will be used for all
@@ -68,12 +68,12 @@ func NewInternalAPI(
 	// Only consume if we actually have ASes to track, else we'll just chew cycles needlessly.
 	// We can't add ASes at runtime so this is safe to do.
 	js, _ := natsInstance.Prepare(processContext, &cfg.Global.JetStream)
-	consumer := consumers.NewOutputRoomEventConsumer(
+	consumer := consumers.NewOutputFrameEventConsumer(
 		processContext, &cfg.AppServiceAPI,
 		js, rsAPI,
 	)
 	if err := consumer.Start(); err != nil {
-		logrus.WithError(err).Panicf("failed to start appservice roomserver consumer")
+		logrus.WithError(err).Panicf("failed to start appservice dataframe consumer")
 	}
 
 	return appserviceQueryAPI

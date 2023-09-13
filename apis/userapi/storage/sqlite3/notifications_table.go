@@ -35,7 +35,7 @@ type notificationsStatements struct {
 	updateReadStmt         *sql.Stmt
 	selectStmt             *sql.Stmt
 	selectCountStmt        *sql.Stmt
-	selectRoomCountsStmt   *sql.Stmt
+	selectFrameCountsStmt   *sql.Stmt
 	cleanNotificationsStmt *sql.Stmt
 }
 
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS userapi_notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 	localpart TEXT NOT NULL,
 	server_name TEXT NOT NULL,
-	room_id TEXT NOT NULL,
+	frame_id TEXT NOT NULL,
 	event_id TEXT NOT NULL,
 	stream_pos BIGINT NOT NULL,
     ts_ms BIGINT NOT NULL,
@@ -53,22 +53,22 @@ CREATE TABLE IF NOT EXISTS userapi_notifications (
     read BOOLEAN NOT NULL DEFAULT FALSE
 );
 
-CREATE INDEX IF NOT EXISTS userapi_notification_localpart_room_id_event_id_idx ON userapi_notifications(localpart, server_name, room_id, event_id);
-CREATE INDEX IF NOT EXISTS userapi_notification_localpart_room_id_id_idx ON userapi_notifications(localpart, server_name, room_id, id);
+CREATE INDEX IF NOT EXISTS userapi_notification_localpart_frame_id_event_id_idx ON userapi_notifications(localpart, server_name, frame_id, event_id);
+CREATE INDEX IF NOT EXISTS userapi_notification_localpart_frame_id_id_idx ON userapi_notifications(localpart, server_name, frame_id, id);
 CREATE INDEX IF NOT EXISTS userapi_notification_localpart_id_idx ON userapi_notifications(localpart, server_name, id);
 `
 
 const insertNotificationSQL = "" +
-	"INSERT INTO userapi_notifications (localpart, server_name, room_id, event_id, stream_pos, ts_ms, highlight, notification_json) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+	"INSERT INTO userapi_notifications (localpart, server_name, frame_id, event_id, stream_pos, ts_ms, highlight, notification_json) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
 
 const deleteNotificationsUpToSQL = "" +
-	"DELETE FROM userapi_notifications WHERE localpart = $1 AND server_name = $2 AND room_id = $3 AND stream_pos <= $4"
+	"DELETE FROM userapi_notifications WHERE localpart = $1 AND server_name = $2 AND frame_id = $3 AND stream_pos <= $4"
 
 const updateNotificationReadSQL = "" +
-	"UPDATE userapi_notifications SET read = $1 WHERE localpart = $2 AND server_name = $3 AND room_id = $4 AND stream_pos <= $5 AND read <> $1"
+	"UPDATE userapi_notifications SET read = $1 WHERE localpart = $2 AND server_name = $3 AND frame_id = $4 AND stream_pos <= $5 AND read <> $1"
 
 const selectNotificationSQL = "" +
-	"SELECT id, room_id, ts_ms, read, notification_json FROM userapi_notifications WHERE localpart = $1 AND server_name = $2 AND id > $3 AND (" +
+	"SELECT id, frame_id, ts_ms, read, notification_json FROM userapi_notifications WHERE localpart = $1 AND server_name = $2 AND id > $3 AND (" +
 	"(($4 & 1) <> 0 AND highlight) OR (($4 & 2) <> 0 AND NOT highlight)" +
 	") AND NOT read ORDER BY localpart, id LIMIT $5"
 
@@ -77,9 +77,9 @@ const selectNotificationCountSQL = "" +
 	"(($3 & 1) <> 0 AND highlight) OR (($3 & 2) <> 0 AND NOT highlight)" +
 	") AND NOT read"
 
-const selectRoomNotificationCountsSQL = "" +
+const selectFrameNotificationCountsSQL = "" +
 	"SELECT COUNT(*), COUNT(*) FILTER (WHERE highlight) FROM userapi_notifications " +
-	"WHERE localpart = $1 AND server_name = $2 AND room_id = $3 AND NOT read"
+	"WHERE localpart = $1 AND server_name = $2 AND frame_id = $3 AND NOT read"
 
 const cleanNotificationsSQL = "" +
 	"DELETE FROM userapi_notifications WHERE" +
@@ -97,7 +97,7 @@ func NewSQLiteNotificationTable(db *sql.DB) (tables.NotificationTable, error) {
 		{&s.updateReadStmt, updateNotificationReadSQL},
 		{&s.selectStmt, selectNotificationSQL},
 		{&s.selectCountStmt, selectNotificationCountSQL},
-		{&s.selectRoomCountsStmt, selectRoomNotificationCountsSQL},
+		{&s.selectFrameCountsStmt, selectFrameNotificationCountsSQL},
 		{&s.cleanNotificationsStmt, cleanNotificationsSQL},
 	}.Prepare(db)
 }
@@ -113,23 +113,23 @@ func (s *notificationsStatements) Clean(ctx context.Context, txn *sql.Tx) error 
 
 // Insert inserts a notification into the database.
 func (s *notificationsStatements) Insert(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, eventID string, pos uint64, highlight bool, n *api.Notification) error {
-	roomID, tsMS := n.RoomID, n.TS
+	frameID, tsMS := n.FrameID, n.TS
 	nn := *n
 	// Clears out fields that have their own columns to (1) shrink the
 	// data and (2) avoid difficult-to-debug inconsistency bugs.
-	nn.RoomID = ""
+	nn.FrameID = ""
 	nn.TS, nn.Read = 0, false
 	bs, err := json.Marshal(nn)
 	if err != nil {
 		return err
 	}
-	_, err = sqlutil.TxStmt(txn, s.insertStmt).ExecContext(ctx, localpart, serverName, roomID, eventID, pos, tsMS, highlight, string(bs))
+	_, err = sqlutil.TxStmt(txn, s.insertStmt).ExecContext(ctx, localpart, serverName, frameID, eventID, pos, tsMS, highlight, string(bs))
 	return err
 }
 
 // DeleteUpTo deletes all previous notifications, up to and including the event.
-func (s *notificationsStatements) DeleteUpTo(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, roomID string, pos uint64) (affected bool, _ error) {
-	res, err := sqlutil.TxStmt(txn, s.deleteUpToStmt).ExecContext(ctx, localpart, serverName, roomID, pos)
+func (s *notificationsStatements) DeleteUpTo(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, frameID string, pos uint64) (affected bool, _ error) {
+	res, err := sqlutil.TxStmt(txn, s.deleteUpToStmt).ExecContext(ctx, localpart, serverName, frameID, pos)
 	if err != nil {
 		return false, err
 	}
@@ -137,13 +137,13 @@ func (s *notificationsStatements) DeleteUpTo(ctx context.Context, txn *sql.Tx, l
 	if err != nil {
 		return true, err
 	}
-	log.WithFields(log.Fields{"localpart": localpart, "room_id": roomID, "stream_pos": pos}).Tracef("DeleteUpTo: %d rows affected", nrows)
+	log.WithFields(log.Fields{"localpart": localpart, "frame_id": frameID, "stream_pos": pos}).Tracef("DeleteUpTo: %d rows affected", nrows)
 	return nrows > 0, nil
 }
 
 // UpdateRead updates the "read" value for an event.
-func (s *notificationsStatements) UpdateRead(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, roomID string, pos uint64, v bool) (affected bool, _ error) {
-	res, err := sqlutil.TxStmt(txn, s.updateReadStmt).ExecContext(ctx, v, localpart, serverName, roomID, pos)
+func (s *notificationsStatements) UpdateRead(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, frameID string, pos uint64, v bool) (affected bool, _ error) {
+	res, err := sqlutil.TxStmt(txn, s.updateReadStmt).ExecContext(ctx, v, localpart, serverName, frameID, pos)
 	if err != nil {
 		return false, err
 	}
@@ -151,7 +151,7 @@ func (s *notificationsStatements) UpdateRead(ctx context.Context, txn *sql.Tx, l
 	if err != nil {
 		return true, err
 	}
-	log.WithFields(log.Fields{"localpart": localpart, "room_id": roomID, "stream_pos": pos}).Tracef("UpdateRead: %d rows affected", nrows)
+	log.WithFields(log.Fields{"localpart": localpart, "frame_id": frameID, "stream_pos": pos}).Tracef("UpdateRead: %d rows affected", nrows)
 	return nrows > 0, nil
 }
 
@@ -167,13 +167,13 @@ func (s *notificationsStatements) Select(ctx context.Context, txn *sql.Tx, local
 	var notifs []*api.Notification
 	for rows.Next() {
 		var id int64
-		var roomID string
+		var frameID string
 		var ts spec.Timestamp
 		var read bool
 		var jsonStr string
 		err = rows.Scan(
 			&id,
-			&roomID,
+			&frameID,
 			&ts,
 			&read,
 			&jsonStr)
@@ -186,7 +186,7 @@ func (s *notificationsStatements) Select(ctx context.Context, txn *sql.Tx, local
 		if err != nil {
 			return nil, 0, err
 		}
-		n.RoomID = roomID
+		n.FrameID = frameID
 		n.TS = ts
 		n.Read = read
 		notifs = append(notifs, &n)
@@ -203,7 +203,7 @@ func (s *notificationsStatements) SelectCount(ctx context.Context, txn *sql.Tx, 
 	return
 }
 
-func (s *notificationsStatements) SelectRoomCounts(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, roomID string) (total int64, highlight int64, err error) {
-	err = sqlutil.TxStmt(txn, s.selectRoomCountsStmt).QueryRowContext(ctx, localpart, serverName, roomID).Scan(&total, &highlight)
+func (s *notificationsStatements) SelectFrameCounts(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, frameID string) (total int64, highlight int64, err error) {
+	err = sqlutil.TxStmt(txn, s.selectFrameCountsStmt).QueryRowContext(ctx, localpart, serverName, frameID).Scan(&total, &highlight)
 	return
 }

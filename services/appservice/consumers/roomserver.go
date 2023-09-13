@@ -30,8 +30,8 @@ import (
 	"github.com/withqb/xtools/spec"
 
 	"github.com/withqb/coddy/apis/syncapi/synctypes"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
 	"github.com/withqb/coddy/setup/process"
@@ -45,13 +45,13 @@ type ApplicationServiceTransaction struct {
 	Events []synctypes.ClientEvent `json:"events"`
 }
 
-// OutputRoomEventConsumer consumes events that originated in the room server.
-type OutputRoomEventConsumer struct {
+// OutputFrameEventConsumer consumes events that originated in the frame server.
+type OutputFrameEventConsumer struct {
 	ctx       context.Context
 	cfg       *config.AppServiceAPI
 	jetstream nats.JetStreamContext
 	topic     string
-	rsAPI     api.AppserviceRoomserverAPI
+	rsAPI     api.AppserviceDataframeAPI
 }
 
 type appserviceState struct {
@@ -59,25 +59,25 @@ type appserviceState struct {
 	backoff int
 }
 
-// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer. Call
-// Start() to begin consuming from room servers.
-func NewOutputRoomEventConsumer(
+// NewOutputFrameEventConsumer creates a new OutputFrameEventConsumer. Call
+// Start() to begin consuming from frame servers.
+func NewOutputFrameEventConsumer(
 	process *process.ProcessContext,
 	cfg *config.AppServiceAPI,
 	js nats.JetStreamContext,
-	rsAPI api.AppserviceRoomserverAPI,
-) *OutputRoomEventConsumer {
-	return &OutputRoomEventConsumer{
+	rsAPI api.AppserviceDataframeAPI,
+) *OutputFrameEventConsumer {
+	return &OutputFrameEventConsumer{
 		ctx:       process.Context(),
 		cfg:       cfg,
 		jetstream: js,
-		topic:     cfg.Matrix.JetStream.Prefixed(jetstream.OutputRoomEvent),
+		topic:     cfg.Matrix.JetStream.Prefixed(jetstream.OutputFrameEvent),
 		rsAPI:     rsAPI,
 	}
 }
 
-// Start consuming from room servers
-func (s *OutputRoomEventConsumer) Start() error {
+// Start consuming from frame servers
+func (s *OutputFrameEventConsumer) Start() error {
 	for _, as := range s.cfg.Derived.ApplicationServices {
 		appsvc := as
 		state := &appserviceState{
@@ -100,16 +100,16 @@ func (s *OutputRoomEventConsumer) Start() error {
 }
 
 // onMessage is called when the appservice component receives a new event from
-// the room server output log.
-func (s *OutputRoomEventConsumer) onMessage(
+// the frame server output log.
+func (s *OutputFrameEventConsumer) onMessage(
 	ctx context.Context, state *appserviceState, msgs []*nats.Msg,
 ) bool {
-	log.WithField("appservice", state.ID).Tracef("Appservice worker received %d message(s) from roomserver", len(msgs))
+	log.WithField("appservice", state.ID).Tracef("Appservice worker received %d message(s) from dataframe", len(msgs))
 	events := make([]*types.HeaderedEvent, 0, len(msgs))
 	for _, msg := range msgs {
 		// Only handle events we care about
-		receivedType := api.OutputType(msg.Header.Get(jetstream.RoomEventType))
-		if receivedType != api.OutputTypeNewRoomEvent && receivedType != api.OutputTypeNewInviteEvent {
+		receivedType := api.OutputType(msg.Header.Get(jetstream.FrameEventType))
+		if receivedType != api.OutputTypeNewFrameEvent && receivedType != api.OutputTypeNewInviteEvent {
 			continue
 		}
 		// Parse out the event JSON
@@ -120,19 +120,19 @@ func (s *OutputRoomEventConsumer) onMessage(
 			continue
 		}
 		switch output.Type {
-		case api.OutputTypeNewRoomEvent:
-			if output.NewRoomEvent == nil || !s.appserviceIsInterestedInEvent(ctx, output.NewRoomEvent.Event, state.ApplicationService) {
+		case api.OutputTypeNewFrameEvent:
+			if output.NewFrameEvent == nil || !s.appserviceIsInterestedInEvent(ctx, output.NewFrameEvent.Event, state.ApplicationService) {
 				continue
 			}
-			events = append(events, output.NewRoomEvent.Event)
-			if len(output.NewRoomEvent.AddsStateEventIDs) > 0 {
-				newEventID := output.NewRoomEvent.Event.EventID()
+			events = append(events, output.NewFrameEvent.Event)
+			if len(output.NewFrameEvent.AddsStateEventIDs) > 0 {
+				newEventID := output.NewFrameEvent.Event.EventID()
 				eventsReq := &api.QueryEventsByIDRequest{
-					RoomID:   output.NewRoomEvent.Event.RoomID(),
-					EventIDs: make([]string, 0, len(output.NewRoomEvent.AddsStateEventIDs)),
+					FrameID:   output.NewFrameEvent.Event.FrameID(),
+					EventIDs: make([]string, 0, len(output.NewFrameEvent.AddsStateEventIDs)),
 				}
 				eventsRes := &api.QueryEventsByIDResponse{}
-				for _, eventID := range output.NewRoomEvent.AddsStateEventIDs {
+				for _, eventID := range output.NewFrameEvent.AddsStateEventIDs {
 					if eventID != newEventID {
 						eventsReq.EventIDs = append(eventsReq.EventIDs, eventID)
 					}
@@ -167,13 +167,13 @@ func (s *OutputRoomEventConsumer) onMessage(
 
 	// Send event to any relevant application services. If we hit
 	// an error here, return false, so that we negatively ack.
-	log.WithField("appservice", state.ID).Debugf("Appservice worker sending %d events(s) from roomserver", len(events))
+	log.WithField("appservice", state.ID).Debugf("Appservice worker sending %d events(s) from dataframe", len(events))
 	return s.sendEvents(ctx, state, events, txnID) == nil
 }
 
 // sendEvents passes events to the appservice by using the transactions
 // endpoint. It will block for the backoff period if necessary.
-func (s *OutputRoomEventConsumer) sendEvents(
+func (s *OutputFrameEventConsumer) sendEvents(
 	ctx context.Context, state *appserviceState,
 	events []*types.HeaderedEvent,
 	txnID string,
@@ -181,8 +181,8 @@ func (s *OutputRoomEventConsumer) sendEvents(
 	// Create the transaction body.
 	transaction, err := json.Marshal(
 		ApplicationServiceTransaction{
-			Events: synctypes.ToClientEvents(xtools.ToPDUs(events), synctypes.FormatAll, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-				return s.rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+			Events: synctypes.ToClientEvents(xtools.ToPDUs(events), synctypes.FormatAll, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+				return s.rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 			}),
 		},
 	)
@@ -196,7 +196,6 @@ func (s *OutputRoomEventConsumer) sendEvents(
 	}
 
 	// Send the transaction to the appservice.
-	// https://matrix.org/docs/spec/application_service/r0.1.2#put-matrix-app-v1-transactions-txnid
 	address := fmt.Sprintf("%s/transactions/%s?access_token=%s", state.RequestUrl(), txnID, url.QueryEscape(state.HSToken))
 	req, err := http.NewRequestWithContext(ctx, "PUT", address, bytes.NewBuffer(transaction))
 	if err != nil {
@@ -234,13 +233,13 @@ func (s *appserviceState) backoffAndPause(err error) error {
 // event falls within one of a given application service's namespaces.
 //
 // TODO: This should be cached, see https://github.com/withqb/dendrite/issues/1682
-func (s *OutputRoomEventConsumer) appserviceIsInterestedInEvent(ctx context.Context, event *types.HeaderedEvent, appservice *config.ApplicationService) bool {
+func (s *OutputFrameEventConsumer) appserviceIsInterestedInEvent(ctx context.Context, event *types.HeaderedEvent, appservice *config.ApplicationService) bool {
 	user := ""
-	validRoomID, err := spec.NewRoomID(event.RoomID())
+	validFrameID, err := spec.NewFrameID(event.FrameID())
 	if err != nil {
 		return false
 	}
-	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, event.SenderID())
+	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, event.SenderID())
 	if err == nil {
 		user = userID.String()
 	}
@@ -250,57 +249,57 @@ func (s *OutputRoomEventConsumer) appserviceIsInterestedInEvent(ctx context.Cont
 		return false
 	case appservice.IsInterestedInUserID(user):
 		return true
-	case appservice.IsInterestedInRoomID(event.RoomID()):
+	case appservice.IsInterestedInFrameID(event.FrameID()):
 		return true
 	}
 
-	if event.Type() == spec.MRoomMember && event.StateKey() != nil {
+	if event.Type() == spec.MFrameMember && event.StateKey() != nil {
 		if appservice.IsInterestedInUserID(*event.StateKey()) {
 			return true
 		}
 	}
 
-	// Check all known room aliases of the room the event came from
-	queryReq := api.GetAliasesForRoomIDRequest{RoomID: event.RoomID()}
-	var queryRes api.GetAliasesForRoomIDResponse
-	if err := s.rsAPI.GetAliasesForRoomID(ctx, &queryReq, &queryRes); err == nil {
+	// Check all known frame aliases of the frame the event came from
+	queryReq := api.GetAliasesForFrameIDRequest{FrameID: event.FrameID()}
+	var queryRes api.GetAliasesForFrameIDResponse
+	if err := s.rsAPI.GetAliasesForFrameID(ctx, &queryReq, &queryRes); err == nil {
 		for _, alias := range queryRes.Aliases {
-			if appservice.IsInterestedInRoomAlias(alias) {
+			if appservice.IsInterestedInFrameAlias(alias) {
 				return true
 			}
 		}
 	} else {
 		log.WithFields(log.Fields{
 			"appservice": appservice.ID,
-			"room_id":    event.RoomID(),
-		}).WithError(err).Errorf("Unable to get aliases for room")
+			"frame_id":    event.FrameID(),
+		}).WithError(err).Errorf("Unable to get aliases for frame")
 	}
 
-	// Check if any of the members in the room match the appservice
+	// Check if any of the members in the frame match the appservice
 	return s.appserviceJoinedAtEvent(ctx, event, appservice)
 }
 
 // appserviceJoinedAtEvent returns a boolean depending on whether a given
 // appservice has membership at the time a given event was created.
-func (s *OutputRoomEventConsumer) appserviceJoinedAtEvent(ctx context.Context, event *types.HeaderedEvent, appservice *config.ApplicationService) bool {
-	// TODO: This is only checking the current room state, not the state at
+func (s *OutputFrameEventConsumer) appserviceJoinedAtEvent(ctx context.Context, event *types.HeaderedEvent, appservice *config.ApplicationService) bool {
+	// TODO: This is only checking the current frame state, not the state at
 	// the event in question. Pretty sure this is what Synapse does too, but
 	// until we have a lighter way of checking the state before the event that
 	// doesn't involve state res, then this is probably OK.
-	membershipReq := &api.QueryMembershipsForRoomRequest{
-		RoomID:     event.RoomID(),
+	membershipReq := &api.QueryMembershipsForFrameRequest{
+		FrameID:     event.FrameID(),
 		JoinedOnly: true,
 	}
-	membershipRes := &api.QueryMembershipsForRoomResponse{}
+	membershipRes := &api.QueryMembershipsForFrameResponse{}
 
 	// XXX: This could potentially race if the state for the event is not known yet
 	// e.g. the event came over federation but we do not have the full state persisted.
-	if err := s.rsAPI.QueryMembershipsForRoom(ctx, membershipReq, membershipRes); err == nil {
+	if err := s.rsAPI.QueryMembershipsForFrame(ctx, membershipReq, membershipRes); err == nil {
 		for _, ev := range membershipRes.JoinEvents {
 			switch {
 			case ev.StateKey == nil:
 				continue
-			case ev.Type != spec.MRoomMember:
+			case ev.Type != spec.MFrameMember:
 				continue
 			}
 			var membership xtools.MemberContent
@@ -317,8 +316,8 @@ func (s *OutputRoomEventConsumer) appserviceJoinedAtEvent(ctx context.Context, e
 	} else {
 		log.WithFields(log.Fields{
 			"appservice": appservice.ID,
-			"room_id":    event.RoomID(),
-		}).WithError(err).Errorf("Unable to get membership for room")
+			"frame_id":    event.FrameID(),
+		}).WithError(err).Errorf("Unable to get membership for frame")
 	}
 	return false
 }

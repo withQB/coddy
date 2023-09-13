@@ -14,7 +14,7 @@ import (
 )
 
 func errorResponse(ctx context.Context, err error, msg string, args ...interface{}) xutil.JSONResponse {
-	if eerr, ok := err.(spec.MatrixError); ok {
+	if eerr, ok := err.(spec.CoddyError); ok {
 		var status int
 		switch eerr.ErrCode {
 		case spec.ErrorInvalidParam:
@@ -24,7 +24,7 @@ func errorResponse(ctx context.Context, err error, msg string, args ...interface
 		default:
 			status = http.StatusInternalServerError
 		}
-		return xutil.MatrixErrorResponse(status, string(eerr.ErrCode), eerr.Err)
+		return xutil.CoddyErrorResponse(status, string(eerr.ErrCode), eerr.Err)
 	}
 	xutil.GetLogger(ctx).WithError(err).Errorf(msg, args...)
 	return xutil.JSONResponse{
@@ -289,8 +289,8 @@ func pushRuleSetKindPointer(ruleSet *pushrules.RuleSet, kind pushrules.Kind) *[]
 		return &ruleSet.Override
 	case pushrules.ContentKind:
 		return &ruleSet.Content
-	case pushrules.RoomKind:
-		return &ruleSet.Room
+	case pushrules.FrameKind:
+		return &ruleSet.Frame
 	case pushrules.SenderKind:
 		return &ruleSet.Sender
 	case pushrules.UnderrideKind:

@@ -43,9 +43,9 @@ type keyBackupVersionResponse struct {
 }
 
 type keyBackupSessionRequest struct {
-	Rooms map[string]struct {
+	Frames map[string]struct {
 		Sessions map[string]userapi.KeyBackupSession `json:"sessions"`
-	} `json:"rooms"`
+	} `json:"frames"`
 }
 
 type keyBackupSessionResponse struct {
@@ -54,7 +54,7 @@ type keyBackupSessionResponse struct {
 }
 
 // Create a new key backup. Request must contain a `keyBackupVersion`. Returns a `keyBackupVersionCreateResponse`.
-// Implements  POST /_matrix/client/r0/room_keys/version
+// Implements  POST /_coddy/client/r0/frame_keys/version
 func CreateKeyBackupVersion(req *http.Request, userAPI userapi.ClientUserAPI, device *userapi.Device) xutil.JSONResponse {
 	var kb keyBackupVersion
 	resErr := httputil.UnmarshalJSONRequest(req, &kb)
@@ -86,7 +86,7 @@ func CreateKeyBackupVersion(req *http.Request, userAPI userapi.ClientUserAPI, de
 }
 
 // KeyBackupVersion returns the key backup version specified. If `version` is empty, the latest `keyBackupVersionResponse` is returned.
-// Implements GET  /_matrix/client/r0/room_keys/version and GET /_matrix/client/r0/room_keys/version/{version}
+// Implements GET  /_coddy/client/r0/frame_keys/version and GET /_coddy/client/r0/frame_keys/version/{version}
 func KeyBackupVersion(req *http.Request, userAPI userapi.ClientUserAPI, device *userapi.Device, version string) xutil.JSONResponse {
 	queryResp, err := userAPI.QueryKeyBackup(req.Context(), &userapi.QueryKeyBackupRequest{
 		UserID:  device.UserID,
@@ -114,7 +114,7 @@ func KeyBackupVersion(req *http.Request, userAPI userapi.ClientUserAPI, device *
 }
 
 // Modify the auth data of a key backup. Version must not be empty. Request must contain a `keyBackupVersion`
-// Implements PUT  /_matrix/client/r0/room_keys/version/{version}
+// Implements PUT  /_coddy/client/r0/frame_keys/version/{version}
 func ModifyKeyBackupVersionAuthData(req *http.Request, userAPI userapi.ClientUserAPI, device *userapi.Device, version string) xutil.JSONResponse {
 	var kb keyBackupVersion
 	resErr := httputil.UnmarshalJSONRequest(req, &kb)
@@ -128,7 +128,7 @@ func ModifyKeyBackupVersionAuthData(req *http.Request, userAPI userapi.ClientUse
 		Algorithm: kb.Algorithm,
 	})
 	switch e := err.(type) {
-	case spec.ErrRoomKeysVersion:
+	case spec.ErrFrameKeysVersion:
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
 			JSON: e,
@@ -153,7 +153,7 @@ func ModifyKeyBackupVersionAuthData(req *http.Request, userAPI userapi.ClientUse
 }
 
 // Delete a version of key backup. Version must not be empty. If the key backup was previously deleted, will return 200 OK.
-// Implements DELETE  /_matrix/client/r0/room_keys/version/{version}
+// Implements DELETE  /_coddy/client/r0/frame_keys/version/{version}
 func DeleteKeyBackupVersion(req *http.Request, userAPI userapi.ClientUserAPI, device *userapi.Device, version string) xutil.JSONResponse {
 	exists, err := userAPI.DeleteKeyBackup(req.Context(), device.UserID, version)
 	if err != nil {
@@ -182,7 +182,7 @@ func UploadBackupKeys(
 	})
 
 	switch e := err.(type) {
-	case spec.ErrRoomKeysVersion:
+	case spec.ErrFrameKeysVersion:
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
 			JSON: e,
@@ -206,15 +206,15 @@ func UploadBackupKeys(
 	}
 }
 
-// Get keys from a given backup version. Response returned varies depending on if roomID and sessionID are set.
+// Get keys from a given backup version. Response returned varies depending on if frameID and sessionID are set.
 func GetBackupKeys(
-	req *http.Request, userAPI userapi.ClientUserAPI, device *userapi.Device, version, roomID, sessionID string,
+	req *http.Request, userAPI userapi.ClientUserAPI, device *userapi.Device, version, frameID, sessionID string,
 ) xutil.JSONResponse {
 	queryResp, err := userAPI.QueryKeyBackup(req.Context(), &userapi.QueryKeyBackupRequest{
 		UserID:           device.UserID,
 		Version:          version,
 		ReturnKeys:       true,
-		KeysForRoomID:    roomID,
+		KeysForFrameID:    frameID,
 		KeysForSessionID: sessionID,
 	})
 	if err != nil {
@@ -228,9 +228,9 @@ func GetBackupKeys(
 	}
 	if sessionID != "" {
 		// return the key itself if it was found
-		roomData, ok := queryResp.Keys[roomID]
+		frameData, ok := queryResp.Keys[frameID]
 		if ok {
-			key, ok := roomData[sessionID]
+			key, ok := frameData[sessionID]
 			if ok {
 				return xutil.JSONResponse{
 					Code: 200,
@@ -238,11 +238,11 @@ func GetBackupKeys(
 				}
 			}
 		}
-	} else if roomID != "" {
-		roomData, ok := queryResp.Keys[roomID]
+	} else if frameID != "" {
+		frameData, ok := queryResp.Keys[frameID]
 		if !ok {
 			// If no keys are found, then an object with an empty sessions property will be returned
-			roomData = make(map[string]userapi.KeyBackupSession)
+			frameData = make(map[string]userapi.KeyBackupSession)
 		}
 		// wrap response in "sessions"
 		return xutil.JSONResponse{
@@ -250,21 +250,21 @@ func GetBackupKeys(
 			JSON: struct {
 				Sessions map[string]userapi.KeyBackupSession `json:"sessions"`
 			}{
-				Sessions: roomData,
+				Sessions: frameData,
 			},
 		}
 
 	} else {
 		// response is the same as the upload request
 		var resp keyBackupSessionRequest
-		resp.Rooms = make(map[string]struct {
+		resp.Frames = make(map[string]struct {
 			Sessions map[string]userapi.KeyBackupSession `json:"sessions"`
 		})
-		for roomID, roomData := range queryResp.Keys {
-			resp.Rooms[roomID] = struct {
+		for frameID, frameData := range queryResp.Keys {
+			resp.Frames[frameID] = struct {
 				Sessions map[string]userapi.KeyBackupSession `json:"sessions"`
 			}{
-				Sessions: roomData,
+				Sessions: frameData,
 			}
 		}
 		return xutil.JSONResponse{

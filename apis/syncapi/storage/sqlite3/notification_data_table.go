@@ -22,92 +22,92 @@ func NewSqliteNotificationDataTable(db *sql.DB, streamID *StreamIDStatements) (t
 		db:                 db,
 	}
 	return r, sqlutil.StatementList{
-		{&r.upsertRoomUnreadCounts, upsertRoomUnreadNotificationCountsSQL},
+		{&r.upsertFrameUnreadCounts, upsertFrameUnreadNotificationCountsSQL},
 		{&r.selectMaxID, selectMaxNotificationIDSQL},
 		{&r.purgeNotificationData, purgeNotificationDataSQL},
-		// {&r.selectUserUnreadCountsForRooms, selectUserUnreadNotificationsForRooms}, // used at runtime
+		// {&r.selectUserUnreadCountsForFrames, selectUserUnreadNotificationsForFrames}, // used at runtime
 	}.Prepare(db)
 }
 
 type notificationDataStatements struct {
 	db                     *sql.DB
 	streamIDStatements     *StreamIDStatements
-	upsertRoomUnreadCounts *sql.Stmt
+	upsertFrameUnreadCounts *sql.Stmt
 	selectMaxID            *sql.Stmt
 	purgeNotificationData  *sql.Stmt
-	//selectUserUnreadCountsForRooms *sql.Stmt
+	//selectUserUnreadCountsForFrames *sql.Stmt
 }
 
 const notificationDataSchema = `
 CREATE TABLE IF NOT EXISTS syncapi_notification_data (
 	id INTEGER PRIMARY KEY,
 	user_id TEXT NOT NULL,
-	room_id TEXT NOT NULL,
+	frame_id TEXT NOT NULL,
 	notification_count BIGINT NOT NULL DEFAULT 0,
 	highlight_count BIGINT NOT NULL DEFAULT 0,
-	CONSTRAINT syncapi_notifications_unique UNIQUE (user_id, room_id)
+	CONSTRAINT syncapi_notifications_unique UNIQUE (user_id, frame_id)
 );`
 
-const upsertRoomUnreadNotificationCountsSQL = `INSERT INTO syncapi_notification_data
-  (user_id, room_id, notification_count, highlight_count)
+const upsertFrameUnreadNotificationCountsSQL = `INSERT INTO syncapi_notification_data
+  (user_id, frame_id, notification_count, highlight_count)
   VALUES ($1, $2, $3, $4)
-  ON CONFLICT (user_id, room_id)
+  ON CONFLICT (user_id, frame_id)
   DO UPDATE SET id = $5, notification_count = $6, highlight_count = $7`
 
-const selectUserUnreadNotificationsForRooms = `SELECT room_id, notification_count, highlight_count
+const selectUserUnreadNotificationsForFrames = `SELECT frame_id, notification_count, highlight_count
 	FROM syncapi_notification_data
 	WHERE user_id = $1 AND
-	      room_id IN ($2)`
+	      frame_id IN ($2)`
 
 const selectMaxNotificationIDSQL = `SELECT CASE COUNT(*) WHEN 0 THEN 0 ELSE MAX(id) END FROM syncapi_notification_data`
 
 const purgeNotificationDataSQL = "" +
-	"DELETE FROM syncapi_notification_data WHERE room_id = $1"
+	"DELETE FROM syncapi_notification_data WHERE frame_id = $1"
 
-func (r *notificationDataStatements) UpsertRoomUnreadCounts(ctx context.Context, txn *sql.Tx, userID, roomID string, notificationCount, highlightCount int) (pos types.StreamPosition, err error) {
+func (r *notificationDataStatements) UpsertFrameUnreadCounts(ctx context.Context, txn *sql.Tx, userID, frameID string, notificationCount, highlightCount int) (pos types.StreamPosition, err error) {
 	pos, err = r.streamIDStatements.nextNotificationID(ctx, nil)
 	if err != nil {
 		return
 	}
-	_, err = r.upsertRoomUnreadCounts.ExecContext(ctx, userID, roomID, notificationCount, highlightCount, pos, notificationCount, highlightCount)
+	_, err = r.upsertFrameUnreadCounts.ExecContext(ctx, userID, frameID, notificationCount, highlightCount, pos, notificationCount, highlightCount)
 	return
 }
 
-func (r *notificationDataStatements) SelectUserUnreadCountsForRooms(
-	ctx context.Context, txn *sql.Tx, userID string, roomIDs []string,
+func (r *notificationDataStatements) SelectUserUnreadCountsForFrames(
+	ctx context.Context, txn *sql.Tx, userID string, frameIDs []string,
 ) (map[string]*eventutil.NotificationData, error) {
-	params := make([]interface{}, len(roomIDs)+1)
+	params := make([]interface{}, len(frameIDs)+1)
 	params[0] = userID
-	for i := range roomIDs {
-		params[i+1] = roomIDs[i]
+	for i := range frameIDs {
+		params[i+1] = frameIDs[i]
 	}
-	sql := strings.Replace(selectUserUnreadNotificationsForRooms, "($2)", sqlutil.QueryVariadicOffset(len(roomIDs), 1), 1)
+	sql := strings.Replace(selectUserUnreadNotificationsForFrames, "($2)", sqlutil.QueryVariadicOffset(len(frameIDs), 1), 1)
 	prep, err := r.db.PrepareContext(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
-	defer internal.CloseAndLogIfError(ctx, prep, "SelectUserUnreadCountsForRooms: prep.close() failed")
+	defer internal.CloseAndLogIfError(ctx, prep, "SelectUserUnreadCountsForFrames: prep.close() failed")
 	rows, err := sqlutil.TxStmt(txn, prep).QueryContext(ctx, params...)
 	if err != nil {
 		return nil, err
 	}
-	defer internal.CloseAndLogIfError(ctx, rows, "SelectUserUnreadCountsForRooms: rows.close() failed")
+	defer internal.CloseAndLogIfError(ctx, rows, "SelectUserUnreadCountsForFrames: rows.close() failed")
 
-	roomCounts := map[string]*eventutil.NotificationData{}
-	var roomID string
+	frameCounts := map[string]*eventutil.NotificationData{}
+	var frameID string
 	var notificationCount, highlightCount int
 	for rows.Next() {
-		if err = rows.Scan(&roomID, &notificationCount, &highlightCount); err != nil {
+		if err = rows.Scan(&frameID, &notificationCount, &highlightCount); err != nil {
 			return nil, err
 		}
 
-		roomCounts[roomID] = &eventutil.NotificationData{
-			RoomID:                  roomID,
+		frameCounts[frameID] = &eventutil.NotificationData{
+			FrameID:                  frameID,
 			UnreadNotificationCount: notificationCount,
 			UnreadHighlightCount:    highlightCount,
 		}
 	}
-	return roomCounts, rows.Err()
+	return frameCounts, rows.Err()
 }
 
 func (r *notificationDataStatements) SelectMaxID(ctx context.Context, txn *sql.Tx) (int64, error) {
@@ -117,8 +117,8 @@ func (r *notificationDataStatements) SelectMaxID(ctx context.Context, txn *sql.T
 }
 
 func (s *notificationDataStatements) PurgeNotificationData(
-	ctx context.Context, txn *sql.Tx, roomID string,
+	ctx context.Context, txn *sql.Tx, frameID string,
 ) error {
-	_, err := sqlutil.TxStmt(txn, s.purgeNotificationData).ExecContext(ctx, roomID)
+	_, err := sqlutil.TxStmt(txn, s.purgeNotificationData).ExecContext(ctx, frameID)
 	return err
 }

@@ -45,7 +45,7 @@ type Dendrite struct {
 	FederationAPI FederationAPI `yaml:"federation_api"`
 	KeyServer     KeyServer     `yaml:"key_server"`
 	MediaAPI      MediaAPI      `yaml:"media_api"`
-	RoomServer    RoomServer    `yaml:"room_server"`
+	DataFrame    DataFrame    `yaml:"frame_server"`
 	SyncAPI       SyncAPI       `yaml:"sync_api"`
 	UserAPI       UserAPI       `yaml:"user_api"`
 	RelayAPI      RelayAPI      `yaml:"relay_api"`
@@ -71,7 +71,7 @@ type Dendrite struct {
 type Derived struct {
 	Registration struct {
 		// Flows is a slice of flows, which represent one possible way that the client can authenticate a request.
-		// http://matrix.org/docs/spec/HEAD/client_server/r0.3.0.html#user-interactive-authentication-api
+
 		// As long as the generated flows only rely on config file options,
 		// we can generate them on startup and store them until needed
 		Flows []authtypes.Flow `json:"flows"`
@@ -91,11 +91,11 @@ type Derived struct {
 	// When a user registers, we check that their username does not match any
 	// exclusive application service namespaces
 	ExclusiveApplicationServicesUsernameRegexp *regexp.Regexp
-	// When a user creates a room alias, we check that it isn't already
+	// When a user creates a frame alias, we check that it isn't already
 	// reserved by an application service
 	ExclusiveApplicationServicesAliasRegexp *regexp.Regexp
-	// Note: An Exclusive Regex for room ID isn't necessary as we aren't blocking
-	// servers from creating RoomIDs in exclusive application service namespaces
+	// Note: An Exclusive Regex for frame ID isn't necessary as we aren't blocking
+	// servers from creating FrameIDs in exclusive application service namespaces
 }
 
 // A Path on the filesystem.
@@ -305,7 +305,7 @@ func (c *Dendrite) Defaults(opts DefaultOpts) {
 	c.FederationAPI.Defaults(opts)
 	c.KeyServer.Defaults(opts)
 	c.MediaAPI.Defaults(opts)
-	c.RoomServer.Defaults(opts)
+	c.DataFrame.Defaults(opts)
 	c.SyncAPI.Defaults(opts)
 	c.UserAPI.Defaults(opts)
 	c.AppServiceAPI.Defaults(opts)
@@ -320,7 +320,7 @@ func (c *Dendrite) Verify(configErrs *ConfigErrors) {
 	}
 	for _, c := range []verifiable{
 		&c.Global, &c.ClientAPI, &c.FederationAPI,
-		&c.KeyServer, &c.MediaAPI, &c.RoomServer,
+		&c.KeyServer, &c.MediaAPI, &c.DataFrame,
 		&c.SyncAPI, &c.UserAPI,
 		&c.AppServiceAPI, &c.RelayAPI, &c.MSCs,
 	} {
@@ -334,7 +334,7 @@ func (c *Dendrite) Wiring() {
 	c.FederationAPI.Matrix = &c.Global
 	c.KeyServer.Matrix = &c.Global
 	c.MediaAPI.Matrix = &c.Global
-	c.RoomServer.Matrix = &c.Global
+	c.DataFrame.Matrix = &c.Global
 	c.SyncAPI.Matrix = &c.Global
 	c.UserAPI.Matrix = &c.Global
 	c.AppServiceAPI.Matrix = &c.Global
@@ -434,7 +434,7 @@ func readKeyPEM(path string, data []byte, enforceKeyIDFormat bool) (xtools.KeyID
 		var keyBlock *pem.Block
 		keyBlock, data = pem.Decode(data)
 		if data == nil {
-			return "", nil, fmt.Errorf("no matrix private key PEM data in %q", path)
+			return "", nil, fmt.Errorf("no coddy private key PEM data in %q", path)
 		}
 		if keyBlock == nil {
 			return "", nil, fmt.Errorf("keyBlock is nil %q", path)

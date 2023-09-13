@@ -14,13 +14,13 @@ import (
 	"github.com/withqb/coddy/apis/federationapi/producers"
 	userAPI "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools/spec"
 )
 
 const (
-	// Event was passed to the Roomserver
+	// Event was passed to the Dataframe
 	MetricsOutcomeOK = "ok"
 	// Event failed to be processed
 	MetricsOutcomeFail = "fail"
@@ -38,17 +38,17 @@ const (
 
 var inFlightTxnsPerOrigin sync.Map // transaction ID -> chan xutil.JSONResponse
 
-// Send implements /_matrix/federation/v1/send/{txnID}
+// Send implements /_coddy/federation/v1/send/{txnID}
 func Send(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
 	txnID xtools.TransactionID,
 	cfg *config.FederationAPI,
-	rsAPI api.FederationRoomserverAPI,
+	rsAPI api.FederationDataframeAPI,
 	keyAPI userAPI.FederationUserAPI,
 	keys xtools.JSONVerifier,
 	federation fclient.FederationClient,
-	mu *internal.MutexByRoom,
+	mu *internal.MutexByFrame,
 	producer *producers.SyncAPIProducer,
 ) xutil.JSONResponse {
 	// First we should check if this origin has already submitted this
@@ -94,7 +94,6 @@ func Send(
 		}
 	}
 	// Transactions are limited in size; they can have at most 50 PDUs and 100 EDUs.
-	// https://matrix.org/docs/spec/server_server/latest#transactions
 	if len(txnEvents.PDUs) > 50 || len(txnEvents.EDUs) > 100 {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
@@ -124,7 +123,6 @@ func Send(
 		return *jsonErr
 	}
 
-	// https://matrix.org/docs/spec/server_server/r0.1.3#put-matrix-federation-v1-send-txnid
 	// Status code 200:
 	// The result of processing the transaction. The server is to use this response
 	// even in the event of one or more PDUs failing to be processed.

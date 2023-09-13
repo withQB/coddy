@@ -8,23 +8,23 @@ import (
 	"github.com/withqb/coddy/apis/clientapi/httputil"
 	"github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/eventutil"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	appserviceAPI "github.com/withqb/coddy/services/appservice/api"
 	"github.com/withqb/xcore"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
 )
 
-func JoinRoomByIDOrAlias(
+func JoinFrameByIDOrAlias(
 	req *http.Request,
 	device *api.Device,
-	rsAPI roomserverAPI.ClientRoomserverAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI,
 	profileAPI api.ClientUserAPI,
-	roomIDOrAlias string,
+	frameIDOrAlias string,
 ) xutil.JSONResponse {
-	// Prepare to ask the roomserver to perform the room join.
-	joinReq := roomserverAPI.PerformJoinRequest{
-		RoomIDOrAlias: roomIDOrAlias,
+	// Prepare to ask the dataframe to perform the frame join.
+	joinReq := dataframeAPI.PerformJoinRequest{
+		FrameIDOrAlias: frameIDOrAlias,
 		UserID:        device.UserID,
 		IsGuest:       device.AccountType == api.AccountTypeGuest,
 		Content:       map[string]interface{}{},
@@ -64,11 +64,11 @@ func JoinRoomByIDOrAlias(
 	default:
 	}
 
-	// Ask the roomserver to perform the join.
+	// Ask the dataframe to perform the join.
 	done := make(chan xutil.JSONResponse, 1)
 	go func() {
 		defer close(done)
-		roomID, _, err := rsAPI.PerformJoin(req.Context(), &joinReq)
+		frameID, _, err := rsAPI.PerformJoin(req.Context(), &joinReq)
 		var response xutil.JSONResponse
 
 		switch e := err.(type) {
@@ -77,15 +77,15 @@ func JoinRoomByIDOrAlias(
 				Code: http.StatusOK,
 				// TODO: Put the response struct somewhere internal.
 				JSON: struct {
-					RoomID string `json:"room_id"`
-				}{roomID},
+					FrameID string `json:"frame_id"`
+				}{frameID},
 			}
-		case roomserverAPI.ErrInvalidID:
+		case dataframeAPI.ErrInvalidID:
 			response = xutil.JSONResponse{
 				Code: http.StatusBadRequest,
 				JSON: spec.Unknown(e.Error()),
 			}
-		case roomserverAPI.ErrNotAllowed:
+		case dataframeAPI.ErrNotAllowed:
 			jsonErr := spec.Forbidden(e.Error())
 			if device.AccountType == api.AccountTypeGuest {
 				jsonErr = spec.GuestAccessForbidden(e.Error())
@@ -99,7 +99,7 @@ func JoinRoomByIDOrAlias(
 				Code: e.Code,
 				JSON: json.RawMessage(e.Message),
 			}
-		case eventutil.ErrRoomNoExists:
+		case eventutil.ErrFrameNoExists:
 			response = xutil.JSONResponse{
 				Code: http.StatusNotFound,
 				JSON: spec.NotFound(e.Error()),
@@ -120,7 +120,7 @@ func JoinRoomByIDOrAlias(
 	case <-timer.C:
 		return xutil.JSONResponse{
 			Code: http.StatusAccepted,
-			JSON: spec.Unknown("The room join will continue in the background."),
+			JSON: spec.Unknown("The frame join will continue in the background."),
 		}
 	case result := <-done:
 		// Stop and drain the timer

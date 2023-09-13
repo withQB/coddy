@@ -9,7 +9,7 @@ import (
 	"github.com/tidwall/gjson"
 
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools/spec"
 
 	"github.com/sirupsen/logrus"
@@ -20,7 +20,7 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/types"
 	"github.com/withqb/coddy/internal/eventutil"
 	"github.com/withqb/coddy/internal/sqlutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 )
 
 // Database is a temporary struct until we have made syncserver.go the same for both pq/sqlite
@@ -33,7 +33,7 @@ type Database struct {
 	AccountData         tables.AccountData
 	OutputEvents        tables.Events
 	Topology            tables.Topology
-	CurrentRoomState    tables.CurrentRoomState
+	CurrentFrameState    tables.CurrentFrameState
 	BackwardExtremities tables.BackwardsExtremities
 	SendToDevice        tables.SendToDevice
 	Filter              tables.Filter
@@ -88,7 +88,7 @@ func (d *Database) Events(ctx context.Context, eventIDs []string) ([]*rstypes.He
 	return d.StreamEventsToEvents(ctx, nil, streamEvents, nil), nil
 }
 
-func (d *Database) StreamEventsToEvents(ctx context.Context, device *userapi.Device, in []types.StreamEvent, rsAPI api.SyncRoomserverAPI) []*rstypes.HeaderedEvent {
+func (d *Database) StreamEventsToEvents(ctx context.Context, device *userapi.Device, in []types.StreamEvent, rsAPI api.SyncDataframeAPI) []*rstypes.HeaderedEvent {
 	out := make([]*rstypes.HeaderedEvent, len(in))
 	for i := 0; i < len(in); i++ {
 		out[i] = in[i].HeaderedEvent
@@ -100,14 +100,14 @@ func (d *Database) StreamEventsToEvents(ctx context.Context, device *userapi.Dev
 				}).WithError(err).Warnf("Failed to add transaction ID to event")
 				continue
 			}
-			roomID, err := spec.NewRoomID(in[i].RoomID())
+			frameID, err := spec.NewFrameID(in[i].FrameID())
 			if err != nil {
 				logrus.WithFields(logrus.Fields{
 					"event_id": out[i].EventID(),
-				}).WithError(err).Warnf("Room ID is invalid")
+				}).WithError(err).Warnf("Frame ID is invalid")
 				continue
 			}
-			deviceSenderID, err := rsAPI.QuerySenderIDForUser(ctx, *roomID, *userID)
+			deviceSenderID, err := rsAPI.QuerySenderIDForUser(ctx, *frameID, *userID)
 			if err != nil || deviceSenderID == nil {
 				logrus.WithFields(logrus.Fields{
 					"event_id": out[i].EventID(),
@@ -158,10 +158,10 @@ func (d *Database) RetireInviteEvent(
 // If the peek was successfully stored this returns the stream ID it was stored at.
 // Returns an error if there was a problem communicating with the database.
 func (d *Database) AddPeek(
-	ctx context.Context, roomID, userID, deviceID string,
+	ctx context.Context, frameID, userID, deviceID string,
 ) (sp types.StreamPosition, err error) {
 	err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		sp, err = d.Peeks.InsertPeek(ctx, txn, roomID, userID, deviceID)
+		sp, err = d.Peeks.InsertPeek(ctx, txn, frameID, userID, deviceID)
 		return err
 	})
 	return
@@ -171,10 +171,10 @@ func (d *Database) AddPeek(
 // device. If the peeks was successfully deleted this returns the stream ID it was
 // stored at. Returns an error if there was a problem communicating with the database.
 func (d *Database) DeletePeek(
-	ctx context.Context, roomID, userID, deviceID string,
+	ctx context.Context, frameID, userID, deviceID string,
 ) (sp types.StreamPosition, err error) {
 	err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		sp, err = d.Peeks.DeletePeek(ctx, txn, roomID, userID, deviceID)
+		sp, err = d.Peeks.DeletePeek(ctx, txn, frameID, userID, deviceID)
 		return err
 	})
 	if err == sql.ErrNoRows {
@@ -188,10 +188,10 @@ func (d *Database) DeletePeek(
 // If the peeks was successfully deleted this returns the stream ID it was stored at.
 // Returns an error if there was a problem communicating with the database.
 func (d *Database) DeletePeeks(
-	ctx context.Context, roomID, userID string,
+	ctx context.Context, frameID, userID string,
 ) (sp types.StreamPosition, err error) {
 	err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		sp, err = d.Peeks.DeletePeeks(ctx, txn, roomID, userID)
+		sp, err = d.Peeks.DeletePeeks(ctx, txn, frameID, userID)
 		return err
 	})
 	if err == sql.ErrNoRows {
@@ -202,16 +202,16 @@ func (d *Database) DeletePeeks(
 }
 
 // UpsertAccountData keeps track of new or updated account data, by saving the type
-// of the new/updated data, and the user ID and room ID the data is related to (empty)
-// room ID means the data isn't specific to any room)
-// If no data with the given type, user ID and room ID exists in the database,
+// of the new/updated data, and the user ID and frame ID the data is related to (empty)
+// frame ID means the data isn't specific to any frame)
+// If no data with the given type, user ID and frame ID exists in the database,
 // creates a new row, else update the existing one
 // Returns an error if there was an issue with the upsert
 func (d *Database) UpsertAccountData(
-	ctx context.Context, userID, roomID, dataType string,
+	ctx context.Context, userID, frameID, dataType string,
 ) (sp types.StreamPosition, err error) {
 	err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		sp, err = d.AccountData.InsertAccountData(ctx, txn, userID, roomID, dataType)
+		sp, err = d.AccountData.InsertAccountData(ctx, txn, userID, frameID, dataType)
 		return err
 	})
 	return
@@ -222,12 +222,12 @@ func (d *Database) UpsertAccountData(
 // to account for the fact that the given event is no longer a backwards extremity, but may be marked as such.
 // This function should always be called within a sqlutil.Writer for safety in SQLite.
 func (d *Database) handleBackwardExtremities(ctx context.Context, txn *sql.Tx, ev *rstypes.HeaderedEvent) error {
-	if err := d.BackwardExtremities.DeleteBackwardExtremity(ctx, txn, ev.RoomID(), ev.EventID()); err != nil {
+	if err := d.BackwardExtremities.DeleteBackwardExtremity(ctx, txn, ev.FrameID(), ev.EventID()); err != nil {
 		return err
 	}
 
 	// Check if we have all of the event's previous events. If an event is
-	// missing, add it to the room's backward extremities.
+	// missing, add it to the frame's backward extremities.
 	prevEvents, err := d.OutputEvents.SelectEvents(ctx, txn, ev.PrevEventIDs(), nil, false)
 	if err != nil {
 		return err
@@ -243,7 +243,7 @@ func (d *Database) handleBackwardExtremities(ctx context.Context, txn *sql.Tx, e
 
 		// If the event is missing, consider it a backward extremity.
 		if !found {
-			if err = d.BackwardExtremities.InsertsBackwardExtremity(ctx, txn, ev.RoomID(), ev.EventID(), eID); err != nil {
+			if err = d.BackwardExtremities.InsertsBackwardExtremity(ctx, txn, ev.FrameID(), ev.EventID(), eID); err != nil {
 				return err
 			}
 		}
@@ -286,14 +286,14 @@ func (d *Database) WriteEvent(
 		for i := range addStateEvents {
 			addStateEvents[i].Visibility = historyVisibility
 		}
-		return d.updateRoomState(ctx, txn, removeStateEventIDs, addStateEvents, pduPosition, topoPosition)
+		return d.updateFrameState(ctx, txn, removeStateEventIDs, addStateEvents, pduPosition, topoPosition)
 	})
 
 	return pduPosition, returnErr
 }
 
 // This function should always be called within a sqlutil.Writer for safety in SQLite.
-func (d *Database) updateRoomState(
+func (d *Database) updateFrameState(
 	ctx context.Context, txn *sql.Tx,
 	removedEventIDs []string,
 	addedEvents []*rstypes.HeaderedEvent,
@@ -302,8 +302,8 @@ func (d *Database) updateRoomState(
 ) error {
 	// remove first, then add, as we do not ever delete state, but do replace state which is a remove followed by an add.
 	for _, eventID := range removedEventIDs {
-		if err := d.CurrentRoomState.DeleteRoomStateByEventID(ctx, txn, eventID); err != nil {
-			return fmt.Errorf("d.CurrentRoomState.DeleteRoomStateByEventID: %w", err)
+		if err := d.CurrentFrameState.DeleteFrameStateByEventID(ctx, txn, eventID); err != nil {
+			return fmt.Errorf("d.CurrentFrameState.DeleteFrameStateByEventID: %w", err)
 		}
 	}
 
@@ -313,7 +313,7 @@ func (d *Database) updateRoomState(
 			continue
 		}
 		var membership *string
-		if event.Type() == "m.room.member" {
+		if event.Type() == "m.frame.member" {
 			value, err := event.Membership()
 			if err != nil {
 				return fmt.Errorf("event.Membership: %w", err)
@@ -324,8 +324,8 @@ func (d *Database) updateRoomState(
 			}
 		}
 
-		if err := d.CurrentRoomState.UpsertRoomState(ctx, txn, event, membership, pduPosition); err != nil {
-			return fmt.Errorf("d.CurrentRoomState.UpsertRoomState: %w", err)
+		if err := d.CurrentFrameState.UpsertFrameState(ctx, txn, event, membership, pduPosition); err != nil {
+			return fmt.Errorf("d.CurrentFrameState.UpsertFrameState: %w", err)
 		}
 	}
 
@@ -373,16 +373,16 @@ func (d *Database) RedactEvent(ctx context.Context, redactedEventID string, reda
 }
 
 // fetchStateEvents converts the set of event IDs into a set of events. It will fetch any which are missing from the database.
-// Returns a map of room ID to list of events.
+// Returns a map of frame ID to list of events.
 func (d *Database) fetchStateEvents(
 	ctx context.Context, txn *sql.Tx,
-	roomIDToEventIDSet map[string]map[string]bool,
+	frameIDToEventIDSet map[string]map[string]bool,
 	eventIDToEvent map[string]types.StreamEvent,
 ) (map[string][]types.StreamEvent, error) {
 	stateBetween := make(map[string][]types.StreamEvent)
 	missingEvents := make(map[string][]string)
-	for roomID, ids := range roomIDToEventIDSet {
-		events := stateBetween[roomID]
+	for frameID, ids := range frameIDToEventIDSet {
+		events := stateBetween[frameID]
 		for id, need := range ids {
 			if !need {
 				continue // deleted state
@@ -391,12 +391,12 @@ func (d *Database) fetchStateEvents(
 			if ok {
 				events = append(events, e)
 			} else {
-				m := missingEvents[roomID]
+				m := missingEvents[frameID]
 				m = append(m, id)
-				missingEvents[roomID] = m
+				missingEvents[frameID] = m
 			}
 		}
-		stateBetween[roomID] = events
+		stateBetween[frameID] = events
 	}
 
 	if len(missingEvents) > 0 {
@@ -412,8 +412,8 @@ func (d *Database) fetchStateEvents(
 		}
 		// we know we got them all otherwise an error would've been returned, so just loop the events
 		for _, ev := range evs {
-			roomID := ev.RoomID()
-			stateBetween[roomID] = append(stateBetween[roomID], ev)
+			frameID := ev.FrameID()
+			stateBetween[frameID] = append(stateBetween[frameID], ev)
 		}
 	}
 	return stateBetween, nil
@@ -445,8 +445,8 @@ func (d *Database) fetchMissingStateEvents(
 
 	// If they are missing from the events table then they should be state
 	// events that we received from outside the main event stream.
-	// These should be in the room state table.
-	stateEvents, err := d.CurrentRoomState.SelectEventsWithEventIDs(ctx, txn, missing)
+	// These should be in the frame state table.
+	stateEvents, err := d.CurrentFrameState.SelectEventsWithEventIDs(ctx, txn, missing)
 
 	if err != nil {
 		return nil, err
@@ -454,7 +454,7 @@ func (d *Database) fetchMissingStateEvents(
 	if len(stateEvents) != len(missing) {
 		logrus.WithContext(ctx).Warnf("Failed to map all event IDs to events (got %d, wanted %d)", len(stateEvents), len(missing))
 
-		// TODO: Why is this happening? It's probably the roomserver. Uncomment
+		// TODO: Why is this happening? It's probably the dataframe. Uncomment
 		// this error again when we work out what it is and fix it, otherwise we
 		// just end up returning lots of 500s to the client and that breaks
 		// pretty much everything, rather than just sending what we have.
@@ -499,8 +499,8 @@ func (d *Database) CleanSendToDeviceUpdates(
 }
 
 // getMembershipFromEvent returns the value of content.membership iff the event is a state event
-// with type 'm.room.member' and state_key of userID. Otherwise, an empty string is returned.
-func getMembershipFromEvent(ctx context.Context, ev xtools.PDU, userID string, rsAPI api.SyncRoomserverAPI) (string, string) {
+// with type 'm.frame.member' and state_key of userID. Otherwise, an empty string is returned.
+func getMembershipFromEvent(ctx context.Context, ev xtools.PDU, userID string, rsAPI api.SyncDataframeAPI) (string, string) {
 	if ev.StateKey() == nil || *ev.StateKey() == "" {
 		return "", ""
 	}
@@ -508,16 +508,16 @@ func getMembershipFromEvent(ctx context.Context, ev xtools.PDU, userID string, r
 	if err != nil {
 		return "", ""
 	}
-	roomID, err := spec.NewRoomID(ev.RoomID())
+	frameID, err := spec.NewFrameID(ev.FrameID())
 	if err != nil {
 		return "", ""
 	}
-	senderID, err := rsAPI.QuerySenderIDForUser(ctx, *roomID, *fullUser)
+	senderID, err := rsAPI.QuerySenderIDForUser(ctx, *frameID, *fullUser)
 	if err != nil || senderID == nil {
 		return "", ""
 	}
 
-	if ev.Type() != "m.room.member" || !ev.StateKeyEquals(string(*senderID)) {
+	if ev.Type() != "m.frame.member" || !ev.StateKeyEquals(string(*senderID)) {
 		return "", ""
 	}
 	membership, err := ev.Membership()
@@ -529,31 +529,31 @@ func getMembershipFromEvent(ctx context.Context, ev xtools.PDU, userID string, r
 }
 
 // StoreReceipt stores user receipts
-func (d *Database) StoreReceipt(ctx context.Context, roomId, receiptType, userId, eventId string, timestamp spec.Timestamp) (pos types.StreamPosition, err error) {
+func (d *Database) StoreReceipt(ctx context.Context, frameId, receiptType, userId, eventId string, timestamp spec.Timestamp) (pos types.StreamPosition, err error) {
 	err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		pos, err = d.Receipts.UpsertReceipt(ctx, txn, roomId, receiptType, userId, eventId, timestamp)
+		pos, err = d.Receipts.UpsertReceipt(ctx, txn, frameId, receiptType, userId, eventId, timestamp)
 		return err
 	})
 	return
 }
 
-func (d *Database) UpsertRoomUnreadNotificationCounts(ctx context.Context, userID, roomID string, notificationCount, highlightCount int) (pos types.StreamPosition, err error) {
+func (d *Database) UpsertFrameUnreadNotificationCounts(ctx context.Context, userID, frameID string, notificationCount, highlightCount int) (pos types.StreamPosition, err error) {
 	err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		pos, err = d.NotificationData.UpsertRoomUnreadCounts(ctx, txn, userID, roomID, notificationCount, highlightCount)
+		pos, err = d.NotificationData.UpsertFrameUnreadCounts(ctx, txn, userID, frameID, notificationCount, highlightCount)
 		return err
 	})
 	return
 }
 
-func (d *Database) SelectContextEvent(ctx context.Context, roomID, eventID string) (int, rstypes.HeaderedEvent, error) {
-	return d.OutputEvents.SelectContextEvent(ctx, nil, roomID, eventID)
+func (d *Database) SelectContextEvent(ctx context.Context, frameID, eventID string) (int, rstypes.HeaderedEvent, error) {
+	return d.OutputEvents.SelectContextEvent(ctx, nil, frameID, eventID)
 }
 
-func (d *Database) SelectContextBeforeEvent(ctx context.Context, id int, roomID string, filter *synctypes.RoomEventFilter) ([]*rstypes.HeaderedEvent, error) {
-	return d.OutputEvents.SelectContextBeforeEvent(ctx, nil, id, roomID, filter)
+func (d *Database) SelectContextBeforeEvent(ctx context.Context, id int, frameID string, filter *synctypes.FrameEventFilter) ([]*rstypes.HeaderedEvent, error) {
+	return d.OutputEvents.SelectContextBeforeEvent(ctx, nil, id, frameID, filter)
 }
-func (d *Database) SelectContextAfterEvent(ctx context.Context, id int, roomID string, filter *synctypes.RoomEventFilter) (int, []*rstypes.HeaderedEvent, error) {
-	return d.OutputEvents.SelectContextAfterEvent(ctx, nil, id, roomID, filter)
+func (d *Database) SelectContextAfterEvent(ctx context.Context, id int, frameID string, filter *synctypes.FrameEventFilter) (int, []*rstypes.HeaderedEvent, error) {
+	return d.OutputEvents.SelectContextAfterEvent(ctx, nil, id, frameID, filter)
 }
 
 func (d *Database) IgnoresForUser(ctx context.Context, userID string) (*types.IgnoredUsers, error) {
@@ -580,21 +580,21 @@ func (d *Database) GetPresences(ctx context.Context, userIDs []string) ([]*types
 	return d.Presence.GetPresenceForUsers(ctx, nil, userIDs)
 }
 
-func (d *Database) SelectMembershipForUser(ctx context.Context, roomID, userID string, pos int64) (membership string, topologicalPos int, err error) {
-	return d.Memberships.SelectMembershipForUser(ctx, nil, roomID, userID, pos)
+func (d *Database) SelectMembershipForUser(ctx context.Context, frameID, userID string, pos int64) (membership string, topologicalPos int, err error) {
+	return d.Memberships.SelectMembershipForUser(ctx, nil, frameID, userID, pos)
 }
 
 func (d *Database) ReIndex(ctx context.Context, limit, afterID int64) (map[int64]rstypes.HeaderedEvent, error) {
 	return d.OutputEvents.ReIndex(ctx, nil, limit, afterID, []string{
-		spec.MRoomName,
-		spec.MRoomTopic,
-		"m.room.message",
+		spec.MFrameName,
+		spec.MFrameTopic,
+		"m.frame.message",
 	})
 }
 
 func (d *Database) UpdateRelations(ctx context.Context, event *rstypes.HeaderedEvent) error {
 	// No need to unmarshal if the event is a redaction
-	if event.Type() == spec.MRoomRedaction {
+	if event.Type() == spec.MFrameRedaction {
 		return nil
 	}
 	var content xtools.RelationContent
@@ -612,23 +612,23 @@ func (d *Database) UpdateRelations(ctx context.Context, event *rstypes.HeaderedE
 	default:
 		return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
 			return d.Relations.InsertRelation(
-				ctx, txn, event.RoomID(), content.Relations.EventID,
+				ctx, txn, event.FrameID(), content.Relations.EventID,
 				event.EventID(), event.Type(), content.Relations.RelationType,
 			)
 		})
 	}
 }
 
-func (d *Database) RedactRelations(ctx context.Context, roomID, redactedEventID string) error {
+func (d *Database) RedactRelations(ctx context.Context, frameID, redactedEventID string) error {
 	return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		return d.Relations.DeleteRelation(ctx, txn, roomID, redactedEventID)
+		return d.Relations.DeleteRelation(ctx, txn, frameID, redactedEventID)
 	})
 }
 
 func (d *Database) SelectMemberships(
 	ctx context.Context,
-	roomID string, pos types.TopologyToken,
+	frameID string, pos types.TopologyToken,
 	membership, notMembership *string,
 ) (eventIDs []string, err error) {
-	return d.Memberships.SelectMemberships(ctx, nil, roomID, pos, membership, notMembership)
+	return d.Memberships.SelectMemberships(ctx, nil, frameID, pos, membership, notMembership)
 }

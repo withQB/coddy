@@ -19,13 +19,12 @@ import (
 )
 
 // Filter is used by clients to specify how the server should filter responses to e.g. sync requests
-// Specified by: https://spec.matrix.org/v1.6/client-server-api/#filtering
 type Filter struct {
 	EventFields []string    `json:"event_fields,omitempty"`
 	EventFormat string      `json:"event_format,omitempty"`
 	Presence    EventFilter `json:"presence,omitempty"`
 	AccountData EventFilter `json:"account_data,omitempty"`
-	Room        RoomFilter  `json:"room,omitempty"`
+	Frame        FrameFilter  `json:"frame,omitempty"`
 }
 
 // EventFilter is used to define filtering rules for events
@@ -37,15 +36,15 @@ type EventFilter struct {
 	Types      *[]string `json:"types,omitempty"`
 }
 
-// RoomFilter is used to define filtering rules for room-related events
-type RoomFilter struct {
-	NotRooms     *[]string       `json:"not_rooms,omitempty"`
-	Rooms        *[]string       `json:"rooms,omitempty"`
-	Ephemeral    RoomEventFilter `json:"ephemeral,omitempty"`
+// FrameFilter is used to define filtering rules for frame-related events
+type FrameFilter struct {
+	NotFrames     *[]string       `json:"not_frames,omitempty"`
+	Frames        *[]string       `json:"frames,omitempty"`
+	Ephemeral    FrameEventFilter `json:"ephemeral,omitempty"`
 	IncludeLeave bool            `json:"include_leave,omitempty"`
 	State        StateFilter     `json:"state,omitempty"`
-	Timeline     RoomEventFilter `json:"timeline,omitempty"`
-	AccountData  RoomEventFilter `json:"account_data,omitempty"`
+	Timeline     FrameEventFilter `json:"timeline,omitempty"`
+	AccountData  FrameEventFilter `json:"account_data,omitempty"`
 }
 
 // StateFilter is used to define filtering rules for state events
@@ -56,15 +55,15 @@ type StateFilter struct {
 	Types                     *[]string `json:"types,omitempty"`
 	LazyLoadMembers           bool      `json:"lazy_load_members,omitempty"`
 	IncludeRedundantMembers   bool      `json:"include_redundant_members,omitempty"`
-	NotRooms                  *[]string `json:"not_rooms,omitempty"`
-	Rooms                     *[]string `json:"rooms,omitempty"`
+	NotFrames                  *[]string `json:"not_frames,omitempty"`
+	Frames                     *[]string `json:"frames,omitempty"`
 	Limit                     int       `json:"limit,omitempty"`
 	UnreadThreadNotifications bool      `json:"unread_thread_notifications,omitempty"`
 	ContainsURL               *bool     `json:"contains_url,omitempty"`
 }
 
-// RoomEventFilter is used to define filtering rules for events in rooms
-type RoomEventFilter struct {
+// FrameEventFilter is used to define filtering rules for events in frames
+type FrameEventFilter struct {
 	Limit                     int       `json:"limit,omitempty"`
 	NotSenders                *[]string `json:"not_senders,omitempty"`
 	NotTypes                  *[]string `json:"not_types,omitempty"`
@@ -72,8 +71,8 @@ type RoomEventFilter struct {
 	Types                     *[]string `json:"types,omitempty"`
 	LazyLoadMembers           bool      `json:"lazy_load_members,omitempty"`
 	IncludeRedundantMembers   bool      `json:"include_redundant_members,omitempty"`
-	NotRooms                  *[]string `json:"not_rooms,omitempty"`
-	Rooms                     *[]string `json:"rooms,omitempty"`
+	NotFrames                  *[]string `json:"not_frames,omitempty"`
+	Frames                     *[]string `json:"frames,omitempty"`
 	UnreadThreadNotifications bool      `json:"unread_thread_notifications,omitempty"`
 	ContainsURL               *bool     `json:"contains_url,omitempty"`
 }
@@ -99,14 +98,14 @@ func DefaultFilter() Filter {
 		EventFields: nil,
 		EventFormat: "client",
 		Presence:    DefaultEventFilter(),
-		Room: RoomFilter{
-			AccountData:  DefaultRoomEventFilter(),
-			Ephemeral:    DefaultRoomEventFilter(),
+		Frame: FrameFilter{
+			AccountData:  DefaultFrameEventFilter(),
+			Ephemeral:    DefaultFrameEventFilter(),
 			IncludeLeave: false,
-			NotRooms:     nil,
-			Rooms:        nil,
+			NotFrames:     nil,
+			Frames:        nil,
 			State:        DefaultStateFilter(),
-			Timeline:     DefaultRoomEventFilter(),
+			Timeline:     DefaultFrameEventFilter(),
 		},
 	}
 }
@@ -134,24 +133,24 @@ func DefaultStateFilter() StateFilter {
 		Types:                   nil,
 		LazyLoadMembers:         false,
 		IncludeRedundantMembers: false,
-		NotRooms:                nil,
-		Rooms:                   nil,
+		NotFrames:                nil,
+		Frames:                   nil,
 		ContainsURL:             nil,
 	}
 }
 
-// DefaultRoomEventFilter returns the default room event filter used by the Matrix server if no
+// DefaultFrameEventFilter returns the default frame event filter used by the Matrix server if no
 // filter is provided in the request
-func DefaultRoomEventFilter() RoomEventFilter {
-	return RoomEventFilter{
+func DefaultFrameEventFilter() FrameEventFilter {
+	return FrameEventFilter{
 		// parity with synapse: https://github.com/withqb/synapse/blob/v1.80.0/synapse/api/filtering.py#L336
 		Limit:       10,
 		NotSenders:  nil,
 		NotTypes:    nil,
 		Senders:     nil,
 		Types:       nil,
-		NotRooms:    nil,
-		Rooms:       nil,
+		NotFrames:    nil,
+		Frames:       nil,
 		ContainsURL: nil,
 	}
 }

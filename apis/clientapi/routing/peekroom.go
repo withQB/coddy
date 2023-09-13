@@ -20,26 +20,26 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/withqb/coddy/apis/userapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/xcore"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
 )
 
-func PeekRoomByIDOrAlias(
+func PeekFrameByIDOrAlias(
 	req *http.Request,
 	device *api.Device,
-	rsAPI roomserverAPI.ClientRoomserverAPI,
-	roomIDOrAlias string,
+	rsAPI dataframeAPI.ClientDataframeAPI,
+	frameIDOrAlias string,
 ) xutil.JSONResponse {
-	// if this is a remote roomIDOrAlias, we have to ask the roomserver (or federation sender?) to
+	// if this is a remote frameIDOrAlias, we have to ask the dataframe (or federation sender?) to
 	// to call /peek and /state on the remote server.
-	// TODO: in future we could skip this if we know we're already participating in the room,
-	// but this is fiddly in case we stop participating in the room.
+	// TODO: in future we could skip this if we know we're already participating in the frame,
+	// but this is fiddly in case we stop participating in the frame.
 
 	// then we create a local peek.
-	peekReq := roomserverAPI.PerformPeekRequest{
-		RoomIDOrAlias: roomIDOrAlias,
+	peekReq := dataframeAPI.PerformPeekRequest{
+		FrameIDOrAlias: frameIDOrAlias,
 		UserID:        device.UserID,
 		DeviceID:      device.ID,
 	}
@@ -54,15 +54,15 @@ func PeekRoomByIDOrAlias(
 		}
 	}
 
-	// Ask the roomserver to perform the peek.
-	roomID, err := rsAPI.PerformPeek(req.Context(), &peekReq)
+	// Ask the dataframe to perform the peek.
+	frameID, err := rsAPI.PerformPeek(req.Context(), &peekReq)
 	switch e := err.(type) {
-	case roomserverAPI.ErrInvalidID:
+	case dataframeAPI.ErrInvalidID:
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
 			JSON: spec.Unknown(e.Error()),
 		}
-	case roomserverAPI.ErrNotAllowed:
+	case dataframeAPI.ErrNotAllowed:
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
 			JSON: spec.Forbidden(e.Error()),
@@ -74,46 +74,46 @@ func PeekRoomByIDOrAlias(
 		}
 	case nil:
 	default:
-		logrus.WithError(err).WithField("roomID", roomIDOrAlias).Errorf("Failed to peek room")
+		logrus.WithError(err).WithField("frameID", frameIDOrAlias).Errorf("Failed to peek frame")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
 	}
 
-	// if this user is already joined to the room, we let them peek anyway
-	// (given they might be about to part the room, and it makes things less fiddly)
+	// if this user is already joined to the frame, we let them peek anyway
+	// (given they might be about to part the frame, and it makes things less fiddly)
 
 	// Peeking stops if none of the devices who started peeking have been
 	// /syncing for a while, or if everyone who was peeking calls /leave
 	// (or /unpeek with a server_name param? or DELETE /peek?)
-	// on the peeked room.
+	// on the peeked frame.
 
 	return xutil.JSONResponse{
 		Code: http.StatusOK,
 		// TODO: Put the response struct somewhere internal.
 		JSON: struct {
-			RoomID string `json:"room_id"`
-		}{roomID},
+			FrameID string `json:"frame_id"`
+		}{frameID},
 	}
 }
 
-func UnpeekRoomByID(
+func UnpeekFrameByID(
 	req *http.Request,
 	device *api.Device,
-	rsAPI roomserverAPI.ClientRoomserverAPI,
-	roomID string,
+	rsAPI dataframeAPI.ClientDataframeAPI,
+	frameID string,
 ) xutil.JSONResponse {
-	err := rsAPI.PerformUnpeek(req.Context(), roomID, device.UserID, device.ID)
+	err := rsAPI.PerformUnpeek(req.Context(), frameID, device.UserID, device.ID)
 	switch e := err.(type) {
-	case roomserverAPI.ErrInvalidID:
+	case dataframeAPI.ErrInvalidID:
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
 			JSON: spec.Unknown(e.Error()),
 		}
 	case nil:
 	default:
-		logrus.WithError(err).WithField("roomID", roomID).Errorf("Failed to un-peek room")
+		logrus.WithError(err).WithField("frameID", frameID).Errorf("Failed to un-peek frame")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},

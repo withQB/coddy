@@ -17,8 +17,8 @@ import (
 	"github.com/withqb/coddy/apis/federationapi/statistics"
 	"github.com/withqb/coddy/apis/federationapi/storage"
 	"github.com/withqb/coddy/apis/federationapi/storage/shared/receipt"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/process"
 )
 
@@ -39,7 +39,7 @@ type destinationQueue struct {
 	db                 storage.Database
 	process            *process.ProcessContext
 	signing            map[spec.ServerName]*fclient.SigningIdentity
-	rsAPI              api.FederationRoomserverAPI
+	rsAPI              api.FederationDataframeAPI
 	client             fclient.FederationClient     // federation client
 	origin             spec.ServerName              // origin of requests
 	destination        spec.ServerName              // destination of requests
@@ -67,7 +67,7 @@ func (oq *destinationQueue) sendEvent(event *types.HeaderedEvent, dbReceipt *rec
 	// Check if the destination is blacklisted. If it isn't then wake
 	// up the queue.
 	if !oq.statistics.Blacklisted() {
-		// If there's room in memory to hold the event then add it to the
+		// If there's frame in memory to hold the event then add it to the
 		// list.
 		oq.pendingMutex.Lock()
 		if len(oq.pendingPDUs) < maxPDUsInMemory {
@@ -98,7 +98,7 @@ func (oq *destinationQueue) sendEDU(event *xtools.EDU, dbReceipt *receipt.Receip
 	// Check if the destination is blacklisted. If it isn't then wake
 	// up the queue.
 	if !oq.statistics.Blacklisted() {
-		// If there's room in memory to hold the event then add it to the
+		// If there's frame in memory to hold the event then add it to the
 		// list.
 		oq.pendingMutex.Lock()
 		if len(oq.pendingEDUs) < maxEDUsInMemory {
@@ -206,7 +206,7 @@ func (oq *destinationQueue) getPendingFromDatabase() {
 
 	overflowed := false
 	if pduCapacity := maxPDUsInMemory - len(oq.pendingPDUs); pduCapacity > 0 {
-		// We have room in memory for some PDUs - let's request no more than that.
+		// We have frame in memory for some PDUs - let's request no more than that.
 		if pdus, err := oq.db.GetPendingPDUs(ctx, oq.destination, maxPDUsInMemory); err == nil {
 			if len(pdus) == maxPDUsInMemory {
 				overflowed = true
@@ -227,7 +227,7 @@ func (oq *destinationQueue) getPendingFromDatabase() {
 	}
 
 	if eduCapacity := maxEDUsInMemory - len(oq.pendingEDUs); eduCapacity > 0 {
-		// We have room in memory for some EDUs - let's request no more than that.
+		// We have frame in memory for some EDUs - let's request no more than that.
 		if edus, err := oq.db.GetPendingEDUs(ctx, oq.destination, maxEDUsInMemory); err == nil {
 			if len(edus) == maxEDUsInMemory {
 				overflowed = true
@@ -247,7 +247,7 @@ func (oq *destinationQueue) getPendingFromDatabase() {
 		}
 	}
 
-	// If we've retrieved all of the events from the database with room to spare
+	// If we've retrieved all of the events from the database with frame to spare
 	// in memory then we'll no longer consider this queue to be overflowed.
 	if !overflowed {
 		oq.overflowed.Store(false)

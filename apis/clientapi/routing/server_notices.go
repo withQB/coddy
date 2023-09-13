@@ -13,13 +13,13 @@ import (
 	"github.com/withqb/xtools/tokens"
 	"github.com/withqb/xutil"
 
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/types"
 
 	"github.com/withqb/coddy/apis/clientapi/httputil"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/eventutil"
 	"github.com/withqb/coddy/internal/transactions"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 	appserviceAPI "github.com/withqb/coddy/services/appservice/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools/spec"
@@ -44,7 +44,7 @@ func SendServerNotice(
 	cfgNotices *config.ServerNotices,
 	cfgClient *config.ClientAPI,
 	userAPI userapi.ClientUserAPI,
-	rsAPI api.ClientRoomserverAPI,
+	rsAPI api.ClientDataframeAPI,
 	asAPI appserviceAPI.AppServiceInternalAPI,
 	device *userapi.Device,
 	senderDevice *userapi.Device,
@@ -88,18 +88,18 @@ func SendServerNotice(
 		}
 	}
 
-	// get rooms for specified user
-	allUserRooms := []spec.RoomID{}
-	// Get rooms the user is either joined, invited or has left.
+	// get frames for specified user
+	allUserFrames := []spec.FrameID{}
+	// Get frames the user is either joined, invited or has left.
 	for _, membership := range []string{"join", "invite", "leave"} {
-		userRooms, queryErr := rsAPI.QueryRoomsForUser(ctx, *userID, membership)
+		userFrames, queryErr := rsAPI.QueryFramesForUser(ctx, *userID, membership)
 		if queryErr != nil {
 			return xutil.ErrorResponse(err)
 		}
-		allUserRooms = append(allUserRooms, userRooms...)
+		allUserFrames = append(allUserFrames, userFrames...)
 	}
 
-	// get rooms of the sender
+	// get frames of the sender
 	senderUserID, err := spec.NewUserID(fmt.Sprintf("@%s:%s", cfgNotices.LocalPart, cfgClient.Matrix.ServerName), true)
 	if err != nil {
 		return xutil.JSONResponse{
@@ -107,32 +107,32 @@ func SendServerNotice(
 			JSON: spec.Unknown("internal server error"),
 		}
 	}
-	senderRooms, err := rsAPI.QueryRoomsForUser(ctx, *senderUserID, "join")
+	senderFrames, err := rsAPI.QueryFramesForUser(ctx, *senderUserID, "join")
 	if err != nil {
 		return xutil.ErrorResponse(err)
 	}
 
-	// check if we have rooms in common
-	commonRooms := []spec.RoomID{}
-	for _, userRoomID := range allUserRooms {
-		for _, senderRoomID := range senderRooms {
-			if userRoomID == senderRoomID {
-				commonRooms = append(commonRooms, senderRoomID)
+	// check if we have frames in common
+	commonFrames := []spec.FrameID{}
+	for _, userFrameID := range allUserFrames {
+		for _, senderFrameID := range senderFrames {
+			if userFrameID == senderFrameID {
+				commonFrames = append(commonFrames, senderFrameID)
 			}
 		}
 	}
 
-	if len(commonRooms) > 1 {
-		return xutil.ErrorResponse(fmt.Errorf("expected to find one room, but got %d", len(commonRooms)))
+	if len(commonFrames) > 1 {
+		return xutil.ErrorResponse(fmt.Errorf("expected to find one frame, but got %d", len(commonFrames)))
 	}
 
 	var (
-		roomID      string
-		roomVersion = rsAPI.DefaultRoomVersion()
+		frameID      string
+		frameVersion = rsAPI.DefaultFrameVersion()
 	)
 
-	// create a new room for the user
-	if len(commonRooms) == 0 {
+	// create a new frame for the user
+	if len(commonFrames) == 0 {
 		powerLevelContent := eventutil.InitialPowerLevelsContent(senderUserID.String())
 		powerLevelContent.Users[r.UserID] = -10 // taken from Synapse
 		pl, err := json.Marshal(powerLevelContent)
@@ -145,29 +145,29 @@ func SendServerNotice(
 		if err != nil {
 			return xutil.ErrorResponse(err)
 		}
-		crReq := createRoomRequest{
+		crReq := createFrameRequest{
 			Invite:                    []string{r.UserID},
-			Name:                      cfgNotices.RoomName,
+			Name:                      cfgNotices.FrameName,
 			Visibility:                "private",
 			Preset:                    spec.PresetPrivateChat,
 			CreationContent:           cc,
-			RoomVersion:               roomVersion,
+			FrameVersion:               frameVersion,
 			PowerLevelContentOverride: pl,
 		}
 
-		roomRes := createRoom(ctx, crReq, senderDevice, cfgClient, userAPI, rsAPI, asAPI, time.Now())
+		frameRes := createFrame(ctx, crReq, senderDevice, cfgClient, userAPI, rsAPI, asAPI, time.Now())
 
-		switch data := roomRes.JSON.(type) {
-		case createRoomResponse:
-			roomID = data.RoomID
+		switch data := frameRes.JSON.(type) {
+		case createFrameResponse:
+			frameID = data.FrameID
 
-			// tag the room, so we can later check if the user tries to reject an invite
+			// tag the frame, so we can later check if the user tries to reject an invite
 			serverAlertTag := xcore.TagContent{Tags: map[string]xcore.TagProperties{
 				"m.server_notice": {
 					Order: 1.0,
 				},
 			}}
-			if err = saveTagData(req, r.UserID, roomID, userAPI, serverAlertTag); err != nil {
+			if err = saveTagData(req, r.UserID, frameID, userAPI, serverAlertTag); err != nil {
 				xutil.GetLogger(ctx).WithError(err).Error("saveTagData failed")
 				return xutil.JSONResponse{
 					Code: http.StatusInternalServerError,
@@ -176,11 +176,11 @@ func SendServerNotice(
 			}
 
 		default:
-			// if we didn't get a createRoomResponse, we probably received an error, so return that.
-			return roomRes
+			// if we didn't get a createFrameResponse, we probably received an error, so return that.
+			return frameRes
 		}
 	} else {
-		// we've found a room in common, check the membership
+		// we've found a frame in common, check the membership
 		deviceUserID, err := spec.NewUserID(r.UserID, true)
 		if err != nil {
 			return xutil.JSONResponse{
@@ -189,9 +189,9 @@ func SendServerNotice(
 			}
 		}
 
-		roomID = commonRooms[0].String()
+		frameID = commonFrames[0].String()
 		membershipRes := api.QueryMembershipForUserResponse{}
-		err = rsAPI.QueryMembershipForUser(ctx, &api.QueryMembershipForUserRequest{UserID: *deviceUserID, RoomID: roomID}, &membershipRes)
+		err = rsAPI.QueryMembershipForUser(ctx, &api.QueryMembershipForUserRequest{UserID: *deviceUserID, FrameID: frameID}, &membershipRes)
 		if err != nil {
 			xutil.GetLogger(ctx).WithError(err).Error("unable to query membership for user")
 			return xutil.JSONResponse{
@@ -199,9 +199,9 @@ func SendServerNotice(
 				JSON: spec.InternalServerError{},
 			}
 		}
-		if !membershipRes.IsInRoom {
+		if !membershipRes.IsInFrame {
 			// re-invite the user
-			res, err := sendInvite(ctx, userAPI, senderDevice, roomID, r.UserID, "Server notice room", cfgClient, rsAPI, asAPI, time.Now())
+			res, err := sendInvite(ctx, userAPI, senderDevice, frameID, r.UserID, "Server notice frame", cfgClient, rsAPI, asAPI, time.Now())
 			if err != nil {
 				return res
 			}
@@ -214,7 +214,7 @@ func SendServerNotice(
 		"body":    r.Content.Body,
 		"msgtype": r.Content.MsgType,
 	}
-	e, resErr := generateSendEvent(ctx, request, senderDevice, roomID, "m.room.message", nil, rsAPI, time.Now())
+	e, resErr := generateSendEvent(ctx, request, senderDevice, frameID, "m.frame.message", nil, rsAPI, time.Now())
 	if resErr != nil {
 		logrus.Errorf("failed to send message: %+v", resErr)
 		return *resErr
@@ -229,7 +229,7 @@ func SendServerNotice(
 		}
 	}
 
-	// pass the new event to the roomserver and receive the correct event ID
+	// pass the new event to the dataframe and receive the correct event ID
 	// event ID in case of duplicate transaction is discarded
 	startedSubmittingEvent := time.Now()
 	if err := api.SendEvents(
@@ -252,9 +252,9 @@ func SendServerNotice(
 	}
 	xutil.GetLogger(ctx).WithFields(logrus.Fields{
 		"event_id":     e.EventID(),
-		"room_id":      roomID,
-		"room_version": roomVersion,
-	}).Info("Sent event to roomserver")
+		"frame_id":      frameID,
+		"frame_version": frameVersion,
+	}).Info("Sent event to dataframe")
 	timeToSubmitEvent := time.Since(startedSubmittingEvent)
 
 	res := xutil.JSONResponse{
@@ -267,7 +267,7 @@ func SendServerNotice(
 	}
 
 	// Take a note of how long it took to generate the event vs submit
-	// it to the roomserver.
+	// it to the dataframe.
 	sendEventDuration.With(prometheus.Labels{"action": "build"}).Observe(float64(timeToGenerateEvent.Milliseconds()))
 	sendEventDuration.With(prometheus.Labels{"action": "submit"}).Observe(float64(timeToSubmitEvent.Milliseconds()))
 
@@ -288,7 +288,7 @@ func (r sendServerNoticeRequest) valid() (ok bool) {
 // It returns an userapi.Device, which is used for building the event
 func getSenderDevice(
 	ctx context.Context,
-	rsAPI api.ClientRoomserverAPI,
+	rsAPI api.ClientDataframeAPI,
 	userAPI userapi.ClientUserAPI,
 	cfg *config.ClientAPI,
 ) (*userapi.Device, error) {

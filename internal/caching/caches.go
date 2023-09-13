@@ -1,7 +1,7 @@
 package caching
 
 import (
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
 )
@@ -10,18 +10,18 @@ import (
 // different implementations as long as they satisfy the Cache
 // interface.
 type Caches struct {
-	RoomVersions            Cache[string, xtools.RoomVersion]            // room ID -> room version
+	FrameVersions            Cache[string, xtools.FrameVersion]            // frame ID -> frame version
 	ServerKeys              Cache[string, xtools.PublicKeyLookupResult]  // server name -> server keys
-	RoomServerRoomNIDs      Cache[string, types.RoomNID]                 // room ID -> room NID
-	RoomServerRoomIDs       Cache[types.RoomNID, string]                 // room NID -> room ID
-	RoomServerEvents        Cache[int64, *types.HeaderedEvent]           // event NID -> event
-	RoomServerStateKeys     Cache[types.EventStateKeyNID, string]        // eventStateKey NID -> event state key
-	RoomServerStateKeyNIDs  Cache[string, types.EventStateKeyNID]        // event state key -> eventStateKey NID
-	RoomServerEventTypeNIDs Cache[string, types.EventTypeNID]            // eventType -> eventType NID
-	RoomServerEventTypes    Cache[types.EventTypeNID, string]            // eventType NID -> eventType
+	DataFrameFrameNIDs      Cache[string, types.FrameNID]                 // frame ID -> frame NID
+	DataFrameFrameIDs       Cache[types.FrameNID, string]                 // frame NID -> frame ID
+	DataFrameEvents        Cache[int64, *types.HeaderedEvent]           // event NID -> event
+	DataFrameStateKeys     Cache[types.EventStateKeyNID, string]        // eventStateKey NID -> event state key
+	DataFrameStateKeyNIDs  Cache[string, types.EventStateKeyNID]        // event state key -> eventStateKey NID
+	DataFrameEventTypeNIDs Cache[string, types.EventTypeNID]            // eventType -> eventType NID
+	DataFrameEventTypes    Cache[types.EventTypeNID, string]            // eventType NID -> eventType
 	FederationPDUs          Cache[int64, *types.HeaderedEvent]           // queue NID -> PDU
 	FederationEDUs          Cache[int64, *xtools.EDU]                    // queue NID -> EDU
-	RoomHierarchies         Cache[string, fclient.RoomHierarchyResponse] // room ID -> space response
+	FrameHierarchies         Cache[string, fclient.FrameHierarchyResponse] // frame ID -> space response
 	LazyLoading             Cache[lazyLoadingCacheKey, string]           // composite key -> event ID
 }
 

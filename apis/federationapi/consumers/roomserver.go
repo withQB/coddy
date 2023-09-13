@@ -20,17 +20,17 @@ import (
 	"github.com/withqb/coddy/apis/federationapi/queue"
 	"github.com/withqb/coddy/apis/federationapi/storage"
 	"github.com/withqb/coddy/apis/federationapi/types"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
 	"github.com/withqb/coddy/setup/process"
 )
 
-// OutputRoomEventConsumer consumes events that originated in the room server.
-type OutputRoomEventConsumer struct {
+// OutputFrameEventConsumer consumes events that originated in the frame server.
+type OutputFrameEventConsumer struct {
 	ctx           context.Context
 	cfg           *config.FederationAPI
-	rsAPI         api.FederationRoomserverAPI
+	rsAPI         api.FederationDataframeAPI
 	jetstream     nats.JetStreamContext
 	natsClient    *nats.Conn
 	durable       string
@@ -40,17 +40,17 @@ type OutputRoomEventConsumer struct {
 	topicPresence string
 }
 
-// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer. Call Start() to begin consuming from room servers.
-func NewOutputRoomEventConsumer(
+// NewOutputFrameEventConsumer creates a new OutputFrameEventConsumer. Call Start() to begin consuming from frame servers.
+func NewOutputFrameEventConsumer(
 	process *process.ProcessContext,
 	cfg *config.FederationAPI,
 	js nats.JetStreamContext,
 	natsClient *nats.Conn,
 	queues *queue.OutgoingQueues,
 	store storage.Database,
-	rsAPI api.FederationRoomserverAPI,
-) *OutputRoomEventConsumer {
-	return &OutputRoomEventConsumer{
+	rsAPI api.FederationDataframeAPI,
+) *OutputFrameEventConsumer {
+	return &OutputFrameEventConsumer{
 		ctx:           process.Context(),
 		cfg:           cfg,
 		jetstream:     js,
@@ -58,31 +58,31 @@ func NewOutputRoomEventConsumer(
 		db:            store,
 		queues:        queues,
 		rsAPI:         rsAPI,
-		durable:       cfg.Matrix.JetStream.Durable("FederationAPIRoomServerConsumer"),
-		topic:         cfg.Matrix.JetStream.Prefixed(jetstream.OutputRoomEvent),
+		durable:       cfg.Matrix.JetStream.Durable("FederationAPIDataFrameConsumer"),
+		topic:         cfg.Matrix.JetStream.Prefixed(jetstream.OutputFrameEvent),
 		topicPresence: cfg.Matrix.JetStream.Prefixed(jetstream.RequestPresence),
 	}
 }
 
-// Start consuming from room servers
-func (s *OutputRoomEventConsumer) Start() error {
+// Start consuming from frame servers
+func (s *OutputFrameEventConsumer) Start() error {
 	return jetstream.JetStreamConsumer(
 		s.ctx, s.jetstream, s.topic, s.durable, 1,
 		s.onMessage, nats.DeliverAll(), nats.ManualAck(),
 	)
 }
 
-// onMessage is called when the federation server receives a new event from the room server output log.
-// It is unsafe to call this with messages for the same room in multiple gorountines
+// onMessage is called when the federation server receives a new event from the frame server output log.
+// It is unsafe to call this with messages for the same frame in multiple gorountines
 // because updates it will likely fail with a types.EventIDMismatchError when it
-// realises that it cannot update the room state using the deltas.
-func (s *OutputRoomEventConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) bool {
+// realises that it cannot update the frame state using the deltas.
+func (s *OutputFrameEventConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) bool {
 	msg := msgs[0] // Guaranteed to exist if onMessage is called
-	receivedType := api.OutputType(msg.Header.Get(jetstream.RoomEventType))
+	receivedType := api.OutputType(msg.Header.Get(jetstream.FrameEventType))
 
 	// Only handle events we care about, avoids unneeded unmarshalling
 	switch receivedType {
-	case api.OutputTypeNewRoomEvent, api.OutputTypeNewInboundPeek, api.OutputTypePurgeRoom:
+	case api.OutputTypeNewFrameEvent, api.OutputTypeNewInboundPeek, api.OutputTypePurgeFrame:
 	default:
 		return true
 	}
@@ -91,22 +91,22 @@ func (s *OutputRoomEventConsumer) onMessage(ctx context.Context, msgs []*nats.Ms
 	var output api.OutputEvent
 	if err := json.Unmarshal(msg.Data, &output); err != nil {
 		// If the message was invalid, log it and move on to the next message in the stream
-		log.WithError(err).Errorf("roomserver output log: message parse failure")
+		log.WithError(err).Errorf("dataframe output log: message parse failure")
 		return true
 	}
 
 	switch output.Type {
-	case api.OutputTypeNewRoomEvent:
-		ev := output.NewRoomEvent.Event
-		if err := s.processMessage(*output.NewRoomEvent, output.NewRoomEvent.RewritesState); err != nil {
+	case api.OutputTypeNewFrameEvent:
+		ev := output.NewFrameEvent.Event
+		if err := s.processMessage(*output.NewFrameEvent, output.NewFrameEvent.RewritesState); err != nil {
 			// panic rather than continue with an inconsistent database
 			log.WithFields(log.Fields{
 				"event_id":   ev.EventID(),
 				"event":      string(ev.JSON()),
-				"add":        output.NewRoomEvent.AddsStateEventIDs,
-				"del":        output.NewRoomEvent.RemovesStateEventIDs,
+				"add":        output.NewFrameEvent.AddsStateEventIDs,
+				"del":        output.NewFrameEvent.RemovesStateEventIDs,
 				log.ErrorKey: err,
-			}).Panicf("roomserver output log: write room event failure")
+			}).Panicf("dataframe output log: write frame event failure")
 		}
 
 	case api.OutputTypeNewInboundPeek:
@@ -114,21 +114,21 @@ func (s *OutputRoomEventConsumer) onMessage(ctx context.Context, msgs []*nats.Ms
 			log.WithFields(log.Fields{
 				"event":      output.NewInboundPeek,
 				log.ErrorKey: err,
-			}).Panicf("roomserver output log: remote peek event failure")
+			}).Panicf("dataframe output log: remote peek event failure")
 			return false
 		}
 
-	case api.OutputTypePurgeRoom:
-		log.WithField("room_id", output.PurgeRoom.RoomID).Warn("Purging room from federation API")
-		if err := s.db.PurgeRoom(ctx, output.PurgeRoom.RoomID); err != nil {
-			logrus.WithField("room_id", output.PurgeRoom.RoomID).WithError(err).Error("Failed to purge room from federation API")
+	case api.OutputTypePurgeFrame:
+		log.WithField("frame_id", output.PurgeFrame.FrameID).Warn("Purging frame from federation API")
+		if err := s.db.PurgeFrame(ctx, output.PurgeFrame.FrameID); err != nil {
+			logrus.WithField("frame_id", output.PurgeFrame.FrameID).WithError(err).Error("Failed to purge frame from federation API")
 		} else {
-			logrus.WithField("room_id", output.PurgeRoom.RoomID).Warn("Room purged from federation API")
+			logrus.WithField("frame_id", output.PurgeFrame.FrameID).Warn("Frame purged from federation API")
 		}
 
 	default:
 		log.WithField("type", output.Type).Debug(
-			"roomserver output log: ignoring unknown output type",
+			"dataframe output log: ignoring unknown output type",
 		)
 	}
 
@@ -137,7 +137,7 @@ func (s *OutputRoomEventConsumer) onMessage(ctx context.Context, msgs []*nats.Ms
 
 // processInboundPeek starts tracking a new federated inbound peek (replacing the existing one if any)
 // causing the federationapi to start sending messages to the peeking server
-func (s *OutputRoomEventConsumer) processInboundPeek(orp api.OutputNewInboundPeek) error {
+func (s *OutputFrameEventConsumer) processInboundPeek(orp api.OutputNewInboundPeek) error {
 
 	// FIXME: there's a race here - we should start /sending new peeked events
 	// atomically after the orp.LatestEventID to ensure there are no gaps between
@@ -149,20 +149,20 @@ func (s *OutputRoomEventConsumer) processInboundPeek(orp api.OutputNewInboundPee
 	//
 	// This is making the tests flakey.
 
-	return s.db.AddInboundPeek(s.ctx, orp.ServerName, orp.RoomID, orp.PeekID, orp.RenewalInterval)
+	return s.db.AddInboundPeek(s.ctx, orp.ServerName, orp.FrameID, orp.PeekID, orp.RenewalInterval)
 }
 
-// processMessage updates the list of currently joined hosts in the room
+// processMessage updates the list of currently joined hosts in the frame
 // and then sends the event to the hosts that were joined before the event.
-func (s *OutputRoomEventConsumer) processMessage(ore api.OutputNewRoomEvent, rewritesState bool) error {
+func (s *OutputFrameEventConsumer) processMessage(ore api.OutputNewFrameEvent, rewritesState bool) error {
 
 	addsStateEvents, missingEventIDs := ore.NeededStateEventIDs()
 
-	// Ask the roomserver and add in the rest of the results into the set.
+	// Ask the dataframe and add in the rest of the results into the set.
 	// Finally, work out if there are any more events missing.
 	if len(missingEventIDs) > 0 {
 		eventsReq := &api.QueryEventsByIDRequest{
-			RoomID:   ore.Event.RoomID(),
+			FrameID:   ore.Event.FrameID(),
 			EventIDs: missingEventIDs,
 		}
 		eventsRes := &api.QueryEventsByIDResponse{}
@@ -188,10 +188,10 @@ func (s *OutputRoomEventConsumer) processMessage(ore api.OutputNewRoomEvent, rew
 	// We keep a copy of the current state because the state at each event is
 	// expressed as a delta against the current state.
 	// TODO(#290): handle EventIDMismatchError and recover the current state by
-	// talking to the roomserver
-	oldJoinedHosts, err := s.db.UpdateRoom(
+	// talking to the dataframe
+	oldJoinedHosts, err := s.db.UpdateFrame(
 		s.ctx,
-		ore.Event.RoomID(),
+		ore.Event.FrameID(),
 		addsJoinedHosts,
 		ore.RemovesStateEventIDs,
 		rewritesState, // if we're re-writing state, nuke all joined hosts before adding
@@ -200,11 +200,11 @@ func (s *OutputRoomEventConsumer) processMessage(ore api.OutputNewRoomEvent, rew
 		return err
 	}
 
-	// If we added new hosts, inform them about our known presence events for this room
-	if s.cfg.Matrix.Presence.EnableOutbound && len(addsJoinedHosts) > 0 && ore.Event.Type() == spec.MRoomMember && ore.Event.StateKey() != nil {
+	// If we added new hosts, inform them about our known presence events for this frame
+	if s.cfg.Matrix.Presence.EnableOutbound && len(addsJoinedHosts) > 0 && ore.Event.Type() == spec.MFrameMember && ore.Event.StateKey() != nil {
 		membership, _ := ore.Event.Membership()
 		if membership == spec.Join {
-			s.sendPresence(ore.Event.RoomID(), addsJoinedHosts)
+			s.sendPresence(ore.Event.FrameID(), addsJoinedHosts)
 		}
 	}
 
@@ -237,21 +237,21 @@ func (s *OutputRoomEventConsumer) processMessage(ore api.OutputNewRoomEvent, rew
 	)
 }
 
-func (s *OutputRoomEventConsumer) sendPresence(roomID string, addedJoined []types.JoinedHost) {
+func (s *OutputFrameEventConsumer) sendPresence(frameID string, addedJoined []types.JoinedHost) {
 	joined := make([]spec.ServerName, 0, len(addedJoined))
 	for _, added := range addedJoined {
 		joined = append(joined, added.ServerName)
 	}
 
 	// get our locally joined users
-	var queryRes api.QueryMembershipsForRoomResponse
-	err := s.rsAPI.QueryMembershipsForRoom(s.ctx, &api.QueryMembershipsForRoomRequest{
+	var queryRes api.QueryMembershipsForFrameResponse
+	err := s.rsAPI.QueryMembershipsForFrame(s.ctx, &api.QueryMembershipsForFrameRequest{
 		JoinedOnly: true,
 		LocalOnly:  true,
-		RoomID:     roomID,
+		FrameID:     frameID,
 	}, &queryRes)
 	if err != nil {
-		log.WithError(err).Error("failed to calculate joined rooms for user")
+		log.WithError(err).Error("failed to calculate joined frames for user")
 		return
 	}
 
@@ -307,23 +307,23 @@ func (s *OutputRoomEventConsumer) sendPresence(roomID string, addedJoined []type
 	}
 }
 
-// joinedHostsAtEvent works out a list of matrix servers that were joined to
-// the room at the event (including peeking ones)
+// joinedHostsAtEvent works out a list of coddy servers that were joined to
+// the frame at the event (including peeking ones)
 // It is important to use the state at the event for sending messages because:
 //
-//  1. We shouldn't send messages to servers that weren't in the room.
-//  2. If a server is kicked from the rooms it should still be told about the
+//  1. We shouldn't send messages to servers that weren't in the frame.
+//  2. If a server is kicked from the frames it should still be told about the
 //     kick event.
 //
 // Usually the list can be calculated locally, but sometimes it will need fetch
-// events from the room server.
-// Returns an error if there was a problem talking to the room server.
-func (s *OutputRoomEventConsumer) joinedHostsAtEvent(
-	ore api.OutputNewRoomEvent, oldJoinedHosts []types.JoinedHost,
+// events from the frame server.
+// Returns an error if there was a problem talking to the frame server.
+func (s *OutputFrameEventConsumer) joinedHostsAtEvent(
+	ore api.OutputNewFrameEvent, oldJoinedHosts []types.JoinedHost,
 ) ([]spec.ServerName, error) {
 	// Combine the delta into a single delta so that the adds and removes can
 	// cancel each other out. This should reduce the number of times we need
-	// to fetch a state event from the room server.
+	// to fetch a state event from the frame server.
 	combinedAdds, combinedRemoves := combineDeltas(
 		ore.AddsStateEventIDs, ore.RemovesStateEventIDs,
 		ore.StateBeforeAddsEventIDs, ore.StateBeforeRemovesEventIDs,
@@ -346,23 +346,23 @@ func (s *OutputRoomEventConsumer) joinedHostsAtEvent(
 	joined := map[spec.ServerName]bool{}
 	for _, joinedHost := range oldJoinedHosts {
 		if removed[joinedHost.MemberEventID] {
-			// This m.room.member event is part of the current state of the
-			// room, but not part of the state at the event we are processing
+			// This m.frame.member event is part of the current state of the
+			// frame, but not part of the state at the event we are processing
 			// Therefore we can't use it to tell whether the server was in
-			// the room at the event.
+			// the frame at the event.
 			continue
 		}
 		joined[joinedHost.ServerName] = true
 	}
 
 	for _, joinedHost := range combinedAddsJoinedHosts {
-		// This m.room.member event was part of the state of the room at the
-		// event, but isn't part of the current state of the room now.
+		// This m.frame.member event was part of the state of the frame at the
+		// event, but isn't part of the current state of the frame now.
 		joined[joinedHost.ServerName] = true
 	}
 
 	// handle peeking hosts
-	inboundPeeks, err := s.db.GetInboundPeeks(s.ctx, ore.Event.PDU.RoomID())
+	inboundPeeks, err := s.db.GetInboundPeeks(s.ctx, ore.Event.PDU.FrameID())
 	if err != nil {
 		return nil, err
 	}
@@ -382,10 +382,10 @@ func (s *OutputRoomEventConsumer) joinedHostsAtEvent(
 // JoinedHostsFromEvents turns a list of state events into a list of joined hosts.
 // This errors if one of the events was invalid.
 // It should be impossible for an invalid event to get this far in the pipeline.
-func JoinedHostsFromEvents(ctx context.Context, evs []xtools.PDU, rsAPI api.FederationRoomserverAPI) ([]types.JoinedHost, error) {
+func JoinedHostsFromEvents(ctx context.Context, evs []xtools.PDU, rsAPI api.FederationDataframeAPI) ([]types.JoinedHost, error) {
 	var joinedHosts []types.JoinedHost
 	for _, ev := range evs {
-		if ev.Type() != "m.room.member" || ev.StateKey() == nil {
+		if ev.Type() != "m.frame.member" || ev.StateKey() == nil {
 			continue
 		}
 		membership, err := ev.Membership()
@@ -395,12 +395,12 @@ func JoinedHostsFromEvents(ctx context.Context, evs []xtools.PDU, rsAPI api.Fede
 		if membership != spec.Join {
 			continue
 		}
-		validRoomID, err := spec.NewRoomID(ev.RoomID())
+		validFrameID, err := spec.NewFrameID(ev.FrameID())
 		if err != nil {
 			return nil, err
 		}
 		var domain spec.ServerName
-		userID, err := rsAPI.QueryUserIDForSender(ctx, *validRoomID, spec.SenderID(*ev.StateKey()))
+		userID, err := rsAPI.QueryUserIDForSender(ctx, *validFrameID, spec.SenderID(*ev.StateKey()))
 		if err != nil {
 			if errors.As(err, new(base64.CorruptInputError)) {
 				// Fallback to using the "old" way of getting the user domain, avoids
@@ -464,7 +464,7 @@ func combineDeltas(adds1, removes1, adds2, removes2 []string) (adds, removes []s
 }
 
 // lookupStateEvents looks up the state events that are added by a new event.
-func (s *OutputRoomEventConsumer) lookupStateEvents(
+func (s *OutputFrameEventConsumer) lookupStateEvents(
 	addsStateEventIDs []string, event xtools.PDU,
 ) ([]xtools.PDU, error) {
 	// Fast path if there aren't any new state events.
@@ -495,8 +495,8 @@ func (s *OutputRoomEventConsumer) lookupStateEvents(
 
 	// At this point the missing events are neither the event itself nor are
 	// they present in our local database. Our only option is to fetch them
-	// from the roomserver using the query API.
-	eventReq := api.QueryEventsByIDRequest{EventIDs: missing, RoomID: event.RoomID()}
+	// from the dataframe using the query API.
+	eventReq := api.QueryEventsByIDRequest{EventIDs: missing, FrameID: event.FrameID()}
 	var eventResp api.QueryEventsByIDResponse
 	if err := s.rsAPI.QueryEventsByID(s.ctx, &eventReq, &eventResp); err != nil {
 		return nil, err

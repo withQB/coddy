@@ -11,10 +11,10 @@ import (
 
 	"github.com/withqb/coddy/internal/caching"
 	"github.com/withqb/coddy/internal/sqlutil"
-	"github.com/withqb/coddy/servers/roomserver"
-	"github.com/withqb/coddy/servers/roomserver/state"
-	"github.com/withqb/coddy/servers/roomserver/storage"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe"
+	"github.com/withqb/coddy/servers/dataframe/state"
+	"github.com/withqb/coddy/servers/dataframe/storage"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
@@ -25,13 +25,13 @@ import (
 
 // This is a utility for inspecting state snapshots and running state resolution
 // against real snapshots in an actual database.
-// It takes one or more state snapshot NIDs as arguments, along with a room version
+// It takes one or more state snapshot NIDs as arguments, along with a frame version
 // to use for unmarshalling events, and will produce resolved output.
 //
-// Usage: ./resolve-state --roomversion=version snapshot [snapshot ...]
-//   e.g. ./resolve-state --roomversion=5 1254 1235 1282
+// Usage: ./resolve-state --frameversion=version snapshot [snapshot ...]
+//   e.g. ./resolve-state --frameversion=5 1254 1235 1282
 
-var roomVersion = flag.String("roomversion", "5", "the room version to parse events as")
+var frameVersion = flag.String("frameversion", "5", "the frame version to parse events as")
 var filterType = flag.String("filtertype", "", "the event types to filter on")
 var difference = flag.Bool("difference", false, "whether to calculate the difference between snapshots")
 
@@ -47,7 +47,7 @@ func main() {
 
 	args := flag.Args()
 
-	fmt.Println("Room version", *roomVersion)
+	fmt.Println("Frame version", *frameVersion)
 
 	snapshotNIDs := []types.StateSnapshotNID{}
 	for _, arg := range args {
@@ -60,8 +60,8 @@ func main() {
 
 	processCtx := process.NewProcessContext()
 	cm := sqlutil.NewConnectionManager(processCtx, cfg.Global.DatabaseOptions)
-	roomserverDB, err := storage.Open(
-		processCtx.Context(), cm, &cfg.RoomServer.Database,
+	dataframeDB, err := storage.Open(
+		processCtx.Context(), cm, &cfg.DataFrame.Database,
 		caching.NewRistrettoCache(128*1024*1024, time.Hour, true),
 	)
 	if err != nil {
@@ -69,13 +69,13 @@ func main() {
 	}
 
 	natsInstance := &jetstream.NATSInstance{}
-	rsAPI := roomserver.NewInternalAPI(processCtx, cfg, cm,
+	rsAPI := dataframe.NewInternalAPI(processCtx, cfg, cm,
 		natsInstance, caching.NewRistrettoCache(128*1024*1024, time.Hour, true), false)
 
-	roomInfo := &types.RoomInfo{
-		RoomVersion: xtools.RoomVersion(*roomVersion),
+	frameInfo := &types.FrameInfo{
+		FrameVersion: xtools.FrameVersion(*frameVersion),
 	}
-	stateres := state.NewStateResolution(roomserverDB, roomInfo, rsAPI)
+	stateres := state.NewStateResolution(dataframeDB, frameInfo, rsAPI)
 
 	if *difference {
 		if len(snapshotNIDs) != 2 {
@@ -98,7 +98,7 @@ func main() {
 		}
 
 		var eventEntries []types.Event
-		eventEntries, err = roomserverDB.Events(ctx, roomInfo.RoomVersion, eventNIDs)
+		eventEntries, err = dataframeDB.Events(ctx, frameInfo.FrameVersion, eventNIDs)
 		if err != nil {
 			panic(err)
 		}
@@ -156,7 +156,7 @@ func main() {
 	}
 
 	fmt.Println("Fetching", len(eventNIDMap), "state events")
-	eventEntries, err := roomserverDB.Events(ctx, roomInfo.RoomVersion, eventNIDs)
+	eventEntries, err := dataframeDB.Events(ctx, frameInfo.FrameVersion, eventNIDs)
 	if err != nil {
 		panic(err)
 	}
@@ -176,7 +176,7 @@ func main() {
 	}
 
 	fmt.Println("Fetching", len(authEventIDs), "auth events")
-	authEventEntries, err := roomserverDB.EventsFromIDs(ctx, roomInfo, authEventIDs)
+	authEventEntries, err := dataframeDB.EventsFromIDs(ctx, frameInfo, authEventIDs)
 	if err != nil {
 		panic(err)
 	}
@@ -189,8 +189,8 @@ func main() {
 	fmt.Println("Resolving state")
 	var resolved Events
 	resolved, err = xtools.ResolveConflicts(
-		xtools.RoomVersion(*roomVersion), events, authEvents, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+		xtools.FrameVersion(*frameVersion), events, authEvents, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 		},
 	)
 	if err != nil {

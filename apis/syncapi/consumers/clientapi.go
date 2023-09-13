@@ -40,7 +40,7 @@ type OutputClientDataConsumer struct {
 	cfg          *config.SyncAPI
 }
 
-// NewOutputClientDataConsumer creates a new OutputClientData consumer. Call Start() to begin consuming from room servers.
+// NewOutputClientDataConsumer creates a new OutputClientData consumer. Call Start() to begin consuming from frame servers.
 func NewOutputClientDataConsumer(
 	process *process.ProcessContext,
 	cfg *config.SyncAPI,
@@ -67,7 +67,7 @@ func NewOutputClientDataConsumer(
 	}
 }
 
-// Start consuming from room servers
+// Start consuming from frame servers
 func (s *OutputClientDataConsumer) Start() error {
 	_, err := s.nats.Subscribe(s.topicReIndex, func(msg *nats.Msg) {
 		if err := msg.Ack(); err != nil {
@@ -99,17 +99,17 @@ func (s *OutputClientDataConsumer) Start() error {
 				id = streamPos
 				e := fulltext.IndexElement{
 					EventID:        ev.EventID(),
-					RoomID:         ev.RoomID(),
+					FrameID:         ev.FrameID(),
 					StreamPosition: streamPos,
 				}
 				e.SetContentType(ev.Type())
 
 				switch ev.Type() {
-				case "m.room.message":
+				case "m.frame.message":
 					e.Content = gjson.GetBytes(ev.Content(), "body").String()
-				case spec.MRoomName:
+				case spec.MFrameName:
 					e.Content = gjson.GetBytes(ev.Content(), "name").String()
-				case spec.MRoomTopic:
+				case spec.MFrameTopic:
 					e.Content = gjson.GetBytes(ev.Content(), "topic").String()
 				default:
 					continue
@@ -155,17 +155,17 @@ func (s *OutputClientDataConsumer) onMessage(ctx context.Context, msgs []*nats.M
 
 	log.WithFields(log.Fields{
 		"type":    output.Type,
-		"room_id": output.RoomID,
+		"frame_id": output.FrameID,
 	}).Debug("Received data from client API server")
 
 	streamPos, err := s.db.UpsertAccountData(
-		s.ctx, userID, output.RoomID, output.Type,
+		s.ctx, userID, output.FrameID, output.Type,
 	)
 	if err != nil {
 		sentry.CaptureException(err)
 		log.WithFields(log.Fields{
 			"type":       output.Type,
-			"room_id":    output.RoomID,
+			"frame_id":    output.FrameID,
 			log.ErrorKey: err,
 		}).Errorf("could not save account data")
 		return false

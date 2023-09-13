@@ -76,12 +76,12 @@ func (s *OutputNotificationDataConsumer) onMessage(ctx context.Context, msgs []*
 		return true
 	}
 
-	streamPos, err := s.db.UpsertRoomUnreadNotificationCounts(ctx, userID, data.RoomID, data.UnreadNotificationCount, data.UnreadHighlightCount)
+	streamPos, err := s.db.UpsertFrameUnreadNotificationCounts(ctx, userID, data.FrameID, data.UnreadNotificationCount, data.UnreadHighlightCount)
 	if err != nil {
 		sentry.CaptureException(err)
 		log.WithFields(log.Fields{
 			"user_id": userID,
-			"room_id": data.RoomID,
+			"frame_id": data.FrameID,
 		}).WithError(err).Error("Could not save notification counts")
 		return false
 	}
@@ -91,7 +91,7 @@ func (s *OutputNotificationDataConsumer) onMessage(ctx context.Context, msgs []*
 
 	log.WithFields(log.Fields{
 		"user_id":   userID,
-		"room_id":   data.RoomID,
+		"frame_id":   data.FrameID,
 		"streamPos": streamPos,
 	}).Trace("Received notification data from user API")
 

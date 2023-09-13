@@ -17,26 +17,26 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
 )
 
-// GetState returns state events & auth events for the roomID, eventID
+// GetState returns state events & auth events for the frameID, eventID
 func GetState(
 	ctx context.Context,
 	request *fclient.FederationRequest,
-	rsAPI api.FederationRoomserverAPI,
-	roomID string,
+	rsAPI api.FederationDataframeAPI,
+	frameID string,
 ) xutil.JSONResponse {
 	eventID, err := parseEventIDParam(request)
 	if err != nil {
 		return *err
 	}
 
-	stateEvents, authChain, err := getState(ctx, request, rsAPI, roomID, eventID)
+	stateEvents, authChain, err := getState(ctx, request, rsAPI, frameID, eventID)
 	if err != nil {
 		return *err
 	}
@@ -47,19 +47,19 @@ func GetState(
 	}}
 }
 
-// GetStateIDs returns state event IDs & auth event IDs for the roomID, eventID
+// GetStateIDs returns state event IDs & auth event IDs for the frameID, eventID
 func GetStateIDs(
 	ctx context.Context,
 	request *fclient.FederationRequest,
-	rsAPI api.FederationRoomserverAPI,
-	roomID string,
+	rsAPI api.FederationDataframeAPI,
+	frameID string,
 ) xutil.JSONResponse {
 	eventID, err := parseEventIDParam(request)
 	if err != nil {
 		return *err
 	}
 
-	stateEvents, authEvents, err := getState(ctx, request, rsAPI, roomID, eventID)
+	stateEvents, authEvents, err := getState(ctx, request, rsAPI, frameID, eventID)
 	if err != nil {
 		return *err
 	}
@@ -98,25 +98,25 @@ func parseEventIDParam(
 func getState(
 	ctx context.Context,
 	request *fclient.FederationRequest,
-	rsAPI api.FederationRoomserverAPI,
-	roomID string,
+	rsAPI api.FederationDataframeAPI,
+	frameID string,
 	eventID string,
 ) (stateEvents, authEvents []*types.HeaderedEvent, errRes *xutil.JSONResponse) {
-	// If we don't think we belong to this room then don't waste the effort
+	// If we don't think we belong to this frame then don't waste the effort
 	// responding to expensive requests for it.
-	if err := ErrorIfLocalServerNotInRoom(ctx, rsAPI, roomID); err != nil {
+	if err := ErrorIfLocalServerNotInFrame(ctx, rsAPI, frameID); err != nil {
 		return nil, nil, err
 	}
 
-	event, resErr := fetchEvent(ctx, rsAPI, roomID, eventID)
+	event, resErr := fetchEvent(ctx, rsAPI, frameID, eventID)
 	if resErr != nil {
 		return nil, nil, resErr
 	}
 
-	if event.RoomID() != roomID {
-		return nil, nil, &xutil.JSONResponse{Code: http.StatusNotFound, JSON: spec.NotFound("event does not belong to this room")}
+	if event.FrameID() != frameID {
+		return nil, nil, &xutil.JSONResponse{Code: http.StatusNotFound, JSON: spec.NotFound("event does not belong to this frame")}
 	}
-	resErr = allowedToSeeEvent(ctx, request.Origin(), rsAPI, eventID, event.RoomID())
+	resErr = allowedToSeeEvent(ctx, request.Origin(), rsAPI, eventID, event.FrameID())
 	if resErr != nil {
 		return nil, nil, resErr
 	}
@@ -125,7 +125,7 @@ func getState(
 	err := rsAPI.QueryStateAndAuthChain(
 		ctx,
 		&api.QueryStateAndAuthChainRequest{
-			RoomID:       roomID,
+			FrameID:       frameID,
 			PrevEventIDs: []string{eventID},
 			AuthEventIDs: event.AuthEventIDs(),
 		},
@@ -137,10 +137,10 @@ func getState(
 	}
 
 	switch {
-	case !response.RoomExists:
+	case !response.FrameExists:
 		return nil, nil, &xutil.JSONResponse{
 			Code: http.StatusNotFound,
-			JSON: spec.NotFound("Room not found"),
+			JSON: spec.NotFound("Frame not found"),
 		}
 	case !response.StateKnown:
 		return nil, nil, &xutil.JSONResponse{

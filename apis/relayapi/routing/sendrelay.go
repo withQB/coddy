@@ -12,7 +12,7 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// SendTransactionToRelay implements PUT /_matrix/federation/v1/send_relay/{txnID}/{userID}
+// SendTransactionToRelay implements PUT /_coddy/federation/v1/send_relay/{txnID}/{userID}
 // This endpoint can be extracted into a separate relay server service.
 func SendTransactionToRelay(
 	httpReq *http.Request,
@@ -33,7 +33,6 @@ func SendTransactionToRelay(
 	}
 
 	// Transactions are limited in size; they can have at most 50 PDUs and 100 EDUs.
-	// https://matrix.org/docs/spec/server_server/latest#transactions
 	if len(txnEvents.PDUs) > 50 || len(txnEvents.EDUs) > 100 {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,

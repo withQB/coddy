@@ -93,11 +93,11 @@ func (p *phoneHomeStats) collect() {
 		p.stats["log_level"] = "info"
 	}
 
-	// message and room stats
+	// message and frame stats
 	// TODO: Find a solution to actually set this value
-	p.stats["total_room_count"] = 0
+	p.stats["total_frame_count"] = 0
 
-	messageStats, activeRooms, activeE2EERooms, err := p.db.DailyRoomsMessages(ctx, p.serverName)
+	messageStats, activeFrames, activeE2EEFrames, err := p.db.DailyFramesMessages(ctx, p.serverName)
 	if err != nil {
 		logrus.WithError(err).Warn("unable to query message stats, using default values")
 	}
@@ -105,8 +105,8 @@ func (p *phoneHomeStats) collect() {
 	p.stats["daily_sent_messages"] = messageStats.SentMessages
 	p.stats["daily_e2ee_messages"] = messageStats.MessagesE2EE
 	p.stats["daily_sent_e2ee_messages"] = messageStats.SentMessagesE2EE
-	p.stats["daily_active_rooms"] = activeRooms
-	p.stats["daily_active_e2ee_rooms"] = activeE2EERooms
+	p.stats["daily_active_frames"] = activeFrames
+	p.stats["daily_active_e2ee_frames"] = activeE2EEFrames
 
 	// user stats and DB engine
 	userStats, db, err := p.db.UserStatistics(ctx)

@@ -29,25 +29,25 @@ type userSet map[string]*time.Timer
 // TimeoutCallbackFn is a function called right after the removal of a user
 // from the typing user list due to timeout.
 // latestSyncPosition is the typing sync position after the removal.
-type TimeoutCallbackFn func(userID, roomID string, latestSyncPosition int64)
+type TimeoutCallbackFn func(userID, frameID string, latestSyncPosition int64)
 
-type roomData struct {
+type frameData struct {
 	syncPosition int64
 	userSet      userSet
 }
 
-// EDUCache maintains a list of users typing in each room.
+// EDUCache maintains a list of users typing in each frame.
 type EDUCache struct {
 	sync.RWMutex
 	latestSyncPosition int64
-	data               map[string]*roomData
+	data               map[string]*frameData
 	timeoutCallback    TimeoutCallbackFn
 }
 
-// Create a roomData with its sync position set to the latest sync position.
+// Create a frameData with its sync position set to the latest sync position.
 // Must only be called after locking the cache.
-func (t *EDUCache) newRoomData() *roomData {
-	return &roomData{
+func (t *EDUCache) newFrameData() *frameData {
+	return &frameData{
 		syncPosition: t.latestSyncPosition,
 		userSet:      make(userSet),
 	}
@@ -55,7 +55,7 @@ func (t *EDUCache) newRoomData() *roomData {
 
 // NewTypingCache returns a new EDUCache initialised for use.
 func NewTypingCache() *EDUCache {
-	return &EDUCache{data: make(map[string]*roomData)}
+	return &EDUCache{data: make(map[string]*frameData)}
 }
 
 // SetTimeoutCallback sets a callback function that is called right after
@@ -64,26 +64,26 @@ func (t *EDUCache) SetTimeoutCallback(fn TimeoutCallbackFn) {
 	t.timeoutCallback = fn
 }
 
-// GetTypingUsers returns the list of users typing in a room.
-func (t *EDUCache) GetTypingUsers(roomID string) []string {
-	users, _ := t.GetTypingUsersIfUpdatedAfter(roomID, 0)
+// GetTypingUsers returns the list of users typing in a frame.
+func (t *EDUCache) GetTypingUsers(frameID string) []string {
+	users, _ := t.GetTypingUsersIfUpdatedAfter(frameID, 0)
 	// 0 should work above because the first position used will be 1.
 	return users
 }
 
-// GetTypingUsersIfUpdatedAfter returns all users typing in this room with
-// updated == true if the typing sync position of the room is after the given
+// GetTypingUsersIfUpdatedAfter returns all users typing in this frame with
+// updated == true if the typing sync position of the frame is after the given
 // position. Otherwise, returns an empty slice with updated == false.
 func (t *EDUCache) GetTypingUsersIfUpdatedAfter(
-	roomID string, position int64,
+	frameID string, position int64,
 ) (users []string, updated bool) {
 	t.RLock()
 	defer t.RUnlock()
 
-	roomData, ok := t.data[roomID]
-	if ok && roomData.syncPosition > position {
+	frameData, ok := t.data[frameID]
+	if ok && frameData.syncPosition > position {
 		updated = true
-		userSet := roomData.userSet
+		userSet := frameData.userSet
 		users = make([]string, 0, len(userSet))
 		for userID := range userSet {
 			users = append(users, userID)
@@ -93,22 +93,22 @@ func (t *EDUCache) GetTypingUsersIfUpdatedAfter(
 	return
 }
 
-// AddTypingUser sets an user as typing in a room.
+// AddTypingUser sets an user as typing in a frame.
 // expire is the time when the user typing should time out.
 // if expire is nil, defaultTypingTimeout is assumed.
 // Returns the latest sync position for typing after update.
 func (t *EDUCache) AddTypingUser(
-	userID, roomID string, expire *time.Time,
+	userID, frameID string, expire *time.Time,
 ) int64 {
 	expireTime := getExpireTime(expire)
 	if until := time.Until(expireTime); until > 0 {
 		timer := time.AfterFunc(until, func() {
-			latestSyncPosition := t.RemoveUser(userID, roomID)
+			latestSyncPosition := t.RemoveUser(userID, frameID)
 			if t.timeoutCallback != nil {
-				t.timeoutCallback(userID, roomID, latestSyncPosition)
+				t.timeoutCallback(userID, frameID, latestSyncPosition)
 			}
 		})
-		return t.addUser(userID, roomID, timer)
+		return t.addUser(userID, frameID, timer)
 	}
 	return t.GetLatestSyncPosition()
 }
@@ -116,21 +116,21 @@ func (t *EDUCache) AddTypingUser(
 // addUser with mutex lock & replace the previous timer.
 // Returns the latest typing sync position after update.
 func (t *EDUCache) addUser(
-	userID, roomID string, expiryTimer *time.Timer,
+	userID, frameID string, expiryTimer *time.Timer,
 ) int64 {
 	t.Lock()
 	defer t.Unlock()
 
 	t.latestSyncPosition++
 
-	if t.data[roomID] == nil {
-		t.data[roomID] = t.newRoomData()
+	if t.data[frameID] == nil {
+		t.data[frameID] = t.newFrameData()
 	} else {
-		t.data[roomID].syncPosition = t.latestSyncPosition
+		t.data[frameID].syncPosition = t.latestSyncPosition
 	}
 
 	// Stop the timer to cancel the call to timeoutCallback
-	if timer, ok := t.data[roomID].userSet[userID]; ok {
+	if timer, ok := t.data[frameID].userSet[userID]; ok {
 		// It may happen that at this stage the timer fires, but we now have a lock on
 		// it. Hence the execution of timeoutCallback will happen after we unlock. So
 		// we may lose a typing state, though this is highly unlikely. This can be
@@ -140,32 +140,32 @@ func (t *EDUCache) addUser(
 		timer.Stop()
 	}
 
-	t.data[roomID].userSet[userID] = expiryTimer
+	t.data[frameID].userSet[userID] = expiryTimer
 
 	return t.latestSyncPosition
 }
 
 // RemoveUser with mutex lock & stop the timer.
 // Returns the latest sync position for typing after update.
-func (t *EDUCache) RemoveUser(userID, roomID string) int64 {
+func (t *EDUCache) RemoveUser(userID, frameID string) int64 {
 	t.Lock()
 	defer t.Unlock()
 
-	roomData, ok := t.data[roomID]
+	frameData, ok := t.data[frameID]
 	if !ok {
 		return t.latestSyncPosition
 	}
 
-	timer, ok := roomData.userSet[userID]
+	timer, ok := frameData.userSet[userID]
 	if !ok {
 		return t.latestSyncPosition
 	}
 
 	timer.Stop()
-	delete(roomData.userSet, userID)
+	delete(frameData.userSet, userID)
 
 	t.latestSyncPosition++
-	t.data[roomID].syncPosition = t.latestSyncPosition
+	t.data[frameID].syncPosition = t.latestSyncPosition
 
 	return t.latestSyncPosition
 }

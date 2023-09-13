@@ -99,7 +99,7 @@ func (c *ClientAPI) Verify(configErrs *ConfigErrors) {
 				"You have tried to enable open registration without any secondary verification methods " +
 					"(such as reCAPTCHA). By enabling open registration, you are SIGNIFICANTLY " +
 					"increasing the risk that your server will be used to send spam or abuse, and may result in " +
-					"your server being banned from some rooms. If you are ABSOLUTELY CERTAIN you want to do this, " +
+					"your server being banned from some frames. If you are ABSOLUTELY CERTAIN you want to do this, " +
 					"start Dendrite with the -really-enable-open-registration command line flag. Otherwise, you " +
 					"should set the registration_disabled option in your Dendrite config.",
 			)

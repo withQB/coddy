@@ -124,7 +124,7 @@ func (r *RelayInternalAPI) QueryTransactions(
 
 func (r *RelayInternalAPI) processTransaction(txn *xtools.Transaction) {
 	logrus.Warn("Processing transaction from relay server")
-	mu := internal.NewMutexByRoom()
+	mu := internal.NewMutexByFrame()
 	t := internal.NewTxnReq(
 		r.rsAPI,
 		nil,

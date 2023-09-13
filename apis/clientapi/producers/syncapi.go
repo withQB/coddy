@@ -30,14 +30,14 @@ type SyncAPIProducer struct {
 
 func (p *SyncAPIProducer) SendReceipt(
 	ctx context.Context,
-	userID, roomID, eventID, receiptType string, timestamp spec.Timestamp,
+	userID, frameID, eventID, receiptType string, timestamp spec.Timestamp,
 ) error {
 	m := &nats.Msg{
 		Subject: p.TopicReceiptEvent,
 		Header:  nats.Header{},
 	}
 	m.Header.Set(jetstream.UserID, userID)
-	m.Header.Set(jetstream.RoomID, roomID)
+	m.Header.Set(jetstream.FrameID, frameID)
 	m.Header.Set(jetstream.EventID, eventID)
 	m.Header.Set("type", receiptType)
 	m.Header.Set("timestamp", fmt.Sprintf("%d", timestamp))
@@ -116,14 +116,14 @@ func (p *SyncAPIProducer) SendToDevice(
 }
 
 func (p *SyncAPIProducer) SendTyping(
-	ctx context.Context, userID, roomID string, typing bool, timeoutMS int64,
+	ctx context.Context, userID, frameID string, typing bool, timeoutMS int64,
 ) error {
 	m := &nats.Msg{
 		Subject: p.TopicTypingEvent,
 		Header:  nats.Header{},
 	}
 	m.Header.Set(jetstream.UserID, userID)
-	m.Header.Set(jetstream.RoomID, roomID)
+	m.Header.Set(jetstream.FrameID, frameID)
 	m.Header.Set("typing", strconv.FormatBool(typing))
 	m.Header.Set("timeout_ms", strconv.Itoa(int(timeoutMS)))
 

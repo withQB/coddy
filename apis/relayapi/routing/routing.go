@@ -77,7 +77,7 @@ func Setup(
 	)).Methods(http.MethodGet, http.MethodOptions)
 }
 
-// MakeRelayAPI makes an http.Handler that checks matrix relay authentication.
+// MakeRelayAPI makes an http.Handler that checks coddy relay authentication.
 func MakeRelayAPI(
 	metricsName string, serverName spec.ServerName,
 	isLocalServerName func(spec.ServerName) bool,
@@ -108,7 +108,7 @@ func MakeRelayAPI(
 		}()
 		vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 		if err != nil {
-			return xutil.MatrixErrorResponse(400, string(spec.ErrorUnrecognized), "badly encoded query params")
+			return xutil.CoddyErrorResponse(400, string(spec.ErrorUnrecognized), "badly encoded query params")
 		}
 
 		jsonRes := f(req, fedReq, vars)

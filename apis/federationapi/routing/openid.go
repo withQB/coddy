@@ -27,7 +27,7 @@ type openIDUserInfoResponse struct {
 	Sub string `json:"sub"`
 }
 
-// GetOpenIDUserInfo implements GET /_matrix/federation/v1/openid/userinfo
+// GetOpenIDUserInfo implements GET /_coddy/federation/v1/openid/userinfo
 func GetOpenIDUserInfo(
 	httpReq *http.Request,
 	userAPI userapi.FederationUserAPI,

@@ -1,37 +1,37 @@
 package caching
 
 import (
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/types"
 )
 
-type RoomServerCaches interface {
-	RoomServerNIDsCache
-	RoomVersionCache
-	RoomServerEventsCache
-	RoomHierarchyCache
+type DataFrameCaches interface {
+	DataFrameNIDsCache
+	FrameVersionCache
+	DataFrameEventsCache
+	FrameHierarchyCache
 	EventStateKeyCache
 	EventTypeCache
 }
 
-// RoomServerNIDsCache contains the subset of functions needed for
-// a roomserver NID cache.
-type RoomServerNIDsCache interface {
-	GetRoomServerRoomID(roomNID types.RoomNID) (string, bool)
-	// StoreRoomServerRoomID stores roomNID -> roomID and roomID -> roomNID
-	StoreRoomServerRoomID(roomNID types.RoomNID, roomID string)
-	GetRoomServerRoomNID(roomID string) (types.RoomNID, bool)
+// DataFrameNIDsCache contains the subset of functions needed for
+// a dataframe NID cache.
+type DataFrameNIDsCache interface {
+	GetDataFrameFrameID(frameNID types.FrameNID) (string, bool)
+	// StoreDataFrameFrameID stores frameNID -> frameID and frameID -> frameNID
+	StoreDataFrameFrameID(frameNID types.FrameNID, frameID string)
+	GetDataFrameFrameNID(frameID string) (types.FrameNID, bool)
 }
 
-func (c Caches) GetRoomServerRoomID(roomNID types.RoomNID) (string, bool) {
-	return c.RoomServerRoomIDs.Get(roomNID)
+func (c Caches) GetDataFrameFrameID(frameNID types.FrameNID) (string, bool) {
+	return c.DataFrameFrameIDs.Get(frameNID)
 }
 
-// StoreRoomServerRoomID stores roomNID -> roomID and roomID -> roomNID
-func (c Caches) StoreRoomServerRoomID(roomNID types.RoomNID, roomID string) {
-	c.RoomServerRoomNIDs.Set(roomID, roomNID)
-	c.RoomServerRoomIDs.Set(roomNID, roomID)
+// StoreDataFrameFrameID stores frameNID -> frameID and frameID -> frameNID
+func (c Caches) StoreDataFrameFrameID(frameNID types.FrameNID, frameID string) {
+	c.DataFrameFrameNIDs.Set(frameID, frameNID)
+	c.DataFrameFrameIDs.Set(frameNID, frameID)
 }
 
-func (c Caches) GetRoomServerRoomNID(roomID string) (types.RoomNID, bool) {
-	return c.RoomServerRoomNIDs.Get(roomID)
+func (c Caches) GetDataFrameFrameNID(frameID string) (types.FrameNID, bool) {
+	return c.DataFrameFrameNIDs.Get(frameID)
 }

@@ -2,16 +2,16 @@ package pushrules
 
 const (
 	MRuleCall                  = ".m.rule.call"
-	MRuleEncryptedRoomOneToOne = ".m.rule.encrypted_room_one_to_one"
-	MRuleRoomOneToOne          = ".m.rule.room_one_to_one"
+	MRuleEncryptedFrameOneToOne = ".m.rule.encrypted_frame_one_to_one"
+	MRuleFrameOneToOne          = ".m.rule.frame_one_to_one"
 	MRuleMessage               = ".m.rule.message"
 	MRuleEncrypted             = ".m.rule.encrypted"
 )
 
 var defaultUnderrideRules = []*Rule{
 	&mRuleCallDefinition,
-	&mRuleRoomOneToOneDefinition,
-	&mRuleEncryptedRoomOneToOneDefinition,
+	&mRuleFrameOneToOneDefinition,
+	&mRuleEncryptedFrameOneToOneDefinition,
 	&mRuleMessageDefinition,
 	&mRuleEncryptedDefinition,
 }
@@ -37,19 +37,19 @@ var (
 			},
 		},
 	}
-	mRuleEncryptedRoomOneToOneDefinition = Rule{
-		RuleID:  MRuleEncryptedRoomOneToOne,
+	mRuleEncryptedFrameOneToOneDefinition = Rule{
+		RuleID:  MRuleEncryptedFrameOneToOne,
 		Default: true,
 		Enabled: true,
 		Conditions: []*Condition{
 			{
-				Kind: RoomMemberCountCondition,
+				Kind: FrameMemberCountCondition,
 				Is:   "2",
 			},
 			{
 				Kind:    EventMatchCondition,
 				Key:     "type",
-				Pattern: pointer("m.room.encrypted"),
+				Pattern: pointer("m.frame.encrypted"),
 			},
 		},
 		Actions: []*Action{
@@ -61,19 +61,19 @@ var (
 			},
 		},
 	}
-	mRuleRoomOneToOneDefinition = Rule{
-		RuleID:  MRuleRoomOneToOne,
+	mRuleFrameOneToOneDefinition = Rule{
+		RuleID:  MRuleFrameOneToOne,
 		Default: true,
 		Enabled: true,
 		Conditions: []*Condition{
 			{
-				Kind: RoomMemberCountCondition,
+				Kind: FrameMemberCountCondition,
 				Is:   "2",
 			},
 			{
 				Kind:    EventMatchCondition,
 				Key:     "type",
-				Pattern: pointer("m.room.message"),
+				Pattern: pointer("m.frame.message"),
 			},
 		},
 		Actions: []*Action{
@@ -93,7 +93,7 @@ var (
 			{
 				Kind:    EventMatchCondition,
 				Key:     "type",
-				Pattern: pointer("m.room.message"),
+				Pattern: pointer("m.frame.message"),
 			},
 		},
 		Actions: []*Action{
@@ -108,7 +108,7 @@ var (
 			{
 				Kind:    EventMatchCondition,
 				Key:     "type",
-				Pattern: pointer("m.room.encrypted"),
+				Pattern: pointer("m.frame.encrypted"),
 			},
 		},
 		Actions: []*Action{

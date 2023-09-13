@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/withqb/coddy/apis/userapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
-	roomserverVersion "github.com/withqb/coddy/servers/roomserver/version"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
+	dataframeVersion "github.com/withqb/coddy/servers/dataframe/version"
 	appserviceAPI "github.com/withqb/coddy/services/appservice/api"
 	"github.com/withqb/xtools/spec"
 
@@ -21,8 +21,7 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
-type createRoomRequest struct {
+type createFrameRequest struct {
 	Invite                    []string                `json:"invite"`
 	Name                      string                  `json:"name"`
 	Visibility                string                  `json:"visibility"`
@@ -30,20 +29,20 @@ type createRoomRequest struct {
 	Preset                    string                  `json:"preset"`
 	CreationContent           json.RawMessage         `json:"creation_content"`
 	InitialState              []xtools.FledglingEvent `json:"initial_state"`
-	RoomAliasName             string                  `json:"room_alias_name"`
-	RoomVersion               xtools.RoomVersion      `json:"room_version"`
+	FrameAliasName             string                  `json:"frame_alias_name"`
+	FrameVersion               xtools.FrameVersion      `json:"frame_version"`
 	PowerLevelContentOverride json.RawMessage         `json:"power_level_content_override"`
 	IsDirect                  bool                    `json:"is_direct"`
 }
 
-func (r createRoomRequest) Validate() *xutil.JSONResponse {
+func (r createFrameRequest) Validate() *xutil.JSONResponse {
 	whitespace := "\t\n\x0b\x0c\r " // https://docs.python.org/2/library/string.html#string.whitespace
-	// https://github.com/withqb/synapse/blob/v0.19.2/synapse/handlers/room.py#L81
+	// https://github.com/withqb/synapse/blob/v0.19.2/synapse/handlers/frame.py#L81
 	// Synapse doesn't check for ':' but we will else it will break parsers badly which split things into 2 segments.
-	if strings.ContainsAny(r.RoomAliasName, whitespace+":") {
+	if strings.ContainsAny(r.FrameAliasName, whitespace+":") {
 		return &xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON("room_alias_name cannot contain whitespace or ':'"),
+			JSON: spec.BadJSON("frame_alias_name cannot contain whitespace or ':'"),
 		}
 	}
 	for _, userID := range r.Invite {
@@ -87,20 +86,19 @@ func (r createRoomRequest) Validate() *xutil.JSONResponse {
 	return nil
 }
 
-// https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-createroom
-type createRoomResponse struct {
-	RoomID    string `json:"room_id"`
-	RoomAlias string `json:"room_alias,omitempty"` // in synapse not spec
+type createFrameResponse struct {
+	FrameID    string `json:"frame_id"`
+	FrameAlias string `json:"frame_alias,omitempty"` // in synapse not spec
 }
 
-// CreateRoom implements /createRoom
-func CreateRoom(
+// CreateFrame implements /createFrame
+func CreateFrame(
 	req *http.Request, device *api.Device,
 	cfg *config.ClientAPI,
-	profileAPI api.ClientUserAPI, rsAPI roomserverAPI.ClientRoomserverAPI,
+	profileAPI api.ClientUserAPI, rsAPI dataframeAPI.ClientDataframeAPI,
 	asAPI appserviceAPI.AppServiceInternalAPI,
 ) xutil.JSONResponse {
-	var createRequest createRoomRequest
+	var createRequest createFrameRequest
 	resErr := httputil.UnmarshalJSONRequest(req, &createRequest)
 	if resErr != nil {
 		return *resErr
@@ -115,15 +113,15 @@ func CreateRoom(
 			JSON: spec.InvalidParam(err.Error()),
 		}
 	}
-	return createRoom(req.Context(), createRequest, device, cfg, profileAPI, rsAPI, asAPI, evTime)
+	return createFrame(req.Context(), createRequest, device, cfg, profileAPI, rsAPI, asAPI, evTime)
 }
 
-// createRoom implements /createRoom
-func createRoom(
+// createFrame implements /createFrame
+func createFrame(
 	ctx context.Context,
-	createRequest createRoomRequest, device *api.Device,
+	createRequest createFrameRequest, device *api.Device,
 	cfg *config.ClientAPI,
-	profileAPI api.ClientUserAPI, rsAPI roomserverAPI.ClientRoomserverAPI,
+	profileAPI api.ClientUserAPI, rsAPI dataframeAPI.ClientDataframeAPI,
 	asAPI appserviceAPI.AppServiceInternalAPI,
 	evTime time.Time,
 ) xutil.JSONResponse {
@@ -144,37 +142,37 @@ func createRoom(
 
 	logger := xutil.GetLogger(ctx)
 
-	// TODO: Check room ID doesn't clash with an existing one, and we
+	// TODO: Check frame ID doesn't clash with an existing one, and we
 	//       probably shouldn't be using pseudo-random strings, maybe GUIDs?
-	roomID, err := spec.NewRoomID(fmt.Sprintf("!%s:%s", xutil.RandomString(16), userID.Domain()))
+	frameID, err := spec.NewFrameID(fmt.Sprintf("!%s:%s", xutil.RandomString(16), userID.Domain()))
 	if err != nil {
-		xutil.GetLogger(ctx).WithError(err).Error("invalid roomID")
+		xutil.GetLogger(ctx).WithError(err).Error("invalid frameID")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
 	}
 
-	// Clobber keys: creator, room_version
+	// Clobber keys: creator, frame_version
 
-	roomVersion := rsAPI.DefaultRoomVersion()
-	if createRequest.RoomVersion != "" {
-		candidateVersion := xtools.RoomVersion(createRequest.RoomVersion)
-		_, roomVersionError := roomserverVersion.SupportedRoomVersion(candidateVersion)
-		if roomVersionError != nil {
+	frameVersion := rsAPI.DefaultFrameVersion()
+	if createRequest.FrameVersion != "" {
+		candidateVersion := xtools.FrameVersion(createRequest.FrameVersion)
+		_, frameVersionError := dataframeVersion.SupportedFrameVersion(candidateVersion)
+		if frameVersionError != nil {
 			return xutil.JSONResponse{
 				Code: http.StatusBadRequest,
-				JSON: spec.UnsupportedRoomVersion(roomVersionError.Error()),
+				JSON: spec.UnsupportedFrameVersion(frameVersionError.Error()),
 			}
 		}
-		roomVersion = candidateVersion
+		frameVersion = candidateVersion
 	}
 
 	logger.WithFields(log.Fields{
 		"userID":      userID.String(),
-		"roomID":      roomID.String(),
-		"roomVersion": roomVersion,
-	}).Info("Creating new room")
+		"frameID":      frameID.String(),
+		"frameVersion": frameVersion,
+	}).Info("Creating new frame")
 
 	profile, err := appserviceAPI.RetrieveUserProfile(ctx, userID.String(), asAPI, profileAPI)
 	if err != nil {
@@ -191,16 +189,16 @@ func createRoom(
 	keyID := cfg.Matrix.KeyID
 	privateKey := cfg.Matrix.PrivateKey
 
-	req := roomserverAPI.PerformCreateRoomRequest{
+	req := dataframeAPI.PerformCreateFrameRequest{
 		InvitedUsers:              createRequest.Invite,
-		RoomName:                  createRequest.Name,
+		FrameName:                  createRequest.Name,
 		Visibility:                createRequest.Visibility,
 		Topic:                     createRequest.Topic,
 		StatePreset:               createRequest.Preset,
 		CreationContent:           createRequest.CreationContent,
 		InitialState:              createRequest.InitialState,
-		RoomAliasName:             createRequest.RoomAliasName,
-		RoomVersion:               roomVersion,
+		FrameAliasName:             createRequest.FrameAliasName,
+		FrameVersion:               frameVersion,
 		PowerLevelContentOverride: createRequest.PowerLevelContentOverride,
 		IsDirect:                  createRequest.IsDirect,
 
@@ -211,14 +209,14 @@ func createRoom(
 		EventTime:       evTime,
 	}
 
-	roomAlias, createRes := rsAPI.PerformCreateRoom(ctx, *userID, *roomID, &req)
+	frameAlias, createRes := rsAPI.PerformCreateFrame(ctx, *userID, *frameID, &req)
 	if createRes != nil {
 		return *createRes
 	}
 
-	response := createRoomResponse{
-		RoomID:    roomID.String(),
-		RoomAlias: roomAlias,
+	response := createFrameResponse{
+		FrameID:    frameID.String(),
+		FrameAlias: frameAlias,
 	}
 
 	return xutil.JSONResponse{

@@ -20,7 +20,7 @@ import (
 	"github.com/withqb/coddy/apis/federationapi/storage"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/caching"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/jetstream"
 
 	"github.com/withqb/xtools"
@@ -37,7 +37,7 @@ func AddPublicRoutes(
 	userAPI userapi.FederationUserAPI,
 	federation fclient.FederationClient,
 	keyRing xtools.JSONVerifier,
-	rsAPI roomserverAPI.FederationRoomserverAPI,
+	rsAPI dataframeAPI.FederationDataframeAPI,
 	fedAPI federationAPI.FederationInternalAPI,
 	enableMetrics bool,
 ) {
@@ -84,7 +84,7 @@ func NewInternalAPI(
 	cm *sqlutil.Connections,
 	natsInstance *jetstream.NATSInstance,
 	federation fclient.FederationClient,
-	rsAPI roomserverAPI.FederationRoomserverAPI,
+	rsAPI dataframeAPI.FederationDataframeAPI,
 	caches *caching.Caches,
 	keyRing *xtools.KeyRing,
 	resetBlacklist bool,
@@ -116,12 +116,12 @@ func NewInternalAPI(
 		signingInfo,
 	)
 
-	rsConsumer := consumers.NewOutputRoomEventConsumer(
+	rsConsumer := consumers.NewOutputFrameEventConsumer(
 		processContext, cfg, js, nats, queues,
 		federationDB, rsAPI,
 	)
 	if err = rsConsumer.Start(); err != nil {
-		logrus.WithError(err).Panic("failed to start room server consumer")
+		logrus.WithError(err).Panic("failed to start frame server consumer")
 	}
 	tsConsumer := consumers.NewOutputSendToDeviceConsumer(
 		processContext, cfg, js, queues, federationDB,

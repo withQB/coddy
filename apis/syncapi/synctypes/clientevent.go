@@ -37,7 +37,7 @@ const (
 	// FormatAll will include all client event keys
 	FormatAll ClientEventFormat = iota
 	// FormatSync will include only the event keys required by the /sync API. Notably, this
-	// means the 'room_id' will be missing from the events.
+	// means the 'frame_id' will be missing from the events.
 	FormatSync
 	// FormatSyncFederation will include all event keys normally included in federated events.
 	// This allows clients to request federated formatted events via the /sync API.
@@ -59,9 +59,9 @@ type ClientEvent struct {
 	Content        spec.RawJSON   `json:"content"`
 	EventID        string         `json:"event_id,omitempty"`         // EventID is omitted on receipt events
 	OriginServerTS spec.Timestamp `json:"origin_server_ts,omitempty"` // OriginServerTS is omitted on receipt events
-	RoomID         string         `json:"room_id,omitempty"`          // RoomID is omitted on /sync responses
+	FrameID         string         `json:"frame_id,omitempty"`          // FrameID is omitted on /sync responses
 	Sender         string         `json:"sender,omitempty"`           // Sender is omitted on receipt events
-	SenderKey      spec.SenderID  `json:"sender_key,omitempty"`       // The SenderKey for events in pseudo ID rooms
+	SenderKey      spec.SenderID  `json:"sender_key,omitempty"`       // The SenderKey for events in pseudo ID frames
 	StateKey       *string        `json:"state_key,omitempty"`
 	Type           string         `json:"type"`
 	Unsigned       spec.RawJSON   `json:"unsigned,omitempty"`
@@ -84,18 +84,18 @@ func ToClientEvents(serverEvs []xtools.PDU, format ClientEventFormat, userIDForS
 		}
 
 		sender := spec.UserID{}
-		validRoomID, err := spec.NewRoomID(se.RoomID())
+		validFrameID, err := spec.NewFrameID(se.FrameID())
 		if err != nil {
 			continue
 		}
-		userID, err := userIDForSender(*validRoomID, se.SenderID())
+		userID, err := userIDForSender(*validFrameID, se.SenderID())
 		if err == nil && userID != nil {
 			sender = *userID
 		}
 
 		sk := se.StateKey()
 		if sk != nil && *sk != "" {
-			skUserID, err := userIDForSender(*validRoomID, spec.SenderID(*sk))
+			skUserID, err := userIDForSender(*validFrameID, spec.SenderID(*sk))
 			if err == nil && skUserID != nil {
 				skString := skUserID.String()
 				sk = &skString
@@ -105,7 +105,7 @@ func ToClientEvents(serverEvs []xtools.PDU, format ClientEventFormat, userIDForS
 		unsigned := se.Unsigned()
 		var prev PrevEventRef
 		if err := json.Unmarshal(se.Unsigned(), &prev); err == nil && prev.PrevSenderID != "" {
-			prevUserID, err := userIDForSender(*validRoomID, spec.SenderID(prev.PrevSenderID))
+			prevUserID, err := userIDForSender(*validFrameID, spec.SenderID(prev.PrevSenderID))
 			if err == nil && userID != nil {
 				prev.PrevSenderID = prevUserID.String()
 			} else {
@@ -142,10 +142,10 @@ func ToClientEvent(se xtools.PDU, format ClientEventFormat, sender string, state
 
 	switch format {
 	case FormatAll:
-		ce.RoomID = se.RoomID()
+		ce.FrameID = se.FrameID()
 	case FormatSync:
 	case FormatSyncFederation:
-		ce.RoomID = se.RoomID()
+		ce.FrameID = se.FrameID()
 		ce.AuthEvents = se.AuthEventIDs()
 		ce.PrevEvents = se.PrevEventIDs()
 		ce.Depth = se.Depth()
@@ -153,7 +153,7 @@ func ToClientEvent(se xtools.PDU, format ClientEventFormat, sender string, state
 	}
 
 	if format != FormatSyncFederation {
-		if se.Version() == xtools.RoomVersionPseudoIDs {
+		if se.Version() == xtools.FrameVersionPseudoIDs {
 			ce.SenderKey = se.SenderID()
 		}
 	}
@@ -164,18 +164,18 @@ func ToClientEvent(se xtools.PDU, format ClientEventFormat, sender string, state
 // It provides default logic for event.SenderID & event.StateKey -> userID conversions.
 func ToClientEventDefault(userIDQuery spec.UserIDForSender, event xtools.PDU) ClientEvent {
 	sender := spec.UserID{}
-	validRoomID, err := spec.NewRoomID(event.RoomID())
+	validFrameID, err := spec.NewFrameID(event.FrameID())
 	if err != nil {
 		return ClientEvent{}
 	}
-	userID, err := userIDQuery(*validRoomID, event.SenderID())
+	userID, err := userIDQuery(*validFrameID, event.SenderID())
 	if err == nil && userID != nil {
 		sender = *userID
 	}
 
 	sk := event.StateKey()
 	if sk != nil && *sk != "" {
-		skUserID, err := userIDQuery(*validRoomID, spec.SenderID(*event.StateKey()))
+		skUserID, err := userIDQuery(*validFrameID, spec.SenderID(*event.StateKey()))
 		if err == nil && skUserID != nil {
 			skString := skUserID.String()
 			sk = &skString
@@ -190,14 +190,14 @@ func ToClientEventDefault(userIDQuery spec.UserIDForSender, event xtools.PDU) Cl
 // # This function either returns the state key that should be used, or an error
 //
 // TODO: handle failure cases better (e.g. no sender ID)
-func FromClientStateKey(roomID spec.RoomID, stateKey string, senderIDQuery spec.SenderIDForUser) (*string, error) {
+func FromClientStateKey(frameID spec.FrameID, stateKey string, senderIDQuery spec.SenderIDForUser) (*string, error) {
 	if len(stateKey) >= 1 && stateKey[0] == '@' {
 		parsedStateKey, err := spec.NewUserID(stateKey, true)
 		if err != nil {
 			// If invalid user ID, then there is no associated state event.
 			return nil, fmt.Errorf("Provided state key begins with @ but is not a valid user ID: %s", err.Error())
 		}
-		senderID, err := senderIDQuery(roomID, *parsedStateKey)
+		senderID, err := senderIDQuery(frameID, *parsedStateKey)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to query sender ID: %s", err.Error())
 		}

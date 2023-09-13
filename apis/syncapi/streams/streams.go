@@ -9,7 +9,7 @@ import (
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/caching"
 	"github.com/withqb/coddy/internal/sqlutil"
-	rsapi "github.com/withqb/coddy/servers/roomserver/api"
+	rsapi "github.com/withqb/coddy/servers/dataframe/api"
 )
 
 type Streams struct {
@@ -26,7 +26,7 @@ type Streams struct {
 
 func NewSyncStreamProviders(
 	d storage.Database, userAPI userapi.SyncUserAPI,
-	rsAPI rsapi.SyncRoomserverAPI,
+	rsAPI rsapi.SyncDataframeAPI,
 	eduCache *caching.EDUCache, lazyLoadCache caching.LazyLoadCache, notifier *notifier.Notifier,
 ) *Streams {
 	streams := &Streams{

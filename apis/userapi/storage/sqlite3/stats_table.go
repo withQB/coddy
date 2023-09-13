@@ -38,23 +38,23 @@ CREATE TABLE IF NOT EXISTS userapi_daily_stats (
 	sent_messages BIGINT NOT NULL,
 	e2ee_messages BIGINT NOT NULL,
 	sent_e2ee_messages BIGINT NOT NULL,
-	active_rooms BIGINT NOT NULL,
-	active_e2ee_rooms BIGINT NOT NULL,
+	active_frames BIGINT NOT NULL,
+	active_e2ee_frames BIGINT NOT NULL,
 	CONSTRAINT daily_stats_unique UNIQUE (timestamp, server_name)
 );
 `
 
 const upsertDailyMessagesSQL = `
-	INSERT INTO userapi_daily_stats (timestamp, server_name, messages, sent_messages, e2ee_messages, sent_e2ee_messages, active_rooms, active_e2ee_rooms)
+	INSERT INTO userapi_daily_stats (timestamp, server_name, messages, sent_messages, e2ee_messages, sent_e2ee_messages, active_frames, active_e2ee_frames)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (timestamp, server_name)
 	DO UPDATE SET
 	    messages=messages+excluded.messages, sent_messages=sent_messages+excluded.sent_messages,
 	    e2ee_messages=e2ee_messages+excluded.e2ee_messages, sent_e2ee_messages=sent_e2ee_messages+excluded.sent_e2ee_messages,
-	    active_rooms=MAX($7, active_rooms), active_e2ee_rooms=MAX($8, active_e2ee_rooms)
+	    active_frames=MAX($7, active_frames), active_e2ee_frames=MAX($8, active_e2ee_frames)
 `
 
 const selectDailyMessagesSQL = `
-	SELECT messages, sent_messages, e2ee_messages, sent_e2ee_messages, active_rooms, active_e2ee_rooms
+	SELECT messages, sent_messages, e2ee_messages, sent_e2ee_messages, active_frames, active_e2ee_frames
 	FROM userapi_daily_stats
 	WHERE server_name = $1 AND timestamp = $2;
 `
@@ -481,7 +481,7 @@ func (s *statsStatements) UpdateUserDailyVisits(
 func (s *statsStatements) UpsertDailyStats(
 	ctx context.Context, txn *sql.Tx,
 	serverName spec.ServerName, stats types.MessageStats,
-	activeRooms, activeE2EERooms int64,
+	activeFrames, activeE2EEFrames int64,
 ) error {
 	stmt := sqlutil.TxStmt(txn, s.upsertMessagesStmt)
 	timestamp := time.Now().Truncate(time.Hour * 24)
@@ -489,22 +489,22 @@ func (s *statsStatements) UpsertDailyStats(
 		spec.AsTimestamp(timestamp),
 		serverName,
 		stats.Messages, stats.SentMessages, stats.MessagesE2EE, stats.SentMessagesE2EE,
-		activeRooms, activeE2EERooms,
+		activeFrames, activeE2EEFrames,
 	)
 	return err
 }
 
-func (s *statsStatements) DailyRoomsMessages(
+func (s *statsStatements) DailyFramesMessages(
 	ctx context.Context, txn *sql.Tx,
 	serverName spec.ServerName,
-) (msgStats types.MessageStats, activeRooms, activeE2EERooms int64, err error) {
+) (msgStats types.MessageStats, activeFrames, activeE2EEFrames int64, err error) {
 	stmt := sqlutil.TxStmt(txn, s.selectDailyMessagesStmt)
 	timestamp := time.Now().Truncate(time.Hour * 24)
 
 	err = stmt.QueryRowContext(ctx, serverName, spec.AsTimestamp(timestamp)).
-		Scan(&msgStats.Messages, &msgStats.SentMessages, &msgStats.MessagesE2EE, &msgStats.SentMessagesE2EE, &activeRooms, &activeE2EERooms)
+		Scan(&msgStats.Messages, &msgStats.SentMessages, &msgStats.MessagesE2EE, &msgStats.SentMessagesE2EE, &activeFrames, &activeE2EEFrames)
 	if err != nil && err != sql.ErrNoRows {
 		return msgStats, 0, 0, err
 	}
-	return msgStats, activeRooms, activeE2EERooms, nil
+	return msgStats, activeFrames, activeE2EEFrames, nil
 }

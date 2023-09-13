@@ -25,7 +25,7 @@ import (
 	"github.com/withqb/xtools/spec"
 )
 
-// SendToDevice handles PUT /_matrix/client/r0/sendToDevice/{eventType}/{txnId}
+// SendToDevice handles PUT /_coddy/client/r0/sendToDevice/{eventType}/{txnId}
 // sends the device events to the syncapi & federationsender
 func SendToDevice(
 	req *http.Request, device *userapi.Device,

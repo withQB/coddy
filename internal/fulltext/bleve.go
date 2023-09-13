@@ -43,7 +43,7 @@ type Search struct {
 type Indexer interface {
 	Index(elements ...IndexElement) error
 	Delete(eventID string) error
-	Search(term string, roomIDs, keys []string, limit, from int, orderByStreamPos bool) (*bleve.SearchResult, error)
+	Search(term string, frameIDs, keys []string, limit, from int, orderByStreamPos bool) (*bleve.SearchResult, error)
 	GetHighlights(result *bleve.SearchResult) []string
 	Close() error
 }
@@ -51,7 +51,7 @@ type Indexer interface {
 // IndexElement describes the layout of an element to index
 type IndexElement struct {
 	EventID        string
-	RoomID         string
+	FrameID         string
 	Content        string
 	ContentType    string
 	StreamPosition int64
@@ -60,11 +60,11 @@ type IndexElement struct {
 // SetContentType sets i.ContentType given an identifier
 func (i *IndexElement) SetContentType(v string) {
 	switch v {
-	case "m.room.message":
+	case "m.frame.message":
 		i.ContentType = "content.body"
-	case spec.MRoomName:
+	case spec.MFrameName:
 		i.ContentType = "content.name"
-	case spec.MRoomTopic:
+	case spec.MFrameTopic:
 		i.ContentType = "content.topic"
 	}
 }
@@ -150,8 +150,8 @@ func (f *Search) GetHighlights(result *bleve.SearchResult) []string {
 	return res
 }
 
-// Search searches the index given a search term, roomIDs and keys.
-func (f *Search) Search(term string, roomIDs, keys []string, limit, from int, orderByStreamPos bool) (*bleve.SearchResult, error) {
+// Search searches the index given a search term, frameIDs and keys.
+func (f *Search) Search(term string, frameIDs, keys []string, limit, from int, orderByStreamPos bool) (*bleve.SearchResult, error) {
 	qry := bleve.NewConjunctionQuery()
 	termQuery := bleve.NewBooleanQuery()
 
@@ -163,14 +163,14 @@ func (f *Search) Search(term string, roomIDs, keys []string, limit, from int, or
 	}
 	qry.AddQuery(termQuery)
 
-	roomQuery := bleve.NewBooleanQuery()
-	for _, roomID := range roomIDs {
-		roomSearch := bleve.NewMatchQuery(roomID)
-		roomSearch.SetField("RoomID")
-		roomQuery.AddShould(roomSearch)
+	frameQuery := bleve.NewBooleanQuery()
+	for _, frameID := range frameIDs {
+		frameSearch := bleve.NewMatchQuery(frameID)
+		frameSearch.SetField("FrameID")
+		frameQuery.AddShould(frameSearch)
 	}
-	if len(roomIDs) > 0 {
-		qry.AddQuery(roomQuery)
+	if len(frameIDs) > 0 {
+		qry.AddQuery(frameQuery)
 	}
 	keyQuery := bleve.NewBooleanQuery()
 	for _, key := range keys {
@@ -223,7 +223,7 @@ func getMapping(cfg config.Fulltext) *mapping.IndexMappingImpl {
 	// Index entries as is
 	idFieldMapping := bleve.NewKeywordFieldMapping()
 	eventMapping.AddFieldMappingsAt("ContentType", idFieldMapping)
-	eventMapping.AddFieldMappingsAt("RoomID", idFieldMapping)
+	eventMapping.AddFieldMappingsAt("FrameID", idFieldMapping)
 	eventMapping.AddFieldMappingsAt("EventID", idFieldMapping)
 
 	indexMapping := bleve.NewIndexMapping()

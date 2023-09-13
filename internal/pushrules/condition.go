@@ -17,7 +17,7 @@ type Condition struct {
 	Pattern *string `json:"pattern,omitempty"`
 
 	// Is indicates the condition that must be fulfilled. Required for
-	// RoomMemberCountCondition.
+	// FrameMemberCountCondition.
 	Is string `json:"is,omitempty"`
 }
 
@@ -39,11 +39,11 @@ const (
 	// display name must be found in the content body.
 	ContainsDisplayNameCondition ConditionKind = "contains_display_name"
 
-	// RoomMemberCountCondition matches a simple arithmetic comparison
-	// against the total number of members in a room.
-	RoomMemberCountCondition ConditionKind = "room_member_count"
+	// FrameMemberCountCondition matches a simple arithmetic comparison
+	// against the total number of members in a frame.
+	FrameMemberCountCondition ConditionKind = "frame_member_count"
 
 	// SenderNotificationPermissionCondition compares power level for
-	// the sender in the event's room.
+	// the sender in the event's frame.
 	SenderNotificationPermissionCondition ConditionKind = "sender_notification_permission"
 )

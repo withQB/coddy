@@ -13,7 +13,7 @@ import (
 	"github.com/withqb/coddy/internal/caching"
 
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/jetstream"
 
 	"github.com/withqb/coddy/apis/syncapi/consumers"
@@ -34,7 +34,7 @@ func AddPublicRoutes(
 	cm *sqlutil.Connections,
 	natsInstance *jetstream.NATSInstance,
 	userAPI userapi.SyncUserAPI,
-	rsAPI api.SyncRoomserverAPI,
+	rsAPI api.SyncDataframeAPI,
 	caches caching.LazyLoadCache,
 	enableMetrics bool,
 ) {
@@ -86,12 +86,12 @@ func AddPublicRoutes(
 		logrus.WithError(err).Panicf("failed to start key change consumer")
 	}
 
-	roomConsumer := consumers.NewOutputRoomEventConsumer(
+	frameConsumer := consumers.NewOutputFrameEventConsumer(
 		processContext, &dendriteCfg.SyncAPI, js, syncDB, notifier, streams.PDUStreamProvider,
 		streams.InviteStreamProvider, rsAPI, fts,
 	)
-	if err = roomConsumer.Start(); err != nil {
-		logrus.WithError(err).Panicf("failed to start room server consumer")
+	if err = frameConsumer.Start(); err != nil {
+		logrus.WithError(err).Panicf("failed to start frame server consumer")
 	}
 
 	clientConsumer := consumers.NewOutputClientDataConsumer(

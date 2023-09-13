@@ -11,10 +11,10 @@ import (
 )
 
 const (
-	maxUsernameLength = 254 // http://matrix.org/speculator/spec/HEAD/intro.html#user-identifiers TODO account for domain
+	maxUsernameLength = 254 //TODO account for domain
 
-	minPasswordLength = 8   // http://matrix.org/docs/spec/client_server/r0.2.0.html#password-based
-	maxPasswordLength = 512 // https://github.com/withqb/synapse/blob/v0.20.0/synapse/rest/client/v2_alpha/register.py#L161
+	minPasswordLength = 8   // password-based
+	maxPasswordLength = 512 
 )
 
 var (
@@ -28,7 +28,6 @@ var (
 
 // ValidatePassword returns an error if the password is invalid
 func ValidatePassword(password string) error {
-	// https://github.com/withqb/synapse/blob/v0.20.0/synapse/rest/client/v2_alpha/register.py#L161
 	if len(password) > maxPasswordLength {
 		return ErrPasswordTooLong
 	} else if len(password) > 0 && len(password) < minPasswordLength {

@@ -17,8 +17,8 @@ package routing
 import (
 	"net/http"
 
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
@@ -31,12 +31,12 @@ func Peek(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
 	cfg *config.FederationAPI,
-	rsAPI api.FederationRoomserverAPI,
-	roomID, peekID string,
-	remoteVersions []xtools.RoomVersion,
+	rsAPI api.FederationDataframeAPI,
+	frameID, peekID string,
+	remoteVersions []xtools.FrameVersion,
 ) xutil.JSONResponse {
 	// TODO: check if we're just refreshing an existing peek by querying the federationapi
-	roomVersion, err := rsAPI.QueryRoomVersionForRoom(httpReq.Context(), roomID)
+	frameVersion, err := rsAPI.QueryFrameVersionForFrame(httpReq.Context(), frameID)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
@@ -44,21 +44,21 @@ func Peek(
 		}
 	}
 
-	// Check that the room that the peeking server is trying to peek is actually
-	// one of the room versions that they listed in their supported ?ver= in
+	// Check that the frame that the peeking server is trying to peek is actually
+	// one of the frame versions that they listed in their supported ?ver= in
 	// the peek URL.
 	remoteSupportsVersion := false
 	for _, v := range remoteVersions {
-		if v == roomVersion {
+		if v == frameVersion {
 			remoteSupportsVersion = true
 			break
 		}
 	}
-	// If it isn't, stop trying to peek the room.
+	// If it isn't, stop trying to peek the frame.
 	if !remoteSupportsVersion {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.IncompatibleRoomVersion(string(roomVersion)),
+			JSON: spec.IncompatibleFrameVersion(string(frameVersion)),
 		}
 	}
 
@@ -71,7 +71,7 @@ func Peek(
 	err = rsAPI.PerformInboundPeek(
 		httpReq.Context(),
 		&api.PerformInboundPeekRequest{
-			RoomID:          roomID,
+			FrameID:          frameID,
 			PeekID:          peekID,
 			ServerName:      request.Origin(),
 			RenewalInterval: renewalInterval,
@@ -83,14 +83,14 @@ func Peek(
 		return resErr
 	}
 
-	if !response.RoomExists {
+	if !response.FrameExists {
 		return xutil.JSONResponse{Code: http.StatusNotFound, JSON: nil}
 	}
 
 	respPeek := fclient.RespPeek{
 		StateEvents:     types.NewEventJSONsFromHeaderedEvents(response.StateEvents),
 		AuthEvents:      types.NewEventJSONsFromHeaderedEvents(response.AuthChainEvents),
-		RoomVersion:     response.RoomVersion,
+		FrameVersion:     response.FrameVersion,
 		LatestEvent:     response.LatestEvent.PDU,
 		RenewalInterval: renewalInterval,
 	}

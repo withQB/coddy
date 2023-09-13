@@ -16,8 +16,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
@@ -31,12 +31,12 @@ type getMissingEventRequest struct {
 }
 
 // GetMissingEvents returns missing events between earliest_events & latest_events.
-// Events are fetched from room DAG starting from latest_events until we reach earliest_events or the limit.
+// Events are fetched from frame DAG starting from latest_events until we reach earliest_events or the limit.
 func GetMissingEvents(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
-	rsAPI api.FederationRoomserverAPI,
-	roomID string,
+	rsAPI api.FederationDataframeAPI,
+	frameID string,
 ) xutil.JSONResponse {
 	var gme getMissingEventRequest
 	if err := json.Unmarshal(request.Content(), &gme); err != nil {
@@ -46,9 +46,9 @@ func GetMissingEvents(
 		}
 	}
 
-	// If we don't think we belong to this room then don't waste the effort
+	// If we don't think we belong to this frame then don't waste the effort
 	// responding to expensive requests for it.
-	if err := ErrorIfLocalServerNotInRoom(httpReq.Context(), rsAPI, roomID); err != nil {
+	if err := ErrorIfLocalServerNotInFrame(httpReq.Context(), rsAPI, frameID); err != nil {
 		return *err
 	}
 
@@ -69,7 +69,7 @@ func GetMissingEvents(
 		}
 	}
 
-	eventsResponse.Events = filterEvents(eventsResponse.Events, roomID)
+	eventsResponse.Events = filterEvents(eventsResponse.Events, frameID)
 
 	resp := fclient.RespMissingEvents{
 		Events: types.NewEventJSONsFromHeaderedEvents(eventsResponse.Events),
@@ -81,13 +81,13 @@ func GetMissingEvents(
 	}
 }
 
-// filterEvents returns only those events with matching roomID
+// filterEvents returns only those events with matching frameID
 func filterEvents(
-	events []*types.HeaderedEvent, roomID string,
+	events []*types.HeaderedEvent, frameID string,
 ) []*types.HeaderedEvent {
 	ref := events[:0]
 	for _, ev := range events {
-		if ev.RoomID() == roomID {
+		if ev.FrameID() == frameID {
 			ref = append(ref, ev)
 		}
 	}

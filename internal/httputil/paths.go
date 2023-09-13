@@ -1,12 +1,12 @@
 package httputil
 
 const (
-	PublicClientPathPrefix     = "/_matrix/client/"
-	PublicFederationPathPrefix = "/_matrix/federation/"
-	PublicKeyPathPrefix        = "/_matrix/key/"
-	PublicMediaPathPrefix      = "/_matrix/media/"
-	PublicStaticPath           = "/_matrix/static/"
-	PublicWellKnownPrefix      = "/.well-known/matrix/"
+	PublicClientPathPrefix     = "/_coddy/client/"
+	PublicFederationPathPrefix = "/_coddy/federation/"
+	PublicKeyPathPrefix        = "/_coddy/key/"
+	PublicMediaPathPrefix      = "/_coddy/media/"
+	PublicStaticPath           = "/_coddy/static/"
+	PublicWellKnownPrefix      = "/.well-known/coddy/"
 	DendriteAdminPathPrefix    = "/_dendrite/"
 	SynapseAdminPathPrefix     = "/_synapse/"
 )

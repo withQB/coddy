@@ -26,14 +26,14 @@ import (
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 )
 
-// AppServiceInternalAPI is used to query user and room alias data from application
+// AppServiceInternalAPI is used to query user and frame alias data from application
 // services
 type AppServiceInternalAPI interface {
-	// Check whether a room alias exists within any application service namespaces
-	RoomAliasExists(
+	// Check whether a frame alias exists within any application service namespaces
+	FrameAliasExists(
 		ctx context.Context,
-		req *RoomAliasExistsRequest,
-		resp *RoomAliasExistsResponse,
+		req *FrameAliasExistsRequest,
+		resp *FrameAliasExistsResponse,
 	) error
 	// Check whether a user ID exists within any application service namespaces
 	UserIDExists(
@@ -47,16 +47,16 @@ type AppServiceInternalAPI interface {
 	Protocols(ctx context.Context, req *ProtocolRequest, resp *ProtocolResponse) error
 }
 
-// RoomAliasExistsRequest is a request to an application service
-// about whether a room alias exists
-type RoomAliasExistsRequest struct {
+// FrameAliasExistsRequest is a request to an application service
+// about whether a frame alias exists
+type FrameAliasExistsRequest struct {
 	// Alias we want to lookup
 	Alias string `json:"alias"`
 }
 
-// RoomAliasExistsResponse is a response from an application service
-// about whether a room alias exists
-type RoomAliasExistsResponse struct {
+// FrameAliasExistsResponse is a response from an application service
+// about whether a frame alias exists
+type FrameAliasExistsResponse struct {
 	AliasExists bool `json:"exists"`
 }
 
@@ -82,9 +82,9 @@ type UserIDExistsResponse struct {
 }
 
 const (
-	ASProtocolPath = "/_matrix/app/unstable/thirdparty/protocol/"
-	ASUserPath     = "/_matrix/app/unstable/thirdparty/user"
-	ASLocationPath = "/_matrix/app/unstable/thirdparty/location"
+	ASProtocolPath = "/_coddy/app/unstable/thirdparty/protocol/"
+	ASUserPath     = "/_coddy/app/unstable/thirdparty/user"
+	ASLocationPath = "/_coddy/app/unstable/thirdparty/location"
 )
 
 type ProtocolRequest struct {

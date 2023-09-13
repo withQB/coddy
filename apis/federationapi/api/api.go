@@ -11,7 +11,7 @@ import (
 	"github.com/withqb/xtools/spec"
 
 	"github.com/withqb/coddy/apis/federationapi/types"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 )
 
 // FederationInternalAPI is used to query information from the federation sender.
@@ -21,14 +21,14 @@ type FederationInternalAPI interface {
 	KeyserverFederationAPI
 	xtools.KeyDatabase
 	ClientFederationAPI
-	RoomserverFederationAPI
+	DataframeFederationAPI
 	P2PFederationAPI
 
 	QueryServerKeys(ctx context.Context, request *QueryServerKeysRequest, response *QueryServerKeysResponse) error
 	LookupServerKeys(ctx context.Context, s spec.ServerName, keyRequests map[xtools.PublicKeyLookupRequest]spec.Timestamp) ([]xtools.ServerKeys, error)
-	MSC2836EventRelationships(ctx context.Context, origin, dst spec.ServerName, r fclient.MSC2836EventRelationshipsRequest, roomVersion xtools.RoomVersion) (res fclient.MSC2836EventRelationshipsResponse, err error)
+	MSC2836EventRelationships(ctx context.Context, origin, dst spec.ServerName, r fclient.MSC2836EventRelationshipsRequest, frameVersion xtools.FrameVersion) (res fclient.MSC2836EventRelationshipsResponse, err error)
 
-	// Broadcasts an EDU to all servers in rooms we are joined to. Used in the yggdrasil demos.
+	// Broadcasts an EDU to all servers in frames we are joined to. Used in the yggdrasil demos.
 	PerformBroadcastEDU(
 		ctx context.Context,
 		request *PerformBroadcastEDURequest,
@@ -42,19 +42,19 @@ type FederationInternalAPI interface {
 }
 
 type ClientFederationAPI interface {
-	// Query the server names of the joined hosts in a room.
-	// Unlike QueryJoinedHostsInRoom, this function returns a de-duplicated slice
+	// Query the server names of the joined hosts in a frame.
+	// Unlike QueryJoinedHostsInFrame, this function returns a de-duplicated slice
 	// containing only the server names (without information for membership events).
-	// The response will include this server if they are joined to the room.
-	QueryJoinedHostServerNamesInRoom(ctx context.Context, request *QueryJoinedHostServerNamesInRoomRequest, response *QueryJoinedHostServerNamesInRoomResponse) error
+	// The response will include this server if they are joined to the frame.
+	QueryJoinedHostServerNamesInFrame(ctx context.Context, request *QueryJoinedHostServerNamesInFrameRequest, response *QueryJoinedHostServerNamesInFrameResponse) error
 }
 
-type RoomserverFederationAPI interface {
+type DataframeFederationAPI interface {
 	xtools.BackfillClient
 	xtools.FederatedStateClient
 	KeyRing() *xtools.KeyRing
 
-	// PerformDirectoryLookup looks up a remote room ID from a room alias.
+	// PerformDirectoryLookup looks up a remote frame ID from a frame alias.
 	PerformDirectoryLookup(ctx context.Context, request *PerformDirectoryLookupRequest, response *PerformDirectoryLookupResponse) error
 	// Handle an instruction to make_join & send_join with a remote server.
 	PerformJoin(ctx context.Context, request *PerformJoinRequest, response *PerformJoinResponse)
@@ -63,19 +63,19 @@ type RoomserverFederationAPI interface {
 	// Handle sending an invite to a remote server.
 	SendInvite(ctx context.Context, event xtools.PDU, strippedState []xtools.InviteStrippedState) (xtools.PDU, error)
 	// Handle sending an invite to a remote server.
-	SendInviteV3(ctx context.Context, event xtools.ProtoEvent, invitee spec.UserID, version xtools.RoomVersion, strippedState []xtools.InviteStrippedState) (xtools.PDU, error)
-	// Handle an instruction to peek a room on a remote server.
+	SendInviteV3(ctx context.Context, event xtools.ProtoEvent, invitee spec.UserID, version xtools.FrameVersion, strippedState []xtools.InviteStrippedState) (xtools.PDU, error)
+	// Handle an instruction to peek a frame on a remote server.
 	PerformOutboundPeek(ctx context.Context, request *PerformOutboundPeekRequest, response *PerformOutboundPeekResponse) error
-	// Query the server names of the joined hosts in a room.
-	// Unlike QueryJoinedHostsInRoom, this function returns a de-duplicated slice
+	// Query the server names of the joined hosts in a frame.
+	// Unlike QueryJoinedHostsInFrame, this function returns a de-duplicated slice
 	// containing only the server names (without information for membership events).
-	// The response will include this server if they are joined to the room.
-	QueryJoinedHostServerNamesInRoom(ctx context.Context, request *QueryJoinedHostServerNamesInRoomRequest, response *QueryJoinedHostServerNamesInRoomResponse) error
-	GetEventAuth(ctx context.Context, origin, s spec.ServerName, roomVersion xtools.RoomVersion, roomID, eventID string) (res fclient.RespEventAuth, err error)
+	// The response will include this server if they are joined to the frame.
+	QueryJoinedHostServerNamesInFrame(ctx context.Context, request *QueryJoinedHostServerNamesInFrameRequest, response *QueryJoinedHostServerNamesInFrameResponse) error
+	GetEventAuth(ctx context.Context, origin, s spec.ServerName, frameVersion xtools.FrameVersion, frameID, eventID string) (res fclient.RespEventAuth, err error)
 	GetEvent(ctx context.Context, origin, s spec.ServerName, eventID string) (res xtools.Transaction, err error)
-	LookupMissingEvents(ctx context.Context, origin, s spec.ServerName, roomID string, missing fclient.MissingEvents, roomVersion xtools.RoomVersion) (res fclient.RespMissingEvents, err error)
+	LookupMissingEvents(ctx context.Context, origin, s spec.ServerName, frameID string, missing fclient.MissingEvents, frameVersion xtools.FrameVersion) (res fclient.RespMissingEvents, err error)
 
-	RoomHierarchies(ctx context.Context, origin, dst spec.ServerName, roomID string, suggestedOnly bool) (res fclient.RoomHierarchyResponse, err error)
+	FrameHierarchies(ctx context.Context, origin, dst spec.ServerName, frameID string, suggestedOnly bool) (res fclient.FrameHierarchyResponse, err error)
 }
 
 type P2PFederationAPI interface {
@@ -150,17 +150,17 @@ type QueryPublicKeysResponse struct {
 }
 
 type PerformDirectoryLookupRequest struct {
-	RoomAlias  string          `json:"room_alias"`
+	FrameAlias  string          `json:"frame_alias"`
 	ServerName spec.ServerName `json:"server_name"`
 }
 
 type PerformDirectoryLookupResponse struct {
-	RoomID      string            `json:"room_id"`
+	FrameID      string            `json:"frame_id"`
 	ServerNames []spec.ServerName `json:"server_names"`
 }
 
 type PerformJoinRequest struct {
-	RoomID string `json:"room_id"`
+	FrameID string `json:"frame_id"`
 	UserID string `json:"user_id"`
 	// The sorted list of servers to try. Servers will be tried sequentially, after de-duplication.
 	ServerNames types.ServerNames      `json:"server_names"`
@@ -174,7 +174,7 @@ type PerformJoinResponse struct {
 }
 
 type PerformOutboundPeekRequest struct {
-	RoomID string `json:"room_id"`
+	FrameID string `json:"frame_id"`
 	// The sorted list of servers to try. Servers will be tried sequentially, after de-duplication.
 	ServerNames types.ServerNames `json:"server_names"`
 }
@@ -184,7 +184,7 @@ type PerformOutboundPeekResponse struct {
 }
 
 type PerformLeaveRequest struct {
-	RoomID      string            `json:"room_id"`
+	FrameID      string            `json:"frame_id"`
 	UserID      string            `json:"user_id"`
 	ServerNames types.ServerNames `json:"server_names"`
 }
@@ -193,24 +193,24 @@ type PerformLeaveResponse struct {
 }
 
 type PerformInviteRequest struct {
-	RoomVersion     xtools.RoomVersion           `json:"room_version"`
+	FrameVersion     xtools.FrameVersion           `json:"frame_version"`
 	Event           *rstypes.HeaderedEvent       `json:"event"`
-	InviteRoomState []xtools.InviteStrippedState `json:"invite_room_state"`
+	InviteFrameState []xtools.InviteStrippedState `json:"invite_frame_state"`
 }
 
 type PerformInviteResponse struct {
 	Event *rstypes.HeaderedEvent `json:"event"`
 }
 
-// QueryJoinedHostServerNamesInRoomRequest is a request to QueryJoinedHostServerNames
-type QueryJoinedHostServerNamesInRoomRequest struct {
-	RoomID             string `json:"room_id"`
+// QueryJoinedHostServerNamesInFrameRequest is a request to QueryJoinedHostServerNames
+type QueryJoinedHostServerNamesInFrameRequest struct {
+	FrameID             string `json:"frame_id"`
 	ExcludeSelf        bool   `json:"exclude_self"`
 	ExcludeBlacklisted bool   `json:"exclude_blacklisted"`
 }
 
-// QueryJoinedHostServerNamesInRoomResponse is a response to QueryJoinedHostServerNames
-type QueryJoinedHostServerNamesInRoomResponse struct {
+// QueryJoinedHostServerNamesInFrameResponse is a response to QueryJoinedHostServerNames
+type QueryJoinedHostServerNamesInFrameResponse struct {
 	ServerNames []spec.ServerName `json:"server_names"`
 }
 

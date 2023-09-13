@@ -9,7 +9,7 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/storage/sqlite3"
 )
 
-// NewPublicRoomsServerDatabase opens a database connection.
+// NewPublicFramesServerDatabase opens a database connection.
 func NewSyncServerDatasource(ctx context.Context, conMan sqlutil.Connections, dbProperties *config.DatabaseOptions) (Database, error) {
 	switch {
 	case dbProperties.ConnectionString.IsSQLite():

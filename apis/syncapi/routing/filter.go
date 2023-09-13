@@ -30,7 +30,7 @@ import (
 	"github.com/withqb/xtools/spec"
 )
 
-// GetFilter implements GET /_matrix/client/r0/user/{userId}/filter/{filterId}
+// GetFilter implements GET /_coddy/client/r0/user/{userId}/filter/{filterId}
 func GetFilter(
 	req *http.Request, device *api.Device, syncDB storage.Database, userID string, filterID string,
 ) xutil.JSONResponse {
@@ -72,7 +72,7 @@ type filterResponse struct {
 
 // PutFilter implements
 //
-//	POST /_matrix/client/r0/user/{userId}/filter
+//	POST /_coddy/client/r0/user/{userId}/filter
 func PutFilter(
 	req *http.Request, device *api.Device, syncDB storage.Database, userID string,
 ) xutil.JSONResponse {
@@ -111,10 +111,10 @@ func PutFilter(
 	}
 	// the filter `limit` is `int` which defaults to 0 if not set which is not what we want. We want to use the default
 	// limit if it is unset, which is what this does.
-	limitRes := gjson.GetBytes(body, "room.timeline.limit")
+	limitRes := gjson.GetBytes(body, "frame.timeline.limit")
 	if !limitRes.Exists() {
 		xutil.GetLogger(req.Context()).Infof("missing timeline limit, using default")
-		filter.Room.Timeline.Limit = sync.DefaultTimelineLimit
+		filter.Frame.Timeline.Limit = sync.DefaultTimelineLimit
 	}
 
 	// Validate generates a user-friendly error

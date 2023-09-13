@@ -11,7 +11,7 @@ type AccountRuleSets struct {
 type RuleSet struct {
 	Override  []*Rule `json:"override,omitempty"`
 	Content   []*Rule `json:"content,omitempty"`
-	Room      []*Rule `json:"room,omitempty"`
+	Frame      []*Rule `json:"frame,omitempty"`
 	Sender    []*Rule `json:"sender,omitempty"`
 	Underride []*Rule `json:"underride,omitempty"`
 }
@@ -65,7 +65,7 @@ const (
 	UnknownKind   Kind = ""
 	OverrideKind  Kind = "override"
 	ContentKind   Kind = "content"
-	RoomKind      Kind = "room"
+	FrameKind      Kind = "frame"
 	SenderKind    Kind = "sender"
 	UnderrideKind Kind = "underride"
 )

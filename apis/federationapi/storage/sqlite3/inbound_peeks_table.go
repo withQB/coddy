@@ -13,33 +13,33 @@ import (
 
 const inboundPeeksSchema = `
 CREATE TABLE IF NOT EXISTS federationsender_inbound_peeks (
-	room_id TEXT NOT NULL,
+	frame_id TEXT NOT NULL,
 	server_name TEXT NOT NULL,
 	peek_id TEXT NOT NULL,
     creation_ts INTEGER NOT NULL,
     renewed_ts INTEGER NOT NULL,
     renewal_interval INTEGER NOT NULL,
-	UNIQUE (room_id, server_name, peek_id)
+	UNIQUE (frame_id, server_name, peek_id)
 );
 `
 
 const insertInboundPeekSQL = "" +
-	"INSERT INTO federationsender_inbound_peeks (room_id, server_name, peek_id, creation_ts, renewed_ts, renewal_interval) VALUES ($1, $2, $3, $4, $5, $6)"
+	"INSERT INTO federationsender_inbound_peeks (frame_id, server_name, peek_id, creation_ts, renewed_ts, renewal_interval) VALUES ($1, $2, $3, $4, $5, $6)"
 
 const selectInboundPeekSQL = "" +
-	"SELECT room_id, server_name, peek_id, creation_ts, renewed_ts, renewal_interval FROM federationsender_inbound_peeks WHERE room_id = $1 and server_name = $2 and peek_id = $3"
+	"SELECT frame_id, server_name, peek_id, creation_ts, renewed_ts, renewal_interval FROM federationsender_inbound_peeks WHERE frame_id = $1 and server_name = $2 and peek_id = $3"
 
 const selectInboundPeeksSQL = "" +
-	"SELECT room_id, server_name, peek_id, creation_ts, renewed_ts, renewal_interval FROM federationsender_inbound_peeks WHERE room_id = $1 ORDER BY creation_ts"
+	"SELECT frame_id, server_name, peek_id, creation_ts, renewed_ts, renewal_interval FROM federationsender_inbound_peeks WHERE frame_id = $1 ORDER BY creation_ts"
 
 const renewInboundPeekSQL = "" +
-	"UPDATE federationsender_inbound_peeks SET renewed_ts=$1, renewal_interval=$2 WHERE room_id = $3 and server_name = $4 and peek_id = $5"
+	"UPDATE federationsender_inbound_peeks SET renewed_ts=$1, renewal_interval=$2 WHERE frame_id = $3 and server_name = $4 and peek_id = $5"
 
 const deleteInboundPeekSQL = "" +
-	"DELETE FROM federationsender_inbound_peeks WHERE room_id = $1 and server_name = $2 and peek_id = $3"
+	"DELETE FROM federationsender_inbound_peeks WHERE frame_id = $1 and server_name = $2 and peek_id = $3"
 
 const deleteInboundPeeksSQL = "" +
-	"DELETE FROM federationsender_inbound_peeks WHERE room_id = $1"
+	"DELETE FROM federationsender_inbound_peeks WHERE frame_id = $1"
 
 type inboundPeeksStatements struct {
 	db                     *sql.DB
@@ -72,29 +72,29 @@ func NewSQLiteInboundPeeksTable(db *sql.DB) (s *inboundPeeksStatements, err erro
 }
 
 func (s *inboundPeeksStatements) InsertInboundPeek(
-	ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string, renewalInterval int64,
+	ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string, renewalInterval int64,
 ) (err error) {
 	nowMilli := time.Now().UnixNano() / int64(time.Millisecond)
 	stmt := sqlutil.TxStmt(txn, s.insertInboundPeekStmt)
-	_, err = stmt.ExecContext(ctx, roomID, serverName, peekID, nowMilli, nowMilli, renewalInterval)
+	_, err = stmt.ExecContext(ctx, frameID, serverName, peekID, nowMilli, nowMilli, renewalInterval)
 	return
 }
 
 func (s *inboundPeeksStatements) RenewInboundPeek(
-	ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string, renewalInterval int64,
+	ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string, renewalInterval int64,
 ) (err error) {
 	nowMilli := time.Now().UnixNano() / int64(time.Millisecond)
-	_, err = sqlutil.TxStmt(txn, s.renewInboundPeekStmt).ExecContext(ctx, nowMilli, renewalInterval, roomID, serverName, peekID)
+	_, err = sqlutil.TxStmt(txn, s.renewInboundPeekStmt).ExecContext(ctx, nowMilli, renewalInterval, frameID, serverName, peekID)
 	return
 }
 
 func (s *inboundPeeksStatements) SelectInboundPeek(
-	ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string,
+	ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string,
 ) (*types.InboundPeek, error) {
-	row := sqlutil.TxStmt(txn, s.selectInboundPeeksStmt).QueryRowContext(ctx, roomID)
+	row := sqlutil.TxStmt(txn, s.selectInboundPeeksStmt).QueryRowContext(ctx, frameID)
 	inboundPeek := types.InboundPeek{}
 	err := row.Scan(
-		&inboundPeek.RoomID,
+		&inboundPeek.FrameID,
 		&inboundPeek.ServerName,
 		&inboundPeek.PeekID,
 		&inboundPeek.CreationTimestamp,
@@ -111,9 +111,9 @@ func (s *inboundPeeksStatements) SelectInboundPeek(
 }
 
 func (s *inboundPeeksStatements) SelectInboundPeeks(
-	ctx context.Context, txn *sql.Tx, roomID string,
+	ctx context.Context, txn *sql.Tx, frameID string,
 ) (inboundPeeks []types.InboundPeek, err error) {
-	rows, err := sqlutil.TxStmt(txn, s.selectInboundPeeksStmt).QueryContext(ctx, roomID)
+	rows, err := sqlutil.TxStmt(txn, s.selectInboundPeeksStmt).QueryContext(ctx, frameID)
 	if err != nil {
 		return
 	}
@@ -122,7 +122,7 @@ func (s *inboundPeeksStatements) SelectInboundPeeks(
 	for rows.Next() {
 		inboundPeek := types.InboundPeek{}
 		if err = rows.Scan(
-			&inboundPeek.RoomID,
+			&inboundPeek.FrameID,
 			&inboundPeek.ServerName,
 			&inboundPeek.PeekID,
 			&inboundPeek.CreationTimestamp,
@@ -138,15 +138,15 @@ func (s *inboundPeeksStatements) SelectInboundPeeks(
 }
 
 func (s *inboundPeeksStatements) DeleteInboundPeek(
-	ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string,
+	ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string,
 ) (err error) {
-	_, err = sqlutil.TxStmt(txn, s.deleteInboundPeekStmt).ExecContext(ctx, roomID, serverName, peekID)
+	_, err = sqlutil.TxStmt(txn, s.deleteInboundPeekStmt).ExecContext(ctx, frameID, serverName, peekID)
 	return
 }
 
 func (s *inboundPeeksStatements) DeleteInboundPeeks(
-	ctx context.Context, txn *sql.Tx, roomID string,
+	ctx context.Context, txn *sql.Tx, frameID string,
 ) (err error) {
-	_, err = sqlutil.TxStmt(txn, s.deleteInboundPeeksStmt).ExecContext(ctx, roomID)
+	_, err = sqlutil.TxStmt(txn, s.deleteInboundPeeksStmt).ExecContext(ctx, frameID)
 	return
 }

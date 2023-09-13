@@ -15,10 +15,10 @@ import (
 	"github.com/withqb/xutil"
 )
 
-func SetReceipt(req *http.Request, userAPI api.ClientUserAPI, syncProducer *producers.SyncAPIProducer, device *userapi.Device, roomID, receiptType, eventID string) xutil.JSONResponse {
+func SetReceipt(req *http.Request, userAPI api.ClientUserAPI, syncProducer *producers.SyncAPIProducer, device *userapi.Device, frameID, receiptType, eventID string) xutil.JSONResponse {
 	timestamp := spec.AsTimestamp(time.Now())
 	logrus.WithFields(logrus.Fields{
-		"roomID":      roomID,
+		"frameID":      frameID,
 		"receiptType": receiptType,
 		"eventID":     eventID,
 		"userId":      device.UserID,
@@ -27,7 +27,7 @@ func SetReceipt(req *http.Request, userAPI api.ClientUserAPI, syncProducer *prod
 
 	switch receiptType {
 	case "m.read", "m.read.private":
-		if err := syncProducer.SendReceipt(req.Context(), device.UserID, roomID, eventID, receiptType, timestamp); err != nil {
+		if err := syncProducer.SendReceipt(req.Context(), device.UserID, frameID, eventID, receiptType, timestamp); err != nil {
 			return xutil.ErrorResponse(err)
 		}
 
@@ -43,7 +43,7 @@ func SetReceipt(req *http.Request, userAPI api.ClientUserAPI, syncProducer *prod
 		dataReq := api.InputAccountDataRequest{
 			UserID:      device.UserID,
 			DataType:    "m.fully_read",
-			RoomID:      roomID,
+			FrameID:      frameID,
 			AccountData: data,
 		}
 		dataRes := api.InputAccountDataResponse{}

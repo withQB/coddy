@@ -4,9 +4,9 @@ type MSCs struct {
 	Matrix *Global `yaml:"-"`
 
 	// The MSCs to enable. Supported MSCs include:
-	// 'msc2444': Peeking over federation - https://github.com/withqb/matrix-doc/pull/2444
-	// 'msc2753': Peeking via /sync - https://github.com/withqb/matrix-doc/pull/2753
-	// 'msc2836': Threading - https://github.com/withqb/matrix-doc/pull/2836
+	// 'msc2444': Peeking over federation - https://github.com/withqb/coddy-doc/pull/2444
+	// 'msc2753': Peeking via /sync - https://github.com/withqb/coddy-doc/pull/2753
+	// 'msc2836': Threading - https://github.com/withqb/coddy-doc/pull/2836
 	MSCs []string `yaml:"mscs"`
 
 	Database DatabaseOptions `yaml:"database,omitempty"`

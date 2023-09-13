@@ -14,7 +14,7 @@ import (
 	"github.com/withqb/coddy/apis/federationapi/storage"
 	"github.com/withqb/coddy/apis/federationapi/types"
 	"github.com/withqb/coddy/apis/userapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
 	"github.com/withqb/coddy/setup/process"
@@ -28,7 +28,7 @@ type KeyChangeConsumer struct {
 	db                storage.Database
 	queues            *queue.OutgoingQueues
 	isLocalServerName func(spec.ServerName) bool
-	rsAPI             roomserverAPI.FederationRoomserverAPI
+	rsAPI             dataframeAPI.FederationDataframeAPI
 	topic             string
 }
 
@@ -39,7 +39,7 @@ func NewKeyChangeConsumer(
 	js nats.JetStreamContext,
 	queues *queue.OutgoingQueues,
 	store storage.Database,
-	rsAPI roomserverAPI.FederationRoomserverAPI,
+	rsAPI dataframeAPI.FederationDataframeAPI,
 ) *KeyChangeConsumer {
 	return &KeyChangeConsumer{
 		ctx:               process.Context(),
@@ -110,23 +110,23 @@ func (t *KeyChangeConsumer) onDeviceKeyMessage(m api.DeviceMessage) bool {
 		return true
 	}
 
-	roomIDs, err := t.rsAPI.QueryRoomsForUser(t.ctx, *userID, "join")
+	frameIDs, err := t.rsAPI.QueryFramesForUser(t.ctx, *userID, "join")
 	if err != nil {
 		sentry.CaptureException(err)
-		logger.WithError(err).Error("failed to calculate joined rooms for user")
+		logger.WithError(err).Error("failed to calculate joined frames for user")
 		return true
 	}
 
-	roomIDStrs := make([]string, len(roomIDs))
-	for i, room := range roomIDs {
-		roomIDStrs[i] = room.String()
+	frameIDStrs := make([]string, len(frameIDs))
+	for i, frame := range frameIDs {
+		frameIDStrs[i] = frame.String()
 	}
 
-	// send this key change to all servers who share rooms with this user.
-	destinations, err := t.db.GetJoinedHostsForRooms(t.ctx, roomIDStrs, true, true)
+	// send this key change to all servers who share frames with this user.
+	destinations, err := t.db.GetJoinedHostsForFrames(t.ctx, frameIDStrs, true, true)
 	if err != nil {
 		sentry.CaptureException(err)
-		logger.WithError(err).Error("failed to calculate joined hosts for rooms user is in")
+		logger.WithError(err).Error("failed to calculate joined hosts for frames user is in")
 		return true
 	}
 
@@ -180,23 +180,23 @@ func (t *KeyChangeConsumer) onCrossSigningMessage(m api.DeviceMessage) bool {
 		return true
 	}
 
-	rooms, err := t.rsAPI.QueryRoomsForUser(t.ctx, *outputUserID, "join")
+	frames, err := t.rsAPI.QueryFramesForUser(t.ctx, *outputUserID, "join")
 	if err != nil {
 		sentry.CaptureException(err)
-		logger.WithError(err).Error("fedsender key change consumer: failed to calculate joined rooms for user")
+		logger.WithError(err).Error("fedsender key change consumer: failed to calculate joined frames for user")
 		return true
 	}
 
-	roomIDStrs := make([]string, len(rooms))
-	for i, room := range rooms {
-		roomIDStrs[i] = room.String()
+	frameIDStrs := make([]string, len(frames))
+	for i, frame := range frames {
+		frameIDStrs[i] = frame.String()
 	}
 
-	// send this key change to all servers who share rooms with this user.
-	destinations, err := t.db.GetJoinedHostsForRooms(t.ctx, roomIDStrs, true, true)
+	// send this key change to all servers who share frames with this user.
+	destinations, err := t.db.GetJoinedHostsForFrames(t.ctx, frameIDStrs, true, true)
 	if err != nil {
 		sentry.CaptureException(err)
-		logger.WithError(err).Error("fedsender key change consumer: failed to calculate joined hosts for rooms user is in")
+		logger.WithError(err).Error("fedsender key change consumer: failed to calculate joined hosts for frames user is in")
 		return true
 	}
 

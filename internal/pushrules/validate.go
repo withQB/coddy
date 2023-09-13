@@ -45,7 +45,7 @@ func ValidateRule(kind Kind, rule *Rule) []error {
 			errs = append(errs, fmt.Errorf("missing content rule pattern"))
 		}
 
-	case RoomKind, SenderKind:
+	case FrameKind, SenderKind:
 		// Do nothing.
 
 	default:
@@ -81,7 +81,7 @@ func validateCondition(cond *Condition) []error {
 	var errs []error
 
 	switch cond.Kind {
-	case EventMatchCondition, ContainsDisplayNameCondition, RoomMemberCountCondition, SenderNotificationPermissionCondition:
+	case EventMatchCondition, ContainsDisplayNameCondition, FrameMemberCountCondition, SenderNotificationPermissionCondition:
 		// Do nothing.
 
 	default:

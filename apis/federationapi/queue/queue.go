@@ -18,18 +18,18 @@ import (
 	"github.com/withqb/coddy/apis/federationapi/statistics"
 	"github.com/withqb/coddy/apis/federationapi/storage"
 	"github.com/withqb/coddy/apis/federationapi/storage/shared/receipt"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/process"
 )
 
 // OutgoingQueues is a collection of queues for sending transactions to other
-// matrix servers
+// coddy servers
 type OutgoingQueues struct {
 	db          storage.Database
 	process     *process.ProcessContext
 	disabled    bool
-	rsAPI       api.FederationRoomserverAPI
+	rsAPI       api.FederationDataframeAPI
 	origin      spec.ServerName
 	client      fclient.FederationClient
 	statistics  *statistics.Statistics
@@ -76,7 +76,7 @@ func NewOutgoingQueues(
 	disabled bool,
 	origin spec.ServerName,
 	client fclient.FederationClient,
-	rsAPI api.FederationRoomserverAPI,
+	rsAPI api.FederationDataframeAPI,
 	statistics *statistics.Statistics,
 	signing []*fclient.SigningIdentity,
 ) *OutgoingQueues {
@@ -201,10 +201,10 @@ func (oqs *OutgoingQueues) SendEvent(
 
 	// Check if any of the destinations are prohibited by server ACLs.
 	for destination := range destmap {
-		if api.IsServerBannedFromRoom(
+		if api.IsServerBannedFromFrame(
 			oqs.process.Context(),
 			oqs.rsAPI,
-			ev.RoomID(),
+			ev.FrameID(),
 			destination,
 		) {
 			delete(destmap, destination)
@@ -289,14 +289,14 @@ func (oqs *OutgoingQueues) SendEDU(
 		delete(destmap, local)
 	}
 
-	// There is absolutely no guarantee that the EDU will have a room_id
+	// There is absolutely no guarantee that the EDU will have a frame_id
 	// field, as it is not required by the spec. However, if it *does*
 	// (e.g. typing notifications) then we should try to make sure we don't
 	// bother sending them to servers that are prohibited by the server
 	// ACLs.
-	if result := gjson.GetBytes(e.Content, "room_id"); result.Exists() {
+	if result := gjson.GetBytes(e.Content, "frame_id"); result.Exists() {
 		for destination := range destmap {
-			if api.IsServerBannedFromRoom(
+			if api.IsServerBannedFromFrame(
 				oqs.process.Context(),
 				oqs.rsAPI,
 				result.Str,

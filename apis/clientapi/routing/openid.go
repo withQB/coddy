@@ -26,7 +26,7 @@ import (
 type openIDTokenResponse struct {
 	AccessToken      string `json:"access_token"`
 	TokenType        string `json:"token_type"`
-	MatrixServerName string `json:"matrix_server_name"`
+	MatrixServerName string `json:"coddy_server_name"`
 	ExpiresIn        int64  `json:"expires_in"`
 }
 

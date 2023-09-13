@@ -2,16 +2,16 @@ package caching
 
 import "github.com/withqb/xtools/fclient"
 
-// RoomHierarchy cache caches responses to federated room hierarchy requests (A.K.A. 'space summaries')
-type RoomHierarchyCache interface {
-	GetRoomHierarchy(roomID string) (r fclient.RoomHierarchyResponse, ok bool)
-	StoreRoomHierarchy(roomID string, r fclient.RoomHierarchyResponse)
+// FrameHierarchy cache caches responses to federated frame hierarchy requests (A.K.A. 'space summaries')
+type FrameHierarchyCache interface {
+	GetFrameHierarchy(frameID string) (r fclient.FrameHierarchyResponse, ok bool)
+	StoreFrameHierarchy(frameID string, r fclient.FrameHierarchyResponse)
 }
 
-func (c Caches) GetRoomHierarchy(roomID string) (r fclient.RoomHierarchyResponse, ok bool) {
-	return c.RoomHierarchies.Get(roomID)
+func (c Caches) GetFrameHierarchy(frameID string) (r fclient.FrameHierarchyResponse, ok bool) {
+	return c.FrameHierarchies.Get(frameID)
 }
 
-func (c Caches) StoreRoomHierarchy(roomID string, r fclient.RoomHierarchyResponse) {
-	c.RoomHierarchies.Set(roomID, r)
+func (c Caches) StoreFrameHierarchy(frameID string, r fclient.FrameHierarchyResponse) {
+	c.FrameHierarchies.Set(frameID, r)
 }

@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 
 	"github.com/withqb/coddy/internal/sqlutil"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
@@ -17,7 +17,7 @@ import (
 type eventInfo struct {
 	EventID        string
 	OriginServerTS spec.Timestamp
-	RoomID         string
+	FrameID         string
 }
 
 type Database interface {
@@ -77,7 +77,7 @@ func newPostgresDatabase(conMan *sqlutil.Connections, dbOpts *config.DatabaseOpt
 		parent_event_id TEXT NOT NULL,
 		child_event_id TEXT NOT NULL,
 		rel_type TEXT NOT NULL,
-		parent_room_id TEXT NOT NULL,
+		parent_frame_id TEXT NOT NULL,
 		parent_servers TEXT NOT NULL,
 		CONSTRAINT msc2836_edges_uniq UNIQUE (parent_event_id, child_event_id, rel_type)
 	);
@@ -85,7 +85,7 @@ func newPostgresDatabase(conMan *sqlutil.Connections, dbOpts *config.DatabaseOpt
 	CREATE TABLE IF NOT EXISTS msc2836_nodes (
 		event_id TEXT PRIMARY KEY NOT NULL,
 		origin_server_ts BIGINT NOT NULL,
-		room_id TEXT NOT NULL,
+		frame_id TEXT NOT NULL,
 		unsigned_children_count BIGINT NOT NULL,
 		unsigned_children_hash TEXT NOT NULL,
 		explored SMALLINT NOT NULL
@@ -95,21 +95,21 @@ func newPostgresDatabase(conMan *sqlutil.Connections, dbOpts *config.DatabaseOpt
 		return nil, err
 	}
 	if d.insertEdgeStmt, err = d.db.Prepare(`
-		INSERT INTO msc2836_edges(parent_event_id, child_event_id, rel_type, parent_room_id, parent_servers)
+		INSERT INTO msc2836_edges(parent_event_id, child_event_id, rel_type, parent_frame_id, parent_servers)
 		VALUES($1, $2, $3, $4, $5)
 		ON CONFLICT DO NOTHING
 	`); err != nil {
 		return nil, err
 	}
 	if d.insertNodeStmt, err = d.db.Prepare(`
-		INSERT INTO msc2836_nodes(event_id, origin_server_ts, room_id, unsigned_children_count, unsigned_children_hash, explored)
+		INSERT INTO msc2836_nodes(event_id, origin_server_ts, frame_id, unsigned_children_count, unsigned_children_hash, explored)
 		VALUES($1, $2, $3, $4, $5, $6)
 		ON CONFLICT DO NOTHING
 	`); err != nil {
 		return nil, err
 	}
 	selectChildrenQuery := `
-	SELECT child_event_id, origin_server_ts, room_id FROM msc2836_edges
+	SELECT child_event_id, origin_server_ts, frame_id FROM msc2836_edges
 	LEFT JOIN msc2836_nodes ON msc2836_edges.child_event_id = msc2836_nodes.event_id
 	WHERE parent_event_id = $1 AND rel_type = $2
 	ORDER BY origin_server_ts
@@ -121,7 +121,7 @@ func newPostgresDatabase(conMan *sqlutil.Connections, dbOpts *config.DatabaseOpt
 		return nil, err
 	}
 	if d.selectParentForChildStmt, err = d.db.Prepare(`
-		SELECT parent_event_id, parent_room_id FROM msc2836_edges
+		SELECT parent_event_id, parent_frame_id FROM msc2836_edges
 		WHERE child_event_id = $1 AND rel_type = $2
 	`); err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func newSQLiteDatabase(conMan *sqlutil.Connections, dbOpts *config.DatabaseOptio
 		parent_event_id TEXT NOT NULL,
 		child_event_id TEXT NOT NULL,
 		rel_type TEXT NOT NULL,
-		parent_room_id TEXT NOT NULL,
+		parent_frame_id TEXT NOT NULL,
 		parent_servers TEXT NOT NULL,
 		UNIQUE (parent_event_id, child_event_id, rel_type)
 	);
@@ -163,7 +163,7 @@ func newSQLiteDatabase(conMan *sqlutil.Connections, dbOpts *config.DatabaseOptio
 	CREATE TABLE IF NOT EXISTS msc2836_nodes (
 		event_id TEXT PRIMARY KEY NOT NULL,
 		origin_server_ts BIGINT NOT NULL,
-		room_id TEXT NOT NULL,
+		frame_id TEXT NOT NULL,
 		unsigned_children_count BIGINT NOT NULL,
 		unsigned_children_hash TEXT NOT NULL,
 		explored SMALLINT NOT NULL
@@ -173,21 +173,21 @@ func newSQLiteDatabase(conMan *sqlutil.Connections, dbOpts *config.DatabaseOptio
 		return nil, err
 	}
 	if d.insertEdgeStmt, err = d.db.Prepare(`
-		INSERT INTO msc2836_edges(parent_event_id, child_event_id, rel_type, parent_room_id, parent_servers)
+		INSERT INTO msc2836_edges(parent_event_id, child_event_id, rel_type, parent_frame_id, parent_servers)
 		VALUES($1, $2, $3, $4, $5)
 		ON CONFLICT (parent_event_id, child_event_id, rel_type) DO NOTHING
 	`); err != nil {
 		return nil, err
 	}
 	if d.insertNodeStmt, err = d.db.Prepare(`
-		INSERT INTO msc2836_nodes(event_id, origin_server_ts, room_id, unsigned_children_count, unsigned_children_hash, explored)
+		INSERT INTO msc2836_nodes(event_id, origin_server_ts, frame_id, unsigned_children_count, unsigned_children_hash, explored)
 		VALUES($1, $2, $3, $4, $5, $6)
 		ON CONFLICT DO NOTHING
 	`); err != nil {
 		return nil, err
 	}
 	selectChildrenQuery := `
-	SELECT child_event_id, origin_server_ts, room_id FROM msc2836_edges
+	SELECT child_event_id, origin_server_ts, frame_id FROM msc2836_edges
 	LEFT JOIN msc2836_nodes ON msc2836_edges.child_event_id = msc2836_nodes.event_id
 	WHERE parent_event_id = $1 AND rel_type = $2
 	ORDER BY origin_server_ts
@@ -199,7 +199,7 @@ func newSQLiteDatabase(conMan *sqlutil.Connections, dbOpts *config.DatabaseOptio
 		return nil, err
 	}
 	if d.selectParentForChildStmt, err = d.db.Prepare(`
-		SELECT parent_event_id, parent_room_id FROM msc2836_edges
+		SELECT parent_event_id, parent_frame_id FROM msc2836_edges
 		WHERE child_event_id = $1 AND rel_type = $2
 	`); err != nil {
 		return nil, err
@@ -227,19 +227,19 @@ func (p *DB) StoreRelation(ctx context.Context, ev *types.HeaderedEvent) error {
 	if parent == "" || child == "" {
 		return nil
 	}
-	relationRoomID, relationServers := roomIDAndServers(ev)
+	relationFrameID, relationServers := frameIDAndServers(ev)
 	relationServersJSON, err := json.Marshal(relationServers)
 	if err != nil {
 		return err
 	}
 	count, hash := extractChildMetadata(ev)
 	return p.writer.Do(p.db, nil, func(txn *sql.Tx) error {
-		_, err := txn.Stmt(p.insertEdgeStmt).ExecContext(ctx, parent, child, relType, relationRoomID, string(relationServersJSON))
+		_, err := txn.Stmt(p.insertEdgeStmt).ExecContext(ctx, parent, child, relType, relationFrameID, string(relationServersJSON))
 		if err != nil {
 			return err
 		}
 		xutil.GetLogger(ctx).Infof("StoreRelation child=%s parent=%s rel_type=%s", child, parent, relType)
-		_, err = txn.Stmt(p.insertNodeStmt).ExecContext(ctx, ev.EventID(), ev.OriginServerTS(), ev.RoomID(), count, base64.RawStdEncoding.EncodeToString(hash), 0)
+		_, err = txn.Stmt(p.insertNodeStmt).ExecContext(ctx, ev.EventID(), ev.OriginServerTS(), ev.FrameID(), count, base64.RawStdEncoding.EncodeToString(hash), 0)
 		return err
 	})
 }
@@ -296,7 +296,7 @@ func (p *DB) ChildrenForParent(ctx context.Context, eventID, relType string, rec
 	var children []eventInfo
 	for rows.Next() {
 		var evInfo eventInfo
-		if err := rows.Scan(&evInfo.EventID, &evInfo.OriginServerTS, &evInfo.RoomID); err != nil {
+		if err := rows.Scan(&evInfo.EventID, &evInfo.OriginServerTS, &evInfo.FrameID); err != nil {
 			return nil, err
 		}
 		children = append(children, evInfo)
@@ -306,7 +306,7 @@ func (p *DB) ChildrenForParent(ctx context.Context, eventID, relType string, rec
 
 func (p *DB) ParentForChild(ctx context.Context, eventID, relType string) (*eventInfo, error) {
 	var ei eventInfo
-	err := p.selectParentForChildStmt.QueryRowContext(ctx, eventID, relType).Scan(&ei.EventID, &ei.RoomID)
+	err := p.selectParentForChildStmt.QueryRowContext(ctx, eventID, relType).Scan(&ei.EventID, &ei.FrameID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -334,19 +334,19 @@ func parentChildEventIDs(ev *types.HeaderedEvent) (parent, child, relType string
 	return body.Relationship.EventID, ev.EventID(), body.Relationship.RelType
 }
 
-func roomIDAndServers(ev *types.HeaderedEvent) (roomID string, servers []string) {
+func frameIDAndServers(ev *types.HeaderedEvent) (frameID string, servers []string) {
 	servers = []string{}
 	if ev == nil {
 		return
 	}
 	body := struct {
-		RoomID  string   `json:"relationship_room_id"`
+		FrameID  string   `json:"relationship_frame_id"`
 		Servers []string `json:"relationship_servers"`
 	}{}
 	if err := json.Unmarshal(ev.Unsigned(), &body); err != nil {
 		return
 	}
-	return body.RoomID, body.Servers
+	return body.FrameID, body.Servers
 }
 
 func extractChildMetadata(ev *types.HeaderedEvent) (count int, hash []byte) {

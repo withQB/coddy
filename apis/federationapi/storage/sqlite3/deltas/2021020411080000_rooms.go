@@ -20,9 +20,9 @@ import (
 	"fmt"
 )
 
-func UpRemoveRoomsTable(ctx context.Context, tx *sql.Tx) error {
+func UpRemoveFramesTable(ctx context.Context, tx *sql.Tx) error {
 	_, err := tx.ExecContext(ctx, `
-		DROP TABLE IF EXISTS federationsender_rooms;
+		DROP TABLE IF EXISTS federationsender_frames;
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to execute upgrade: %w", err)
@@ -30,7 +30,7 @@ func UpRemoveRoomsTable(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
-func DownRemoveRoomsTable(tx *sql.Tx) error {
+func DownRemoveFramesTable(tx *sql.Tx) error {
 	// We can't reverse this.
 	return nil
 }

@@ -13,19 +13,19 @@ import (
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
 
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 )
 
 const (
-	roomVersionsCache byte = iota + 1
+	frameVersionsCache byte = iota + 1
 	serverKeysCache
-	roomNIDsCache
-	roomIDsCache
-	roomEventsCache
+	frameNIDsCache
+	frameIDsCache
+	frameEventsCache
 	federationPDUsCache
 	federationEDUsCache
-	spaceSummaryRoomsCache
+	spaceSummaryFramesCache
 	lazyLoadingCache
 	eventStateKeyCache
 	eventTypeCache
@@ -68,9 +68,9 @@ func NewRistrettoCache(maxCost config.DataUnit, maxAge time.Duration, enableProm
 		})
 	}
 	return &Caches{
-		RoomVersions: &RistrettoCachePartition[string, xtools.RoomVersion]{ // room ID -> room version
+		FrameVersions: &RistrettoCachePartition[string, xtools.FrameVersion]{ // frame ID -> frame version
 			cache:  cache,
-			Prefix: roomVersionsCache,
+			Prefix: frameVersionsCache,
 			MaxAge: maxAge,
 		},
 		ServerKeys: &RistrettoCachePartition[string, xtools.PublicKeyLookupResult]{ // server name -> server keys
@@ -79,40 +79,40 @@ func NewRistrettoCache(maxCost config.DataUnit, maxAge time.Duration, enableProm
 			Mutable: true,
 			MaxAge:  maxAge,
 		},
-		RoomServerRoomNIDs: &RistrettoCachePartition[string, types.RoomNID]{ // room ID -> room NID
+		DataFrameFrameNIDs: &RistrettoCachePartition[string, types.FrameNID]{ // frame ID -> frame NID
 			cache:  cache,
-			Prefix: roomNIDsCache,
+			Prefix: frameNIDsCache,
 			MaxAge: maxAge,
 		},
-		RoomServerRoomIDs: &RistrettoCachePartition[types.RoomNID, string]{ // room NID -> room ID
+		DataFrameFrameIDs: &RistrettoCachePartition[types.FrameNID, string]{ // frame NID -> frame ID
 			cache:  cache,
-			Prefix: roomIDsCache,
+			Prefix: frameIDsCache,
 			MaxAge: maxAge,
 		},
-		RoomServerEvents: &RistrettoCostedCachePartition[int64, *types.HeaderedEvent]{ // event NID -> event
+		DataFrameEvents: &RistrettoCostedCachePartition[int64, *types.HeaderedEvent]{ // event NID -> event
 			&RistrettoCachePartition[int64, *types.HeaderedEvent]{
 				cache:   cache,
-				Prefix:  roomEventsCache,
+				Prefix:  frameEventsCache,
 				MaxAge:  maxAge,
 				Mutable: true,
 			},
 		},
-		RoomServerStateKeys: &RistrettoCachePartition[types.EventStateKeyNID, string]{ // event NID -> event state key
+		DataFrameStateKeys: &RistrettoCachePartition[types.EventStateKeyNID, string]{ // event NID -> event state key
 			cache:  cache,
 			Prefix: eventStateKeyCache,
 			MaxAge: maxAge,
 		},
-		RoomServerStateKeyNIDs: &RistrettoCachePartition[string, types.EventStateKeyNID]{ // eventStateKey -> eventStateKey NID
+		DataFrameStateKeyNIDs: &RistrettoCachePartition[string, types.EventStateKeyNID]{ // eventStateKey -> eventStateKey NID
 			cache:  cache,
 			Prefix: eventStateKeyNIDCache,
 			MaxAge: maxAge,
 		},
-		RoomServerEventTypeNIDs: &RistrettoCachePartition[string, types.EventTypeNID]{ // eventType -> eventType NID
+		DataFrameEventTypeNIDs: &RistrettoCachePartition[string, types.EventTypeNID]{ // eventType -> eventType NID
 			cache:  cache,
 			Prefix: eventTypeCache,
 			MaxAge: maxAge,
 		},
-		RoomServerEventTypes: &RistrettoCachePartition[types.EventTypeNID, string]{ // eventType NID -> eventType
+		DataFrameEventTypes: &RistrettoCachePartition[types.EventTypeNID, string]{ // eventType NID -> eventType
 			cache:  cache,
 			Prefix: eventTypeNIDCache,
 			MaxAge: maxAge,
@@ -133,9 +133,9 @@ func NewRistrettoCache(maxCost config.DataUnit, maxAge time.Duration, enableProm
 				MaxAge:  lesserOf(time.Hour/2, maxAge),
 			},
 		},
-		RoomHierarchies: &RistrettoCachePartition[string, fclient.RoomHierarchyResponse]{ // room ID -> space response
+		FrameHierarchies: &RistrettoCachePartition[string, fclient.FrameHierarchyResponse]{ // frame ID -> space response
 			cache:   cache,
-			Prefix:  spaceSummaryRoomsCache,
+			Prefix:  spaceSummaryFramesCache,
 			Mutable: true,
 			MaxAge:  maxAge,
 		},

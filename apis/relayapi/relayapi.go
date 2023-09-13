@@ -10,7 +10,7 @@ import (
 	"github.com/withqb/coddy/internal/caching"
 	"github.com/withqb/coddy/internal/httputil"
 	"github.com/withqb/coddy/internal/sqlutil"
-	rsAPI "github.com/withqb/coddy/servers/roomserver/api"
+	rsAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
@@ -41,7 +41,7 @@ func NewRelayInternalAPI(
 	dendriteCfg *config.Dendrite,
 	cm *sqlutil.Connections,
 	fedClient fclient.FederationClient,
-	rsAPI rsAPI.RoomserverInternalAPI,
+	rsAPI rsAPI.DataframeInternalAPI,
 	keyRing *xtools.KeyRing,
 	producer *producers.SyncAPIProducer,
 	relayingEnabled bool,

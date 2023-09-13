@@ -34,7 +34,7 @@ type AppserviceUserAPI interface {
 	PerformDeviceCreation(ctx context.Context, req *PerformDeviceCreationRequest, res *PerformDeviceCreationResponse) error
 }
 
-type RoomserverUserAPI interface {
+type DataframeUserAPI interface {
 	QueryAccountData(ctx context.Context, req *QueryAccountDataRequest, res *QueryAccountDataResponse) error
 	QueryAccountByLocalpart(ctx context.Context, req *QueryAccountByLocalpartRequest, res *QueryAccountByLocalpartResponse) (err error)
 }
@@ -140,13 +140,13 @@ type PerformKeyBackupRequest struct {
 
 	// The keys to upload, if any. If blank, creates/updates/deletes key version metadata only.
 	Keys struct {
-		Rooms map[string]struct {
+		Frames map[string]struct {
 			Sessions map[string]KeyBackupSession `json:"sessions"`
-		} `json:"rooms"`
+		} `json:"frames"`
 	}
 }
 
-// KeyBackupData in https://spec.matrix.org/unstable/client-server-api/#get_matrixclientr0room_keyskeysroomidsessionid
+// KeyBackupData 
 type KeyBackupSession struct {
 	FirstMessageIndex int             `json:"first_message_index"`
 	ForwardedCount    int             `json:"forwarded_count"`
@@ -154,8 +154,7 @@ type KeyBackupSession struct {
 	SessionData       json.RawMessage `json:"session_data"`
 }
 
-func (a *KeyBackupSession) ShouldReplaceRoomKey(newKey *KeyBackupSession) bool {
-	// https://spec.matrix.org/unstable/client-server-api/#backup-algorithm-mmegolm_backupv1curve25519-aes-sha2
+func (a *KeyBackupSession) ShouldReplaceFrameKey(newKey *KeyBackupSession) bool {
 	// "if the keys have different values for is_verified, then it will keep the key that has is_verified set to true"
 	if newKey.IsVerified && !a.IsVerified {
 		return true
@@ -172,7 +171,7 @@ func (a *KeyBackupSession) ShouldReplaceRoomKey(newKey *KeyBackupSession) bool {
 // Internal KeyBackupData for passing to/from the storage layer
 type InternalKeyBackupSession struct {
 	KeyBackupSession
-	RoomID    string
+	FrameID    string
 	SessionID string
 }
 
@@ -189,8 +188,8 @@ type QueryKeyBackupRequest struct {
 	Version string // the version to query, if blank it means the latest
 
 	ReturnKeys       bool   // whether to return keys in the backup response or just the metadata
-	KeysForRoomID    string // optional string to return keys which belong to this room
-	KeysForSessionID string // optional string to return keys which belong to this (room, session)
+	KeysForFrameID    string // optional string to return keys which belong to this frame
+	KeysForSessionID string // optional string to return keys which belong to this (frame, session)
 }
 
 type QueryKeyBackupResponse struct {
@@ -208,7 +207,7 @@ type QueryKeyBackupResponse struct {
 // InputAccountDataRequest is the request for InputAccountData
 type InputAccountDataRequest struct {
 	UserID      string          // required: the user to set account data for
-	RoomID      string          // optional: the room to associate the account data with
+	FrameID      string          // optional: the frame to associate the account data with
 	DataType    string          // required: the data type of the data
 	AccountData json.RawMessage // required: the message content
 }
@@ -256,7 +255,6 @@ type QueryDeviceInfosResponse struct {
 type QueryAccessTokenRequest struct {
 	AccessToken string
 	// optional user ID, valid only if the token is an appservice.
-	// https://matrix.org/docs/spec/application_service/r0.1.2#using-sync-and-events
 	AppServiceUserID string
 }
 
@@ -269,14 +267,14 @@ type QueryAccessTokenResponse struct {
 // QueryAccountDataRequest is the request for QueryAccountData
 type QueryAccountDataRequest struct {
 	UserID   string // required: the user to get account data for.
-	RoomID   string // optional: the room ID, or global account data if not specified.
+	FrameID   string // optional: the frame ID, or global account data if not specified.
 	DataType string // optional: the data type, or all types if not specified.
 }
 
 // QueryAccountDataResponse is the response for QueryAccountData
 type QueryAccountDataResponse struct {
 	GlobalAccountData map[string]json.RawMessage            // type -> data
-	RoomAccountData   map[string]map[string]json.RawMessage // room -> type -> data
+	FrameAccountData   map[string]map[string]json.RawMessage // frame -> type -> data
 }
 
 // QueryDevicesRequest is the request for QueryDevices
@@ -567,7 +565,7 @@ type Notification struct {
 	Event      synctypes.ClientEvent `json:"event"`       // Required.
 	ProfileTag string                `json:"profile_tag"` // Required by Sytest, but actually optional.
 	Read       bool                  `json:"read"`        // Required.
-	RoomID     string                `json:"room_id"`     // Required.
+	FrameID     string                `json:"frame_id"`     // Required.
 	TS         spec.Timestamp        `json:"ts"`          // Required.
 }
 
@@ -727,7 +725,6 @@ func (m1 *DeviceMessage) DeviceKeysEqual(m2 *DeviceMessage) bool {
 }
 
 // DeviceKeys represents a set of device keys for a single device
-// https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-keys-upload
 type DeviceKeys struct {
 	// The user who owns this device
 	UserID string
@@ -748,7 +745,6 @@ func (k *DeviceKeys) WithStreamID(streamID int64) DeviceMessage {
 }
 
 // OneTimeKeys represents a set of one-time keys for a single device
-// https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-keys-upload
 type OneTimeKeys struct {
 	// The user who owns this device
 	UserID string
@@ -902,7 +898,7 @@ type QueryOneTimeKeysRequest struct {
 }
 
 type QueryOneTimeKeysResponse struct {
-	// OTK key counts, in the extended /sync form described by https://matrix.org/docs/spec/client_server/r0.6.1#id84
+	// OTK key counts, in the extended /sync
 	Count OneTimeKeysCount
 	Error *KeyError
 }

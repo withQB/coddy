@@ -12,10 +12,10 @@ import (
 	"github.com/withqb/xutil"
 
 	"github.com/withqb/coddy/apis/clientapi/httputil"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 )
 
-type PublicRoomReq struct {
+type PublicFrameReq struct {
 	Since              string `json:"since,omitempty"`
 	Limit              int16  `json:"limit,omitempty"`
 	Filter             filter `json:"filter,omitempty"`
@@ -25,19 +25,19 @@ type PublicRoomReq struct {
 
 type filter struct {
 	SearchTerms string   `json:"generic_search_term,omitempty"`
-	RoomTypes   []string `json:"room_types,omitempty"`
+	FrameTypes   []string `json:"frame_types,omitempty"`
 }
 
-// GetPostPublicRooms implements GET and POST /publicRooms
-func GetPostPublicRooms(req *http.Request, rsAPI roomserverAPI.FederationRoomserverAPI) xutil.JSONResponse {
-	var request PublicRoomReq
-	if fillErr := fillPublicRoomsReq(req, &request); fillErr != nil {
+// GetPostPublicFrames implements GET and POST /publicFrames
+func GetPostPublicFrames(req *http.Request, rsAPI dataframeAPI.FederationDataframeAPI) xutil.JSONResponse {
+	var request PublicFrameReq
+	if fillErr := fillPublicFramesReq(req, &request); fillErr != nil {
 		return *fillErr
 	}
 	if request.Limit == 0 {
 		request.Limit = 50
 	}
-	response, err := publicRooms(req.Context(), request, rsAPI)
+	response, err := publicFrames(req.Context(), request, rsAPI)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
@@ -50,11 +50,11 @@ func GetPostPublicRooms(req *http.Request, rsAPI roomserverAPI.FederationRoomser
 	}
 }
 
-func publicRooms(
-	ctx context.Context, request PublicRoomReq, rsAPI roomserverAPI.FederationRoomserverAPI,
-) (*fclient.RespPublicRooms, error) {
+func publicFrames(
+	ctx context.Context, request PublicFrameReq, rsAPI dataframeAPI.FederationDataframeAPI,
+) (*fclient.RespPublicFrames, error) {
 
-	var response fclient.RespPublicRooms
+	var response fclient.RespPublicFrames
 	var limit int16
 	var offset int64
 	limit = request.Limit
@@ -70,39 +70,39 @@ func publicRooms(
 		return nil, fmt.Errorf("include_all_networks and third_party_instance_id can not be used together")
 	}
 
-	var queryRes roomserverAPI.QueryPublishedRoomsResponse
-	err = rsAPI.QueryPublishedRooms(ctx, &roomserverAPI.QueryPublishedRoomsRequest{
+	var queryRes dataframeAPI.QueryPublishedFramesResponse
+	err = rsAPI.QueryPublishedFrames(ctx, &dataframeAPI.QueryPublishedFramesRequest{
 		NetworkID: request.NetworkID,
 	}, &queryRes)
 	if err != nil {
-		xutil.GetLogger(ctx).WithError(err).Error("QueryPublishedRooms failed")
+		xutil.GetLogger(ctx).WithError(err).Error("QueryPublishedFrames failed")
 		return nil, err
 	}
-	response.TotalRoomCountEstimate = len(queryRes.RoomIDs)
+	response.TotalFrameCountEstimate = len(queryRes.FrameIDs)
 
 	if offset > 0 {
 		response.PrevBatch = strconv.Itoa(int(offset) - 1)
 	}
 	nextIndex := int(offset) + int(limit)
-	if response.TotalRoomCountEstimate > nextIndex {
+	if response.TotalFrameCountEstimate > nextIndex {
 		response.NextBatch = strconv.Itoa(nextIndex)
 	}
 
 	if offset < 0 {
 		offset = 0
 	}
-	if nextIndex > len(queryRes.RoomIDs) {
-		nextIndex = len(queryRes.RoomIDs)
+	if nextIndex > len(queryRes.FrameIDs) {
+		nextIndex = len(queryRes.FrameIDs)
 	}
-	roomIDs := queryRes.RoomIDs[offset:nextIndex]
-	response.Chunk, err = fillInRooms(ctx, roomIDs, rsAPI)
+	frameIDs := queryRes.FrameIDs[offset:nextIndex]
+	response.Chunk, err = fillInFrames(ctx, frameIDs, rsAPI)
 	return &response, err
 }
 
-// fillPublicRoomsReq fills the Limit, Since and Filter attributes of a GET or POST request
-// on /publicRooms by parsing the incoming HTTP request
+// fillPublicFramesReq fills the Limit, Since and Filter attributes of a GET or POST request
+// on /publicFrames by parsing the incoming HTTP request
 // Filter is only filled for POST requests
-func fillPublicRoomsReq(httpReq *http.Request, request *PublicRoomReq) *xutil.JSONResponse {
+func fillPublicFramesReq(httpReq *http.Request, request *PublicFrameReq) *xutil.JSONResponse {
 	if httpReq.Method == http.MethodGet {
 		limit, err := strconv.Atoi(httpReq.FormValue("limit"))
 		// Atoi returns 0 and an error when trying to parse an empty string
@@ -128,38 +128,38 @@ func fillPublicRoomsReq(httpReq *http.Request, request *PublicRoomReq) *xutil.JS
 }
 
 // due to lots of switches
-func fillInRooms(ctx context.Context, roomIDs []string, rsAPI roomserverAPI.FederationRoomserverAPI) ([]fclient.PublicRoom, error) {
-	avatarTuple := xtools.StateKeyTuple{EventType: "m.room.avatar", StateKey: ""}
-	nameTuple := xtools.StateKeyTuple{EventType: "m.room.name", StateKey: ""}
-	canonicalTuple := xtools.StateKeyTuple{EventType: spec.MRoomCanonicalAlias, StateKey: ""}
-	topicTuple := xtools.StateKeyTuple{EventType: "m.room.topic", StateKey: ""}
-	guestTuple := xtools.StateKeyTuple{EventType: "m.room.guest_access", StateKey: ""}
-	visibilityTuple := xtools.StateKeyTuple{EventType: spec.MRoomHistoryVisibility, StateKey: ""}
-	joinRuleTuple := xtools.StateKeyTuple{EventType: spec.MRoomJoinRules, StateKey: ""}
+func fillInFrames(ctx context.Context, frameIDs []string, rsAPI dataframeAPI.FederationDataframeAPI) ([]fclient.PublicFrame, error) {
+	avatarTuple := xtools.StateKeyTuple{EventType: "m.frame.avatar", StateKey: ""}
+	nameTuple := xtools.StateKeyTuple{EventType: "m.frame.name", StateKey: ""}
+	canonicalTuple := xtools.StateKeyTuple{EventType: spec.MFrameCanonicalAlias, StateKey: ""}
+	topicTuple := xtools.StateKeyTuple{EventType: "m.frame.topic", StateKey: ""}
+	guestTuple := xtools.StateKeyTuple{EventType: "m.frame.guest_access", StateKey: ""}
+	visibilityTuple := xtools.StateKeyTuple{EventType: spec.MFrameHistoryVisibility, StateKey: ""}
+	joinRuleTuple := xtools.StateKeyTuple{EventType: spec.MFrameJoinRules, StateKey: ""}
 
-	var stateRes roomserverAPI.QueryBulkStateContentResponse
-	err := rsAPI.QueryBulkStateContent(ctx, &roomserverAPI.QueryBulkStateContentRequest{
-		RoomIDs:        roomIDs,
+	var stateRes dataframeAPI.QueryBulkStateContentResponse
+	err := rsAPI.QueryBulkStateContent(ctx, &dataframeAPI.QueryBulkStateContentRequest{
+		FrameIDs:        frameIDs,
 		AllowWildcards: true,
 		StateTuples: []xtools.StateKeyTuple{
 			nameTuple, canonicalTuple, topicTuple, guestTuple, visibilityTuple, joinRuleTuple, avatarTuple,
-			{EventType: spec.MRoomMember, StateKey: "*"},
+			{EventType: spec.MFrameMember, StateKey: "*"},
 		},
 	}, &stateRes)
 	if err != nil {
 		xutil.GetLogger(ctx).WithError(err).Error("QueryBulkStateContent failed")
 		return nil, err
 	}
-	chunk := make([]fclient.PublicRoom, len(roomIDs))
+	chunk := make([]fclient.PublicFrame, len(frameIDs))
 	i := 0
-	for roomID, data := range stateRes.Rooms {
-		pub := fclient.PublicRoom{
-			RoomID: roomID,
+	for frameID, data := range stateRes.Frames {
+		pub := fclient.PublicFrame{
+			FrameID: frameID,
 		}
 		joinCount := 0
 		var joinRule, guestAccess string
 		for tuple, contentVal := range data {
-			if tuple.EventType == spec.MRoomMember && contentVal == "join" {
+			if tuple.EventType == spec.MFrameMember && contentVal == "join" {
 				joinCount++
 				continue
 			}

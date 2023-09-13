@@ -1,4 +1,4 @@
-// Package mscs implements Matrix Spec Changes from https://github.com/withqb/matrix-doc
+// Package mscs implements Matrix Spec Changes from https://github.com/withqb/coddy-doc
 package mscs
 
 import (
@@ -28,7 +28,7 @@ func Enable(cfg *config.Dendrite, cm *sqlutil.Connections, routers httputil.Rout
 func EnableMSC(cfg *config.Dendrite, cm *sqlutil.Connections, routers httputil.Routers, monolith *setup.Monolith, msc string, caches *caching.Caches) error {
 	switch msc {
 	case "msc2836":
-		return msc2836.Enable(cfg, cm, routers, monolith.RoomserverAPI, monolith.FederationAPI, monolith.UserAPI, monolith.KeyRing)
+		return msc2836.Enable(cfg, cm, routers, monolith.DataframeAPI, monolith.FederationAPI, monolith.UserAPI, monolith.KeyRing)
 	case "msc2444": // enabled inside federationapi
 	case "msc2753": // enabled inside clientapi
 	default:

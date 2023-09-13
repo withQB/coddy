@@ -11,7 +11,7 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// GetTransactionFromRelay implements GET /_matrix/federation/v1/relay_txn/{userID}
+// GetTransactionFromRelay implements GET /_coddy/federation/v1/relay_txn/{userID}
 // This endpoint can be extracted into a separate relay server service.
 func GetTransactionFromRelay(
 	httpReq *http.Request,

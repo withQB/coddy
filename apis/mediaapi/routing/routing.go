@@ -19,8 +19,7 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// configResponse is the response to GET /_matrix/media/r0/config
-// https://matrix.org/docs/spec/client_server/latest#get-matrix-media-r0-config
+// configResponse is the response to GET /_coddy/media/r0/config
 type configResponse struct {
 	UploadSize *config.FileSizeBytes `json:"m.upload.size,omitempty"`
 }
@@ -130,7 +129,7 @@ func makeDownloadAPI(
 
 		// For the purposes of loop avoidance, we will return a 404 if allow_remote is set to
 		// false in the query string and the target server name isn't our own.
-		// https://github.com/withqb/matrix-doc/pull/1265
+		// https://github.com/withqb/coddy-doc/pull/1265
 		if allowRemote := req.URL.Query().Get("allow_remote"); strings.ToLower(allowRemote) == "false" {
 			if serverName != cfg.Matrix.ServerName {
 				w.WriteHeader(http.StatusNotFound)

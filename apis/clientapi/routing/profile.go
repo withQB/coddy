@@ -14,8 +14,8 @@ import (
 	"github.com/withqb/coddy/apis/clientapi/httputil"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/eventutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	appserviceAPI "github.com/withqb/coddy/services/appservice/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xcore"
@@ -78,7 +78,7 @@ func GetAvatarURL(
 // SetAvatarURL implements PUT /profile/{userID}/avatar_url
 func SetAvatarURL(
 	req *http.Request, profileAPI userapi.ProfileAPI,
-	device *userapi.Device, userID string, cfg *config.ClientAPI, rsAPI api.ClientRoomserverAPI,
+	device *userapi.Device, userID string, cfg *config.ClientAPI, rsAPI api.ClientDataframeAPI,
 ) xutil.JSONResponse {
 	if userID != device.UserID {
 		return xutil.JSONResponse{
@@ -167,7 +167,7 @@ func GetDisplayName(
 // SetDisplayName implements PUT /profile/{userID}/displayname
 func SetDisplayName(
 	req *http.Request, profileAPI userapi.ProfileAPI,
-	device *userapi.Device, userID string, cfg *config.ClientAPI, rsAPI api.ClientRoomserverAPI,
+	device *userapi.Device, userID string, cfg *config.ClientAPI, rsAPI api.ClientDataframeAPI,
 ) xutil.JSONResponse {
 	if userID != device.UserID {
 		return xutil.JSONResponse{
@@ -233,7 +233,7 @@ func SetDisplayName(
 }
 
 func updateProfile(
-	ctx context.Context, rsAPI api.ClientRoomserverAPI, device *userapi.Device,
+	ctx context.Context, rsAPI api.ClientDataframeAPI, device *userapi.Device,
 	profile *authtypes.Profile,
 	userID string, evTime time.Time,
 ) (xutil.JSONResponse, error) {
@@ -245,18 +245,18 @@ func updateProfile(
 		}, err
 	}
 
-	rooms, err := rsAPI.QueryRoomsForUser(ctx, *deviceUserID, "join")
+	frames, err := rsAPI.QueryFramesForUser(ctx, *deviceUserID, "join")
 	if err != nil {
-		xutil.GetLogger(ctx).WithError(err).Error("QueryRoomsForUser failed")
+		xutil.GetLogger(ctx).WithError(err).Error("QueryFramesForUser failed")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}, err
 	}
 
-	roomIDStrs := make([]string, len(rooms))
-	for i, room := range rooms {
-		roomIDStrs[i] = room.String()
+	frameIDStrs := make([]string, len(frames))
+	for i, frame := range frames {
+		frameIDStrs[i] = frame.String()
 	}
 
 	_, domain, err := xtools.SplitID('@', userID)
@@ -269,7 +269,7 @@ func updateProfile(
 	}
 
 	events, err := buildMembershipEvents(
-		ctx, roomIDStrs, *profile, userID, evTime, rsAPI,
+		ctx, frameIDStrs, *profile, userID, evTime, rsAPI,
 	)
 	switch e := err.(type) {
 	case nil:
@@ -340,9 +340,9 @@ func getProfile(
 
 func buildMembershipEvents(
 	ctx context.Context,
-	roomIDs []string,
+	frameIDs []string,
 	newProfile authtypes.Profile, userID string,
-	evTime time.Time, rsAPI api.ClientRoomserverAPI,
+	evTime time.Time, rsAPI api.ClientDataframeAPI,
 ) ([]*types.HeaderedEvent, error) {
 	evs := []*types.HeaderedEvent{}
 
@@ -350,22 +350,22 @@ func buildMembershipEvents(
 	if err != nil {
 		return nil, err
 	}
-	for _, roomID := range roomIDs {
-		validRoomID, err := spec.NewRoomID(roomID)
+	for _, frameID := range frameIDs {
+		validFrameID, err := spec.NewFrameID(frameID)
 		if err != nil {
 			return nil, err
 		}
-		senderID, err := rsAPI.QuerySenderIDForUser(ctx, *validRoomID, *fullUserID)
+		senderID, err := rsAPI.QuerySenderIDForUser(ctx, *validFrameID, *fullUserID)
 		if err != nil {
 			return nil, err
 		} else if senderID == nil {
-			return nil, fmt.Errorf("sender ID not found for %s in %s", *fullUserID, *validRoomID)
+			return nil, fmt.Errorf("sender ID not found for %s in %s", *fullUserID, *validFrameID)
 		}
 		senderIDString := string(*senderID)
 		proto := xtools.ProtoEvent{
 			SenderID: senderIDString,
-			RoomID:   roomID,
-			Type:     "m.room.member",
+			FrameID:   frameID,
+			Type:     "m.frame.member",
 			StateKey: &senderIDString,
 		}
 
@@ -385,7 +385,7 @@ func buildMembershipEvents(
 			return nil, err
 		}
 
-		identity, err := rsAPI.SigningIdentityFor(ctx, *validRoomID, *user)
+		identity, err := rsAPI.SigningIdentityFor(ctx, *validFrameID, *user)
 		if err != nil {
 			return nil, err
 		}

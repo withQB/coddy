@@ -24,7 +24,7 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// GetNotifications handles /_matrix/client/r0/notifications
+// GetNotifications handles /_coddy/client/r0/notifications
 func GetNotifications(
 	req *http.Request, device *userapi.Device,
 	userAPI userapi.ClientUserAPI,

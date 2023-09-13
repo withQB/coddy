@@ -31,7 +31,7 @@ const queuePDUsSchema = `
 CREATE TABLE IF NOT EXISTS federationsender_queue_pdus (
     -- The transaction ID that was generated before persisting the event.
 	transaction_id TEXT NOT NULL,
-    -- The domain part of the user ID the m.room.member event is for.
+    -- The domain part of the user ID the m.frame.member event is for.
 	server_name TEXT NOT NULL,
 	-- The JSON NID from the federationsender_queue_pdus_json table.
 	json_nid BIGINT NOT NULL

@@ -16,21 +16,21 @@ import (
 	"github.com/withqb/coddy/apis/userapi/producers"
 	"github.com/withqb/coddy/apis/userapi/storage"
 	"github.com/withqb/coddy/apis/userapi/util"
-	rsapi "github.com/withqb/coddy/servers/roomserver/api"
+	rsapi "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/jetstream"
 )
 
 // NewInternalAPI returns a concrete implementation of the internal API. Callers
 // can call functions directly on the returned API or via an HTTP interface using AddInternalRoutes.
 //
-// Creating a new instance of the user API requires a roomserver API with a federation API set
+// Creating a new instance of the user API requires a dataframe API with a federation API set
 // using its `SetFederationAPI` method, other you may get nil-dereference errors.
 func NewInternalAPI(
 	processContext *process.ProcessContext,
 	dendriteCfg *config.Dendrite,
 	cm *sqlutil.Connections,
 	natsInstance *jetstream.NATSInstance,
-	rsAPI rsapi.UserRoomserverAPI,
+	rsAPI rsapi.UserDataframeAPI,
 	fedClient fedsenderapi.KeyserverFederationAPI,
 ) *internal.UserInternalAPI {
 	js, _ := natsInstance.Prepare(processContext, &dendriteCfg.Global.JetStream)
@@ -87,7 +87,7 @@ func NewInternalAPI(
 
 	updater := internal.NewDeviceListUpdater(processContext, keyDB, userAPI, keyChangeProducer, fedClient, 8, rsAPI, dendriteCfg.Global.ServerName) // 8 workers TODO: configurable
 	userAPI.Updater = updater
-	// Remove users which we don't share a room with anymore
+	// Remove users which we don't share a frame with anymore
 	if err := updater.CleanUp(); err != nil {
 		logrus.WithError(err).Error("failed to cleanup stale device lists")
 	}
@@ -119,7 +119,7 @@ func NewInternalAPI(
 		logrus.WithError(err).Panic("failed to start user API receipt consumer")
 	}
 
-	eventConsumer := consumers.NewOutputRoomEventConsumer(
+	eventConsumer := consumers.NewOutputFrameEventConsumer(
 		processContext, &dendriteCfg.UserAPI, js, db, pgClient, rsAPI, syncProducer,
 	)
 	if err := eventConsumer.Start(); err != nil {

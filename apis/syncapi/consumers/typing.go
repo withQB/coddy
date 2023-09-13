@@ -72,7 +72,7 @@ func (s *OutputTypingEventConsumer) Start() error {
 
 func (s *OutputTypingEventConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) bool {
 	msg := msgs[0] // Guaranteed to exist if onMessage is called
-	roomID := msg.Header.Get(jetstream.RoomID)
+	frameID := msg.Header.Get(jetstream.FrameID)
 	userID := msg.Header.Get(jetstream.UserID)
 	typing, err := strconv.ParseBool(msg.Header.Get("typing"))
 	if err != nil {
@@ -86,7 +86,7 @@ func (s *OutputTypingEventConsumer) onMessage(ctx context.Context, msgs []*nats.
 	}
 
 	log.WithFields(log.Fields{
-		"room_id": roomID,
+		"frame_id": frameID,
 		"user_id": userID,
 		"typing":  typing,
 		"timeout": timeout,
@@ -96,16 +96,16 @@ func (s *OutputTypingEventConsumer) onMessage(ctx context.Context, msgs []*nats.
 	if typing {
 		expiry := time.Now().Add(time.Duration(timeout) * time.Millisecond)
 		typingPos = types.StreamPosition(
-			s.eduCache.AddTypingUser(userID, roomID, &expiry),
+			s.eduCache.AddTypingUser(userID, frameID, &expiry),
 		)
 	} else {
 		typingPos = types.StreamPosition(
-			s.eduCache.RemoveUser(userID, roomID),
+			s.eduCache.RemoveUser(userID, frameID),
 		)
 	}
 
 	s.stream.Advance(typingPos)
-	s.notifier.OnNewTyping(roomID, types.StreamingToken{TypingPosition: typingPos})
+	s.notifier.OnNewTyping(frameID, types.StreamingToken{TypingPosition: typingPos})
 
 	return true
 }

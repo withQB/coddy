@@ -27,47 +27,47 @@ import (
 )
 
 const joinedHostsSchema = `
--- The joined_hosts table stores a list of m.room.member event ids in the
--- current state for each room where the membership is "join".
--- There will be an entry for every user that is joined to the room.
+-- The joined_hosts table stores a list of m.frame.member event ids in the
+-- current state for each frame where the membership is "join".
+-- There will be an entry for every user that is joined to the frame.
 CREATE TABLE IF NOT EXISTS federationsender_joined_hosts (
-    -- The string ID of the room.
-    room_id TEXT NOT NULL,
-    -- The event ID of the m.room.member join event.
+    -- The string ID of the frame.
+    frame_id TEXT NOT NULL,
+    -- The event ID of the m.frame.member join event.
     event_id TEXT NOT NULL,
-    -- The domain part of the user ID the m.room.member event is for.
+    -- The domain part of the user ID the m.frame.member event is for.
     server_name TEXT NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS federatonsender_joined_hosts_event_id_idx
     ON federationsender_joined_hosts (event_id);
 
-CREATE INDEX IF NOT EXISTS federatonsender_joined_hosts_room_id_idx
-    ON federationsender_joined_hosts (room_id)
+CREATE INDEX IF NOT EXISTS federatonsender_joined_hosts_frame_id_idx
+    ON federationsender_joined_hosts (frame_id)
 `
 
 const insertJoinedHostsSQL = "" +
-	"INSERT OR IGNORE INTO federationsender_joined_hosts (room_id, event_id, server_name)" +
+	"INSERT OR IGNORE INTO federationsender_joined_hosts (frame_id, event_id, server_name)" +
 	" VALUES ($1, $2, $3)"
 
 const deleteJoinedHostsSQL = "" +
 	"DELETE FROM federationsender_joined_hosts WHERE event_id = $1"
 
-const deleteJoinedHostsForRoomSQL = "" +
-	"DELETE FROM federationsender_joined_hosts WHERE room_id = $1"
+const deleteJoinedHostsForFrameSQL = "" +
+	"DELETE FROM federationsender_joined_hosts WHERE frame_id = $1"
 
 const selectJoinedHostsSQL = "" +
 	"SELECT event_id, server_name FROM federationsender_joined_hosts" +
-	" WHERE room_id = $1"
+	" WHERE frame_id = $1"
 
 const selectAllJoinedHostsSQL = "" +
 	"SELECT DISTINCT server_name FROM federationsender_joined_hosts"
 
-const selectJoinedHostsForRoomsSQL = "" +
-	"SELECT DISTINCT server_name FROM federationsender_joined_hosts WHERE room_id IN ($1)"
+const selectJoinedHostsForFramesSQL = "" +
+	"SELECT DISTINCT server_name FROM federationsender_joined_hosts WHERE frame_id IN ($1)"
 
-const selectJoinedHostsForRoomsExcludingBlacklistedSQL = "" +
-	"SELECT DISTINCT server_name FROM federationsender_joined_hosts j WHERE room_id IN ($1) AND NOT EXISTS (" +
+const selectJoinedHostsForFramesExcludingBlacklistedSQL = "" +
+	"SELECT DISTINCT server_name FROM federationsender_joined_hosts j WHERE frame_id IN ($1) AND NOT EXISTS (" +
 	"  SELECT server_name FROM federationsender_blacklist WHERE j.server_name = server_name" +
 	");"
 
@@ -75,11 +75,11 @@ type joinedHostsStatements struct {
 	db                           *sql.DB
 	insertJoinedHostsStmt        *sql.Stmt
 	deleteJoinedHostsStmt        *sql.Stmt
-	deleteJoinedHostsForRoomStmt *sql.Stmt
+	deleteJoinedHostsForFrameStmt *sql.Stmt
 	selectJoinedHostsStmt        *sql.Stmt
 	selectAllJoinedHostsStmt     *sql.Stmt
-	// selectJoinedHostsForRoomsStmt *sql.Stmt - prepared at runtime due to variadic
-	// selectJoinedHostsForRoomsExcludingBlacklistedStmt *sql.Stmt - prepared at runtime due to variadic
+	// selectJoinedHostsForFramesStmt *sql.Stmt - prepared at runtime due to variadic
+	// selectJoinedHostsForFramesExcludingBlacklistedStmt *sql.Stmt - prepared at runtime due to variadic
 }
 
 func NewSQLiteJoinedHostsTable(db *sql.DB) (s *joinedHostsStatements, err error) {
@@ -94,7 +94,7 @@ func NewSQLiteJoinedHostsTable(db *sql.DB) (s *joinedHostsStatements, err error)
 	return s, sqlutil.StatementList{
 		{&s.insertJoinedHostsStmt, insertJoinedHostsSQL},
 		{&s.deleteJoinedHostsStmt, deleteJoinedHostsSQL},
-		{&s.deleteJoinedHostsForRoomStmt, deleteJoinedHostsForRoomSQL},
+		{&s.deleteJoinedHostsForFrameStmt, deleteJoinedHostsForFrameSQL},
 		{&s.selectJoinedHostsStmt, selectJoinedHostsSQL},
 		{&s.selectAllJoinedHostsStmt, selectAllJoinedHostsSQL},
 	}.Prepare(db)
@@ -103,11 +103,11 @@ func NewSQLiteJoinedHostsTable(db *sql.DB) (s *joinedHostsStatements, err error)
 func (s *joinedHostsStatements) InsertJoinedHosts(
 	ctx context.Context,
 	txn *sql.Tx,
-	roomID, eventID string,
+	frameID, eventID string,
 	serverName spec.ServerName,
 ) error {
 	stmt := sqlutil.TxStmt(txn, s.insertJoinedHostsStmt)
-	_, err := stmt.ExecContext(ctx, roomID, eventID, serverName)
+	_, err := stmt.ExecContext(ctx, frameID, eventID, serverName)
 	return err
 }
 
@@ -123,25 +123,25 @@ func (s *joinedHostsStatements) DeleteJoinedHosts(
 	return nil
 }
 
-func (s *joinedHostsStatements) DeleteJoinedHostsForRoom(
-	ctx context.Context, txn *sql.Tx, roomID string,
+func (s *joinedHostsStatements) DeleteJoinedHostsForFrame(
+	ctx context.Context, txn *sql.Tx, frameID string,
 ) error {
-	stmt := sqlutil.TxStmt(txn, s.deleteJoinedHostsForRoomStmt)
-	_, err := stmt.ExecContext(ctx, roomID)
+	stmt := sqlutil.TxStmt(txn, s.deleteJoinedHostsForFrameStmt)
+	_, err := stmt.ExecContext(ctx, frameID)
 	return err
 }
 
 func (s *joinedHostsStatements) SelectJoinedHostsWithTx(
-	ctx context.Context, txn *sql.Tx, roomID string,
+	ctx context.Context, txn *sql.Tx, frameID string,
 ) ([]types.JoinedHost, error) {
 	stmt := sqlutil.TxStmt(txn, s.selectJoinedHostsStmt)
-	return joinedHostsFromStmt(ctx, stmt, roomID)
+	return joinedHostsFromStmt(ctx, stmt, frameID)
 }
 
 func (s *joinedHostsStatements) SelectJoinedHosts(
-	ctx context.Context, roomID string,
+	ctx context.Context, frameID string,
 ) ([]types.JoinedHost, error) {
-	return joinedHostsFromStmt(ctx, s.selectJoinedHostsStmt, roomID)
+	return joinedHostsFromStmt(ctx, s.selectJoinedHostsStmt, frameID)
 }
 
 func (s *joinedHostsStatements) SelectAllJoinedHosts(
@@ -165,23 +165,23 @@ func (s *joinedHostsStatements) SelectAllJoinedHosts(
 	return result, rows.Err()
 }
 
-func (s *joinedHostsStatements) SelectJoinedHostsForRooms(
-	ctx context.Context, roomIDs []string, excludingBlacklisted bool,
+func (s *joinedHostsStatements) SelectJoinedHostsForFrames(
+	ctx context.Context, frameIDs []string, excludingBlacklisted bool,
 ) ([]spec.ServerName, error) {
-	iRoomIDs := make([]interface{}, len(roomIDs))
-	for i := range roomIDs {
-		iRoomIDs[i] = roomIDs[i]
+	iFrameIDs := make([]interface{}, len(frameIDs))
+	for i := range frameIDs {
+		iFrameIDs[i] = frameIDs[i]
 	}
-	query := selectJoinedHostsForRoomsSQL
+	query := selectJoinedHostsForFramesSQL
 	if excludingBlacklisted {
-		query = selectJoinedHostsForRoomsExcludingBlacklistedSQL
+		query = selectJoinedHostsForFramesExcludingBlacklistedSQL
 	}
-	sql := strings.Replace(query, "($1)", sqlutil.QueryVariadic(len(iRoomIDs)), 1)
-	rows, err := s.db.QueryContext(ctx, sql, iRoomIDs...)
+	sql := strings.Replace(query, "($1)", sqlutil.QueryVariadic(len(iFrameIDs)), 1)
+	rows, err := s.db.QueryContext(ctx, sql, iFrameIDs...)
 	if err != nil {
 		return nil, err
 	}
-	defer internal.CloseAndLogIfError(ctx, rows, "selectJoinedHostsForRoomsStmt: rows.close() failed")
+	defer internal.CloseAndLogIfError(ctx, rows, "selectJoinedHostsForFramesStmt: rows.close() failed")
 
 	var result []spec.ServerName
 	for rows.Next() {
@@ -196,9 +196,9 @@ func (s *joinedHostsStatements) SelectJoinedHostsForRooms(
 }
 
 func joinedHostsFromStmt(
-	ctx context.Context, stmt *sql.Stmt, roomID string,
+	ctx context.Context, stmt *sql.Stmt, frameID string,
 ) ([]types.JoinedHost, error) {
-	rows, err := stmt.QueryContext(ctx, roomID)
+	rows, err := stmt.QueryContext(ctx, frameID)
 	if err != nil {
 		return nil, err
 	}

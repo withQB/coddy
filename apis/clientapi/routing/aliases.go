@@ -20,22 +20,22 @@ import (
 	"net/http"
 
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
 )
 
-// GetAliases implements GET /_matrix/client/r0/rooms/{roomId}/aliases
+// GetAliases implements GET /_coddy/client/r0/frames/{frameId}/aliases
 func GetAliases(
-	req *http.Request, rsAPI api.ClientRoomserverAPI, device *userapi.Device, roomID string,
+	req *http.Request, rsAPI api.ClientDataframeAPI, device *userapi.Device, frameID string,
 ) xutil.JSONResponse {
 	stateTuple := xtools.StateKeyTuple{
-		EventType: spec.MRoomHistoryVisibility,
+		EventType: spec.MFrameHistoryVisibility,
 		StateKey:  "",
 	}
 	stateReq := &api.QueryCurrentStateRequest{
-		RoomID:      roomID,
+		FrameID:      frameID,
 		StateTuples: []xtools.StateKeyTuple{stateTuple},
 	}
 	stateRes := &api.QueryCurrentStateResponse{}
@@ -63,32 +63,32 @@ func GetAliases(
 			}
 		}
 		queryReq := api.QueryMembershipForUserRequest{
-			RoomID: roomID,
+			FrameID: frameID,
 			UserID: *deviceUserID,
 		}
 		var queryRes api.QueryMembershipForUserResponse
 		if err := rsAPI.QueryMembershipForUser(req.Context(), &queryReq, &queryRes); err != nil {
-			xutil.GetLogger(req.Context()).WithError(err).Error("rsAPI.QueryMembershipsForRoom failed")
+			xutil.GetLogger(req.Context()).WithError(err).Error("rsAPI.QueryMembershipsForFrame failed")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.InternalServerError{},
 			}
 		}
-		if !queryRes.IsInRoom {
+		if !queryRes.IsInFrame {
 			return xutil.JSONResponse{
 				Code: http.StatusForbidden,
-				JSON: spec.Forbidden("You aren't a member of this room."),
+				JSON: spec.Forbidden("You aren't a member of this frame."),
 			}
 		}
 	}
 
-	aliasesReq := api.GetAliasesForRoomIDRequest{
-		RoomID: roomID,
+	aliasesReq := api.GetAliasesForFrameIDRequest{
+		FrameID: frameID,
 	}
-	aliasesRes := api.GetAliasesForRoomIDResponse{}
-	if err := rsAPI.GetAliasesForRoomID(req.Context(), &aliasesReq, &aliasesRes); err != nil {
-		xutil.GetLogger(req.Context()).WithError(err).Error("rsAPI.GetAliasesForRoomID failed")
-		return xutil.ErrorResponse(fmt.Errorf("rsAPI.GetAliasesForRoomID: %w", err))
+	aliasesRes := api.GetAliasesForFrameIDResponse{}
+	if err := rsAPI.GetAliasesForFrameID(req.Context(), &aliasesReq, &aliasesRes); err != nil {
+		xutil.GetLogger(req.Context()).WithError(err).Error("rsAPI.GetAliasesForFrameID failed")
+		return xutil.ErrorResponse(fmt.Errorf("rsAPI.GetAliasesForFrameID: %w", err))
 	}
 
 	response := struct {

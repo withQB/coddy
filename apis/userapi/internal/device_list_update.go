@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	rsapi "github.com/withqb/coddy/servers/roomserver/api"
+	rsapi "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
 
@@ -68,7 +68,7 @@ func init() {
 //   - Query requests can get queued behind other servers if they hash to the same worker, even if there are other free
 //     workers elsewhere. Whilst suboptimal, provided we cap how long a single request can last (e.g using context timeouts)
 //     we guarantee we will get around to it. Also, more users on a given server does not increase the number of requests
-//     (as /keys/query allows multiple users to be specified) so being stuck behind matrix.org won't materially be any worse
+//     (as /keys/query allows multiple users to be specified) so being stuck behind domain won't materially be any worse
 //     than being stuck behind foo.bar
 //
 // In the event that the query fails, a lock is acquired and the server name along with the time to wait before retrying is
@@ -92,7 +92,7 @@ type DeviceListUpdater struct {
 	// block on or timeout via a select.
 	userIDToChan   map[string]chan bool
 	userIDToChanMu *sync.Mutex
-	rsAPI          rsapi.KeyserverRoomserverAPI
+	rsAPI          rsapi.KeyserverDataframeAPI
 }
 
 // DeviceListUpdaterDatabase is the subset of functionality from storage.Database required for the updater.
@@ -133,7 +133,7 @@ func NewDeviceListUpdater(
 	process *process.ProcessContext, db DeviceListUpdaterDatabase,
 	api DeviceListUpdaterAPI, producer KeyChangeProducer,
 	fedClient fedsenderapi.KeyserverFederationAPI, numWorkers int,
-	rsAPI rsapi.KeyserverRoomserverAPI, thisServer spec.ServerName,
+	rsAPI rsapi.KeyserverDataframeAPI, thisServer spec.ServerName,
 ) *DeviceListUpdater {
 	return &DeviceListUpdater{
 		process:        process,
@@ -180,7 +180,7 @@ func (u *DeviceListUpdater) Start() error {
 	return nil
 }
 
-// CleanUp removes stale device entries for users we don't share a room with anymore
+// CleanUp removes stale device entries for users we don't share a frame with anymore
 func (u *DeviceListUpdater) CleanUp() error {
 	staleUsers, err := u.db.StaleDeviceLists(u.process.Context(), []spec.ServerName{})
 	if err != nil {

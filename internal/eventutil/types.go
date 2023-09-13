@@ -9,7 +9,7 @@ import (
 // AccountData represents account data sent from the client API server to the
 // sync API server
 type AccountData struct {
-	RoomID       string              `json:"room_id"`
+	FrameID       string              `json:"frame_id"`
 	Type         string              `json:"type"`
 	ReadMarker   *ReadMarkerJSON     `json:"read_marker,omitempty"`   // optional
 	IgnoredUsers *types.IgnoredUsers `json:"ignored_users,omitempty"` // optional
@@ -24,9 +24,9 @@ type ReadMarkerJSON struct {
 // NotificationData contains statistics about notifications, sent from
 // the Push Server to the Sync API server.
 type NotificationData struct {
-	// RoomID identifies the scope of the statistics, together with
+	// FrameID identifies the scope of the statistics, together with
 	// MXID (which is encoded in the Kafka key).
-	RoomID string `json:"room_id"`
+	FrameID string `json:"frame_id"`
 
 	// HighlightCount is the number of unread notifications with the
 	// highlight tweak.

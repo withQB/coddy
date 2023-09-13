@@ -21,7 +21,7 @@ var noOpHTTPTransport = &http.Transport{
 }
 
 func init() {
-	noOpHTTPTransport.RegisterProtocol("matrix", &noOpHTTPRoundTripper{})
+	noOpHTTPTransport.RegisterProtocol("coddy", &noOpHTTPRoundTripper{})
 }
 
 type noOpHTTPRoundTripper struct {

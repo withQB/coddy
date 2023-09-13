@@ -9,19 +9,19 @@ import (
 
 	"github.com/withqb/coddy/apis/federationapi/storage/shared/receipt"
 	"github.com/withqb/coddy/apis/federationapi/types"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 )
 
 type Database interface {
 	P2PDatabase
 	xtools.KeyDatabase
 
-	UpdateRoom(ctx context.Context, roomID string, addHosts []types.JoinedHost, removeHosts []string, purgeRoomFirst bool) (joinedHosts []types.JoinedHost, err error)
+	UpdateFrame(ctx context.Context, frameID string, addHosts []types.JoinedHost, removeHosts []string, purgeFrameFirst bool) (joinedHosts []types.JoinedHost, err error)
 
-	GetJoinedHosts(ctx context.Context, roomID string) ([]types.JoinedHost, error)
+	GetJoinedHosts(ctx context.Context, frameID string) ([]types.JoinedHost, error)
 	GetAllJoinedHosts(ctx context.Context) ([]spec.ServerName, error)
-	// GetJoinedHostsForRooms returns the complete set of servers in the rooms given.
-	GetJoinedHostsForRooms(ctx context.Context, roomIDs []string, excludeSelf, excludeBlacklisted bool) ([]spec.ServerName, error)
+	// GetJoinedHostsForFrames returns the complete set of servers in the frames given.
+	GetJoinedHostsForFrames(ctx context.Context, frameIDs []string, excludeSelf, excludeBlacklisted bool) ([]spec.ServerName, error)
 
 	StoreJSON(ctx context.Context, js string) (*receipt.Receipt, error)
 
@@ -55,15 +55,15 @@ type Database interface {
 	// If it is present, returns true. If not, returns false.
 	IsServerAssumedOffline(ctx context.Context, serverName spec.ServerName) (bool, error)
 
-	AddOutboundPeek(ctx context.Context, serverName spec.ServerName, roomID, peekID string, renewalInterval int64) error
-	RenewOutboundPeek(ctx context.Context, serverName spec.ServerName, roomID, peekID string, renewalInterval int64) error
-	GetOutboundPeek(ctx context.Context, serverName spec.ServerName, roomID, peekID string) (*types.OutboundPeek, error)
-	GetOutboundPeeks(ctx context.Context, roomID string) ([]types.OutboundPeek, error)
+	AddOutboundPeek(ctx context.Context, serverName spec.ServerName, frameID, peekID string, renewalInterval int64) error
+	RenewOutboundPeek(ctx context.Context, serverName spec.ServerName, frameID, peekID string, renewalInterval int64) error
+	GetOutboundPeek(ctx context.Context, serverName spec.ServerName, frameID, peekID string) (*types.OutboundPeek, error)
+	GetOutboundPeeks(ctx context.Context, frameID string) ([]types.OutboundPeek, error)
 
-	AddInboundPeek(ctx context.Context, serverName spec.ServerName, roomID, peekID string, renewalInterval int64) error
-	RenewInboundPeek(ctx context.Context, serverName spec.ServerName, roomID, peekID string, renewalInterval int64) error
-	GetInboundPeek(ctx context.Context, serverName spec.ServerName, roomID, peekID string) (*types.InboundPeek, error)
-	GetInboundPeeks(ctx context.Context, roomID string) ([]types.InboundPeek, error)
+	AddInboundPeek(ctx context.Context, serverName spec.ServerName, frameID, peekID string, renewalInterval int64) error
+	RenewInboundPeek(ctx context.Context, serverName spec.ServerName, frameID, peekID string, renewalInterval int64) error
+	GetInboundPeek(ctx context.Context, serverName spec.ServerName, frameID, peekID string) (*types.InboundPeek, error)
+	GetInboundPeeks(ctx context.Context, frameID string) ([]types.InboundPeek, error)
 
 	// Update the notary with the given server keys from the given server name.
 	UpdateNotaryKeys(ctx context.Context, serverName spec.ServerName, serverKeys xtools.ServerKeys) error
@@ -73,7 +73,7 @@ type Database interface {
 	// DeleteExpiredEDUs cleans up expired EDUs
 	DeleteExpiredEDUs(ctx context.Context) error
 
-	PurgeRoom(ctx context.Context, roomID string) error
+	PurgeFrame(ctx context.Context, frameID string) error
 }
 
 type P2PDatabase interface {

@@ -7,12 +7,12 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/storage"
 	"github.com/withqb/coddy/apis/syncapi/types"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 )
 
 type DeviceListStreamProvider struct {
 	DefaultStreamProvider
-	rsAPI   api.SyncRoomserverAPI
+	rsAPI   api.SyncDataframeAPI
 	userAPI userapi.SyncKeyAPI
 }
 

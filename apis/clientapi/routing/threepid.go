@@ -55,7 +55,7 @@ func RequestEmailToken(req *http.Request, threePIDAPI api.ClientUserAPI, cfg *co
 	if len(res.Localpart) > 0 {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.MatrixError{
+			JSON: spec.CoddyError{
 				ErrCode: spec.ErrorThreePIDInUse,
 				Err:     userdb.Err3PIDInUse.Error(),
 			},
@@ -116,7 +116,7 @@ func CheckAndSave3PIDAssociation(
 	if !verified {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.MatrixError{
+			JSON: spec.CoddyError{
 				ErrCode: spec.ErrorThreePIDAuthFailed,
 				Err:     "Failed to auth 3pid",
 			},

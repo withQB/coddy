@@ -13,9 +13,9 @@ import (
 	"github.com/withqb/coddy/apis/clientapi/threepid"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/eventutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	appserviceAPI "github.com/withqb/coddy/services/appservice/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools"
@@ -27,8 +27,8 @@ import (
 
 func SendBan(
 	req *http.Request, profileAPI userapi.ClientUserAPI, device *userapi.Device,
-	roomID string, cfg *config.ClientAPI,
-	rsAPI roomserverAPI.ClientRoomserverAPI, asAPI appserviceAPI.AppServiceInternalAPI,
+	frameID string, cfg *config.ClientAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI, asAPI appserviceAPI.AppServiceInternalAPI,
 ) xutil.JSONResponse {
 	body, evTime, reqErr := extractRequestData(req)
 	if reqErr != nil {
@@ -49,14 +49,14 @@ func SendBan(
 			JSON: spec.Forbidden("You don't have permission to ban this user, bad userID"),
 		}
 	}
-	validRoomID, err := spec.NewRoomID(roomID)
+	validFrameID, err := spec.NewFrameID(frameID)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON("RoomID is invalid"),
+			JSON: spec.BadJSON("FrameID is invalid"),
 		}
 	}
-	senderID, err := rsAPI.QuerySenderIDForUser(req.Context(), *validRoomID, *deviceUserID)
+	senderID, err := rsAPI.QuerySenderIDForUser(req.Context(), *validFrameID, *deviceUserID)
 	if err != nil || senderID == nil {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
@@ -64,12 +64,12 @@ func SendBan(
 		}
 	}
 
-	errRes := checkMemberInRoom(req.Context(), rsAPI, *deviceUserID, roomID)
+	errRes := checkMemberInFrame(req.Context(), rsAPI, *deviceUserID, frameID)
 	if errRes != nil {
 		return *errRes
 	}
 
-	pl, errRes := getPowerlevels(req, rsAPI, roomID)
+	pl, errRes := getPowerlevels(req, rsAPI, frameID)
 	if errRes != nil {
 		return *errRes
 	}
@@ -81,16 +81,16 @@ func SendBan(
 		}
 	}
 
-	return sendMembership(req.Context(), profileAPI, device, roomID, spec.Ban, body.Reason, cfg, body.UserID, evTime, rsAPI, asAPI)
+	return sendMembership(req.Context(), profileAPI, device, frameID, spec.Ban, body.Reason, cfg, body.UserID, evTime, rsAPI, asAPI)
 }
 
 func sendMembership(ctx context.Context, profileAPI userapi.ClientUserAPI, device *userapi.Device,
-	roomID, membership, reason string, cfg *config.ClientAPI, targetUserID string, evTime time.Time,
-	rsAPI roomserverAPI.ClientRoomserverAPI, asAPI appserviceAPI.AppServiceInternalAPI) xutil.JSONResponse {
+	frameID, membership, reason string, cfg *config.ClientAPI, targetUserID string, evTime time.Time,
+	rsAPI dataframeAPI.ClientDataframeAPI, asAPI appserviceAPI.AppServiceInternalAPI) xutil.JSONResponse {
 
 	event, err := buildMembershipEvent(
 		ctx, targetUserID, reason, profileAPI, device, membership,
-		roomID, false, cfg, evTime, rsAPI, asAPI,
+		frameID, false, cfg, evTime, rsAPI, asAPI,
 	)
 	if err != nil {
 		xutil.GetLogger(ctx).WithError(err).Error("buildMembershipEvent failed")
@@ -101,9 +101,9 @@ func sendMembership(ctx context.Context, profileAPI userapi.ClientUserAPI, devic
 	}
 
 	serverName := device.UserDomain()
-	if err = roomserverAPI.SendEvents(
+	if err = dataframeAPI.SendEvents(
 		ctx, rsAPI,
-		roomserverAPI.KindNew,
+		dataframeAPI.KindNew,
 		[]*types.HeaderedEvent{event},
 		device.UserDomain(),
 		serverName,
@@ -126,8 +126,8 @@ func sendMembership(ctx context.Context, profileAPI userapi.ClientUserAPI, devic
 
 func SendKick(
 	req *http.Request, profileAPI userapi.ClientUserAPI, device *userapi.Device,
-	roomID string, cfg *config.ClientAPI,
-	rsAPI roomserverAPI.ClientRoomserverAPI, asAPI appserviceAPI.AppServiceInternalAPI,
+	frameID string, cfg *config.ClientAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI, asAPI appserviceAPI.AppServiceInternalAPI,
 ) xutil.JSONResponse {
 	body, evTime, reqErr := extractRequestData(req)
 	if reqErr != nil {
@@ -147,14 +147,14 @@ func SendKick(
 			JSON: spec.Forbidden("You don't have permission to kick this user, bad userID"),
 		}
 	}
-	validRoomID, err := spec.NewRoomID(roomID)
+	validFrameID, err := spec.NewFrameID(frameID)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON("RoomID is invalid"),
+			JSON: spec.BadJSON("FrameID is invalid"),
 		}
 	}
-	senderID, err := rsAPI.QuerySenderIDForUser(req.Context(), *validRoomID, *deviceUserID)
+	senderID, err := rsAPI.QuerySenderIDForUser(req.Context(), *validFrameID, *deviceUserID)
 	if err != nil || senderID == nil {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
@@ -162,12 +162,12 @@ func SendKick(
 		}
 	}
 
-	errRes := checkMemberInRoom(req.Context(), rsAPI, *deviceUserID, roomID)
+	errRes := checkMemberInFrame(req.Context(), rsAPI, *deviceUserID, frameID)
 	if errRes != nil {
 		return *errRes
 	}
 
-	pl, errRes := getPowerlevels(req, rsAPI, roomID)
+	pl, errRes := getPowerlevels(req, rsAPI, frameID)
 	if errRes != nil {
 		return *errRes
 	}
@@ -186,9 +186,9 @@ func SendKick(
 			JSON: spec.BadJSON("body userID is invalid"),
 		}
 	}
-	var queryRes roomserverAPI.QueryMembershipForUserResponse
-	err = rsAPI.QueryMembershipForUser(req.Context(), &roomserverAPI.QueryMembershipForUserRequest{
-		RoomID: roomID,
+	var queryRes dataframeAPI.QueryMembershipForUserResponse
+	err = rsAPI.QueryMembershipForUser(req.Context(), &dataframeAPI.QueryMembershipForUserRequest{
+		FrameID: frameID,
 		UserID: *bodyUserID,
 	}, &queryRes)
 	if err != nil {
@@ -202,13 +202,13 @@ func SendKick(
 		}
 	}
 	// TODO: should we be using SendLeave instead?
-	return sendMembership(req.Context(), profileAPI, device, roomID, spec.Leave, body.Reason, cfg, body.UserID, evTime, rsAPI, asAPI)
+	return sendMembership(req.Context(), profileAPI, device, frameID, spec.Leave, body.Reason, cfg, body.UserID, evTime, rsAPI, asAPI)
 }
 
 func SendUnban(
 	req *http.Request, profileAPI userapi.ClientUserAPI, device *userapi.Device,
-	roomID string, cfg *config.ClientAPI,
-	rsAPI roomserverAPI.ClientRoomserverAPI, asAPI appserviceAPI.AppServiceInternalAPI,
+	frameID string, cfg *config.ClientAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI, asAPI appserviceAPI.AppServiceInternalAPI,
 ) xutil.JSONResponse {
 	body, evTime, reqErr := extractRequestData(req)
 	if reqErr != nil {
@@ -229,7 +229,7 @@ func SendUnban(
 		}
 	}
 
-	errRes := checkMemberInRoom(req.Context(), rsAPI, *deviceUserID, roomID)
+	errRes := checkMemberInFrame(req.Context(), rsAPI, *deviceUserID, frameID)
 	if errRes != nil {
 		return *errRes
 	}
@@ -241,9 +241,9 @@ func SendUnban(
 			JSON: spec.BadJSON("body userID is invalid"),
 		}
 	}
-	var queryRes roomserverAPI.QueryMembershipForUserResponse
-	err = rsAPI.QueryMembershipForUser(req.Context(), &roomserverAPI.QueryMembershipForUserRequest{
-		RoomID: roomID,
+	var queryRes dataframeAPI.QueryMembershipForUserResponse
+	err = rsAPI.QueryMembershipForUser(req.Context(), &dataframeAPI.QueryMembershipForUserRequest{
+		FrameID: frameID,
 		UserID: *bodyUserID,
 	}, &queryRes)
 	if err != nil {
@@ -258,13 +258,13 @@ func SendUnban(
 		}
 	}
 	// TODO: should we be using SendLeave instead?
-	return sendMembership(req.Context(), profileAPI, device, roomID, spec.Leave, body.Reason, cfg, body.UserID, evTime, rsAPI, asAPI)
+	return sendMembership(req.Context(), profileAPI, device, frameID, spec.Leave, body.Reason, cfg, body.UserID, evTime, rsAPI, asAPI)
 }
 
 func SendInvite(
 	req *http.Request, profileAPI userapi.ClientUserAPI, device *userapi.Device,
-	roomID string, cfg *config.ClientAPI,
-	rsAPI roomserverAPI.ClientRoomserverAPI, asAPI appserviceAPI.AppServiceInternalAPI,
+	frameID string, cfg *config.ClientAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI, asAPI appserviceAPI.AppServiceInternalAPI,
 ) xutil.JSONResponse {
 	body, evTime, reqErr := extractRequestData(req)
 	if reqErr != nil {
@@ -272,15 +272,15 @@ func SendInvite(
 	}
 
 	inviteStored, jsonErrResp := checkAndProcessThreepid(
-		req, device, body, cfg, rsAPI, profileAPI, roomID, evTime,
+		req, device, body, cfg, rsAPI, profileAPI, frameID, evTime,
 	)
 	if jsonErrResp != nil {
 		return *jsonErrResp
 	}
 
 	// If an invite has been stored on an identity server, it means that a
-	// m.room.third_party_invite event has been emitted and that we shouldn't
-	// emit a m.room.member one.
+	// m.frame.third_party_invite event has been emitted and that we shouldn't
+	// emit a m.frame.member one.
 	if inviteStored {
 		return xutil.JSONResponse{
 			Code: http.StatusOK,
@@ -303,13 +303,13 @@ func SendInvite(
 		}
 	}
 
-	errRes := checkMemberInRoom(req.Context(), rsAPI, *deviceUserID, roomID)
+	errRes := checkMemberInFrame(req.Context(), rsAPI, *deviceUserID, frameID)
 	if errRes != nil {
 		return *errRes
 	}
 
 	// We already received the return value, so no need to check for an error here.
-	response, _ := sendInvite(req.Context(), profileAPI, device, roomID, body.UserID, body.Reason, cfg, rsAPI, asAPI, evTime)
+	response, _ := sendInvite(req.Context(), profileAPI, device, frameID, body.UserID, body.Reason, cfg, rsAPI, asAPI, evTime)
 	return response
 }
 
@@ -318,16 +318,16 @@ func sendInvite(
 	ctx context.Context,
 	profileAPI userapi.ClientUserAPI,
 	device *userapi.Device,
-	roomID, userID, reason string,
+	frameID, userID, reason string,
 	cfg *config.ClientAPI,
-	rsAPI roomserverAPI.ClientRoomserverAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI,
 	asAPI appserviceAPI.AppServiceInternalAPI, evTime time.Time,
 ) (xutil.JSONResponse, error) {
-	validRoomID, err := spec.NewRoomID(roomID)
+	validFrameID, err := spec.NewFrameID(frameID)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.InvalidParam("RoomID is invalid"),
+			JSON: spec.InvalidParam("FrameID is invalid"),
 		}, err
 	}
 	inviter, err := spec.NewUserID(device.UserID, true)
@@ -359,8 +359,8 @@ func sendInvite(
 		}, err
 	}
 	err = rsAPI.PerformInvite(ctx, &api.PerformInviteRequest{
-		InviteInput: roomserverAPI.InviteInput{
-			RoomID:      *validRoomID,
+		InviteInput: dataframeAPI.InviteInput{
+			FrameID:      *validFrameID,
 			Inviter:     *inviter,
 			Invitee:     *invitee,
 			DisplayName: profile.DisplayName,
@@ -371,17 +371,17 @@ func sendInvite(
 			PrivateKey:  identity.PrivateKey,
 			EventTime:   evTime,
 		},
-		InviteRoomState: nil, // ask the roomserver to draw up invite room state for us
+		InviteFrameState: nil, // ask the dataframe to draw up invite frame state for us
 		SendAsServer:    string(device.UserDomain()),
 	})
 
 	switch e := err.(type) {
-	case roomserverAPI.ErrInvalidID:
+	case dataframeAPI.ErrInvalidID:
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
 			JSON: spec.Unknown(e.Error()),
 		}, e
-	case roomserverAPI.ErrNotAllowed:
+	case dataframeAPI.ErrNotAllowed:
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
 			JSON: spec.Forbidden(e.Error()),
@@ -406,15 +406,15 @@ func buildMembershipEventDirect(
 	ctx context.Context,
 	targetSenderID spec.SenderID, reason string, userDisplayName, userAvatarURL string,
 	sender spec.SenderID, senderDomain spec.ServerName,
-	membership, roomID string, isDirect bool,
+	membership, frameID string, isDirect bool,
 	keyID xtools.KeyID, privateKey ed25519.PrivateKey, evTime time.Time,
-	rsAPI roomserverAPI.ClientRoomserverAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI,
 ) (*types.HeaderedEvent, error) {
 	targetSenderString := string(targetSenderID)
 	proto := xtools.ProtoEvent{
 		SenderID: string(sender),
-		RoomID:   roomID,
-		Type:     "m.room.member",
+		FrameID:   frameID,
+		Type:     "m.frame.member",
 		StateKey: &targetSenderString,
 	}
 
@@ -442,9 +442,9 @@ func buildMembershipEvent(
 	ctx context.Context,
 	targetUserID, reason string, profileAPI userapi.ClientUserAPI,
 	device *userapi.Device,
-	membership, roomID string, isDirect bool,
+	membership, frameID string, isDirect bool,
 	cfg *config.ClientAPI, evTime time.Time,
-	rsAPI roomserverAPI.ClientRoomserverAPI, asAPI appserviceAPI.AppServiceInternalAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI, asAPI appserviceAPI.AppServiceInternalAPI,
 ) (*types.HeaderedEvent, error) {
 	profile, err := loadProfile(ctx, targetUserID, cfg, profileAPI, asAPI)
 	if err != nil {
@@ -455,35 +455,35 @@ func buildMembershipEvent(
 	if err != nil {
 		return nil, err
 	}
-	validRoomID, err := spec.NewRoomID(roomID)
+	validFrameID, err := spec.NewFrameID(frameID)
 	if err != nil {
 		return nil, err
 	}
-	senderID, err := rsAPI.QuerySenderIDForUser(ctx, *validRoomID, *userID)
+	senderID, err := rsAPI.QuerySenderIDForUser(ctx, *validFrameID, *userID)
 	if err != nil {
 		return nil, err
 	} else if senderID == nil {
-		return nil, fmt.Errorf("no sender ID for %s in %s", *userID, *validRoomID)
+		return nil, fmt.Errorf("no sender ID for %s in %s", *userID, *validFrameID)
 	}
 
 	targetID, err := spec.NewUserID(targetUserID, true)
 	if err != nil {
 		return nil, err
 	}
-	targetSenderID, err := rsAPI.QuerySenderIDForUser(ctx, *validRoomID, *targetID)
+	targetSenderID, err := rsAPI.QuerySenderIDForUser(ctx, *validFrameID, *targetID)
 	if err != nil {
 		return nil, err
 	} else if targetSenderID == nil {
-		return nil, fmt.Errorf("no sender ID for %s in %s", *targetID, *validRoomID)
+		return nil, fmt.Errorf("no sender ID for %s in %s", *targetID, *validFrameID)
 	}
 
-	identity, err := rsAPI.SigningIdentityFor(ctx, *validRoomID, *userID)
+	identity, err := rsAPI.SigningIdentityFor(ctx, *validFrameID, *userID)
 	if err != nil {
 		return nil, err
 	}
 
 	return buildMembershipEventDirect(ctx, *targetSenderID, reason, profile.DisplayName, profile.AvatarURL,
-		*senderID, device.UserDomain(), membership, roomID, isDirect, identity.KeyID, identity.PrivateKey, evTime, rsAPI)
+		*senderID, device.UserDomain(), membership, frameID, isDirect, identity.KeyID, identity.PrivateKey, evTime, rsAPI)
 }
 
 // loadProfile lookups the profile of a given user from the database and returns
@@ -535,15 +535,15 @@ func checkAndProcessThreepid(
 	device *userapi.Device,
 	body *threepid.MembershipRequest,
 	cfg *config.ClientAPI,
-	rsAPI roomserverAPI.ClientRoomserverAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI,
 	profileAPI userapi.ClientUserAPI,
-	roomID string,
+	frameID string,
 	evTime time.Time,
 ) (inviteStored bool, errRes *xutil.JSONResponse) {
 
 	inviteStored, err := threepid.CheckAndProcessInvite(
 		req.Context(), device, body, cfg, rsAPI, profileAPI,
-		roomID, evTime,
+		frameID, evTime,
 	)
 	switch e := err.(type) {
 	case nil:
@@ -559,7 +559,7 @@ func checkAndProcessThreepid(
 			Code: http.StatusBadRequest,
 			JSON: spec.NotTrusted(body.IDServer),
 		}
-	case eventutil.ErrRoomNoExists:
+	case eventutil.ErrFrameNoExists:
 		xutil.GetLogger(req.Context()).WithError(err).Error("threepid.CheckAndProcessInvite failed")
 		return inviteStored, &xutil.JSONResponse{
 			Code: http.StatusNotFound,
@@ -581,10 +581,10 @@ func checkAndProcessThreepid(
 	return
 }
 
-func checkMemberInRoom(ctx context.Context, rsAPI roomserverAPI.ClientRoomserverAPI, userID spec.UserID, roomID string) *xutil.JSONResponse {
-	var membershipRes roomserverAPI.QueryMembershipForUserResponse
-	err := rsAPI.QueryMembershipForUser(ctx, &roomserverAPI.QueryMembershipForUserRequest{
-		RoomID: roomID,
+func checkMemberInFrame(ctx context.Context, rsAPI dataframeAPI.ClientDataframeAPI, userID spec.UserID, frameID string) *xutil.JSONResponse {
+	var membershipRes dataframeAPI.QueryMembershipForUserResponse
+	err := rsAPI.QueryMembershipForUser(ctx, &dataframeAPI.QueryMembershipForUserRequest{
+		FrameID: frameID,
 		UserID: userID,
 	}, &membershipRes)
 	if err != nil {
@@ -594,10 +594,10 @@ func checkMemberInRoom(ctx context.Context, rsAPI roomserverAPI.ClientRoomserver
 			JSON: spec.InternalServerError{},
 		}
 	}
-	if !membershipRes.IsInRoom {
+	if !membershipRes.IsInFrame {
 		return &xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden("user does not belong to room"),
+			JSON: spec.Forbidden("user does not belong to frame"),
 		}
 	}
 	return nil
@@ -605,10 +605,10 @@ func checkMemberInRoom(ctx context.Context, rsAPI roomserverAPI.ClientRoomserver
 
 func SendForget(
 	req *http.Request, device *userapi.Device,
-	roomID string, rsAPI roomserverAPI.ClientRoomserverAPI,
+	frameID string, rsAPI dataframeAPI.ClientDataframeAPI,
 ) xutil.JSONResponse {
 	ctx := req.Context()
-	logger := xutil.GetLogger(ctx).WithField("roomID", roomID).WithField("userID", device.UserID)
+	logger := xutil.GetLogger(ctx).WithField("frameID", frameID).WithField("userID", device.UserID)
 
 	deviceUserID, err := spec.NewUserID(device.UserID, true)
 	if err != nil {
@@ -618,9 +618,9 @@ func SendForget(
 		}
 	}
 
-	var membershipRes roomserverAPI.QueryMembershipForUserResponse
-	membershipReq := roomserverAPI.QueryMembershipForUserRequest{
-		RoomID: roomID,
+	var membershipRes dataframeAPI.QueryMembershipForUserResponse
+	membershipReq := dataframeAPI.QueryMembershipForUserRequest{
+		FrameID: frameID,
 		UserID: *deviceUserID,
 	}
 	err = rsAPI.QueryMembershipForUser(ctx, &membershipReq, &membershipRes)
@@ -631,26 +631,26 @@ func SendForget(
 			JSON: spec.InternalServerError{},
 		}
 	}
-	if !membershipRes.RoomExists {
+	if !membershipRes.FrameExists {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden("room does not exist"),
+			JSON: spec.Forbidden("frame does not exist"),
 		}
 	}
-	if membershipRes.IsInRoom {
+	if membershipRes.IsInFrame {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.Unknown(fmt.Sprintf("User %s is in room %s", device.UserID, roomID)),
+			JSON: spec.Unknown(fmt.Sprintf("User %s is in frame %s", device.UserID, frameID)),
 		}
 	}
 
-	request := roomserverAPI.PerformForgetRequest{
-		RoomID: roomID,
+	request := dataframeAPI.PerformForgetRequest{
+		FrameID: frameID,
 		UserID: device.UserID,
 	}
-	response := roomserverAPI.PerformForgetResponse{}
+	response := dataframeAPI.PerformForgetResponse{}
 	if err := rsAPI.PerformForget(ctx, &request, &response); err != nil {
-		logger.WithError(err).Error("PerformForget: unable to forget room")
+		logger.WithError(err).Error("PerformForget: unable to forget frame")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -662,22 +662,22 @@ func SendForget(
 	}
 }
 
-func getPowerlevels(req *http.Request, rsAPI roomserverAPI.ClientRoomserverAPI, roomID string) (*xtools.PowerLevelContent, *xutil.JSONResponse) {
-	plEvent := roomserverAPI.GetStateEvent(req.Context(), rsAPI, roomID, xtools.StateKeyTuple{
-		EventType: spec.MRoomPowerLevels,
+func getPowerlevels(req *http.Request, rsAPI dataframeAPI.ClientDataframeAPI, frameID string) (*xtools.PowerLevelContent, *xutil.JSONResponse) {
+	plEvent := dataframeAPI.GetStateEvent(req.Context(), rsAPI, frameID, xtools.StateKeyTuple{
+		EventType: spec.MFramePowerLevels,
 		StateKey:  "",
 	})
 	if plEvent == nil {
 		return nil, &xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden("You don't have permission to perform this action, no power_levels event in this room."),
+			JSON: spec.Forbidden("You don't have permission to perform this action, no power_levels event in this frame."),
 		}
 	}
 	pl, err := plEvent.PowerLevels()
 	if err != nil {
 		return nil, &xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden("You don't have permission to perform this action, the power_levels event for this room is malformed so auth checks cannot be performed."),
+			JSON: spec.Forbidden("You don't have permission to perform this action, the power_levels event for this frame is malformed so auth checks cannot be performed."),
 		}
 	}
 	return pl, nil

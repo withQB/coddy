@@ -19,39 +19,39 @@ const receiptsSchema = `
 CREATE TABLE IF NOT EXISTS syncapi_receipts (
 	-- The ID
 	id BIGINT,
-	room_id TEXT NOT NULL,
+	frame_id TEXT NOT NULL,
 	receipt_type TEXT NOT NULL,
 	user_id TEXT NOT NULL,
 	event_id TEXT NOT NULL,
 	receipt_ts BIGINT NOT NULL,
-	CONSTRAINT syncapi_receipts_unique UNIQUE (room_id, receipt_type, user_id)
+	CONSTRAINT syncapi_receipts_unique UNIQUE (frame_id, receipt_type, user_id)
 );
-CREATE INDEX IF NOT EXISTS syncapi_receipts_room_id_idx ON syncapi_receipts(room_id);
+CREATE INDEX IF NOT EXISTS syncapi_receipts_frame_id_idx ON syncapi_receipts(frame_id);
 `
 
 const upsertReceipt = "" +
 	"INSERT INTO syncapi_receipts" +
-	" (id, room_id, receipt_type, user_id, event_id, receipt_ts)" +
+	" (id, frame_id, receipt_type, user_id, event_id, receipt_ts)" +
 	" VALUES ($1, $2, $3, $4, $5, $6)" +
-	" ON CONFLICT (room_id, receipt_type, user_id)" +
+	" ON CONFLICT (frame_id, receipt_type, user_id)" +
 	" DO UPDATE SET id = $7, event_id = $8, receipt_ts = $9"
 
-const selectRoomReceipts = "" +
-	"SELECT id, room_id, receipt_type, user_id, event_id, receipt_ts" +
+const selectFrameReceipts = "" +
+	"SELECT id, frame_id, receipt_type, user_id, event_id, receipt_ts" +
 	" FROM syncapi_receipts" +
-	" WHERE id > $1 and room_id in ($2)"
+	" WHERE id > $1 and frame_id in ($2)"
 
 const selectMaxReceiptIDSQL = "" +
 	"SELECT MAX(id) FROM syncapi_receipts"
 
 const purgeReceiptsSQL = "" +
-	"DELETE FROM syncapi_receipts WHERE room_id = $1"
+	"DELETE FROM syncapi_receipts WHERE frame_id = $1"
 
 type receiptStatements struct {
 	db                 *sql.DB
 	streamIDStatements *StreamIDStatements
 	upsertReceipt      *sql.Stmt
-	selectRoomReceipts *sql.Stmt
+	selectFrameReceipts *sql.Stmt
 	selectMaxReceiptID *sql.Stmt
 	purgeReceiptsStmt  *sql.Stmt
 }
@@ -76,47 +76,47 @@ func NewSqliteReceiptsTable(db *sql.DB, streamID *StreamIDStatements) (tables.Re
 	}
 	return r, sqlutil.StatementList{
 		{&r.upsertReceipt, upsertReceipt},
-		{&r.selectRoomReceipts, selectRoomReceipts},
+		{&r.selectFrameReceipts, selectFrameReceipts},
 		{&r.selectMaxReceiptID, selectMaxReceiptIDSQL},
 		{&r.purgeReceiptsStmt, purgeReceiptsSQL},
 	}.Prepare(db)
 }
 
 // UpsertReceipt creates new user receipts
-func (r *receiptStatements) UpsertReceipt(ctx context.Context, txn *sql.Tx, roomId, receiptType, userId, eventId string, timestamp spec.Timestamp) (pos types.StreamPosition, err error) {
+func (r *receiptStatements) UpsertReceipt(ctx context.Context, txn *sql.Tx, frameId, receiptType, userId, eventId string, timestamp spec.Timestamp) (pos types.StreamPosition, err error) {
 	pos, err = r.streamIDStatements.nextReceiptID(ctx, txn)
 	if err != nil {
 		return
 	}
 	stmt := sqlutil.TxStmt(txn, r.upsertReceipt)
-	_, err = stmt.ExecContext(ctx, pos, roomId, receiptType, userId, eventId, timestamp, pos, eventId, timestamp)
+	_, err = stmt.ExecContext(ctx, pos, frameId, receiptType, userId, eventId, timestamp, pos, eventId, timestamp)
 	return
 }
 
-// SelectRoomReceiptsAfter select all receipts for a given room after a specific timestamp
-func (r *receiptStatements) SelectRoomReceiptsAfter(ctx context.Context, txn *sql.Tx, roomIDs []string, streamPos types.StreamPosition) (types.StreamPosition, []types.OutputReceiptEvent, error) {
-	selectSQL := strings.Replace(selectRoomReceipts, "($2)", sqlutil.QueryVariadicOffset(len(roomIDs), 1), 1)
+// SelectFrameReceiptsAfter select all receipts for a given frame after a specific timestamp
+func (r *receiptStatements) SelectFrameReceiptsAfter(ctx context.Context, txn *sql.Tx, frameIDs []string, streamPos types.StreamPosition) (types.StreamPosition, []types.OutputReceiptEvent, error) {
+	selectSQL := strings.Replace(selectFrameReceipts, "($2)", sqlutil.QueryVariadicOffset(len(frameIDs), 1), 1)
 	var lastPos types.StreamPosition
-	params := make([]interface{}, len(roomIDs)+1)
+	params := make([]interface{}, len(frameIDs)+1)
 	params[0] = streamPos
-	for k, v := range roomIDs {
+	for k, v := range frameIDs {
 		params[k+1] = v
 	}
 	prep, err := r.db.Prepare(selectSQL)
 	if err != nil {
 		return 0, nil, fmt.Errorf("unable to prepare statement: %w", err)
 	}
-	defer internal.CloseAndLogIfError(ctx, prep, "SelectRoomReceiptsAfter: prep.close() failed")
+	defer internal.CloseAndLogIfError(ctx, prep, "SelectFrameReceiptsAfter: prep.close() failed")
 	rows, err := sqlutil.TxStmt(txn, prep).QueryContext(ctx, params...)
 	if err != nil {
-		return 0, nil, fmt.Errorf("unable to query room receipts: %w", err)
+		return 0, nil, fmt.Errorf("unable to query frame receipts: %w", err)
 	}
-	defer internal.CloseAndLogIfError(ctx, rows, "SelectRoomReceiptsAfter: rows.close() failed")
+	defer internal.CloseAndLogIfError(ctx, rows, "SelectFrameReceiptsAfter: rows.close() failed")
 	var res []types.OutputReceiptEvent
 	for rows.Next() {
 		r := types.OutputReceiptEvent{}
 		var id types.StreamPosition
-		err = rows.Scan(&id, &r.RoomID, &r.Type, &r.UserID, &r.EventID, &r.Timestamp)
+		err = rows.Scan(&id, &r.FrameID, &r.Type, &r.UserID, &r.EventID, &r.Timestamp)
 		if err != nil {
 			return 0, res, fmt.Errorf("unable to scan row to api.Receipts: %w", err)
 		}
@@ -141,8 +141,8 @@ func (s *receiptStatements) SelectMaxReceiptID(
 }
 
 func (s *receiptStatements) PurgeReceipts(
-	ctx context.Context, txn *sql.Tx, roomID string,
+	ctx context.Context, txn *sql.Tx, frameID string,
 ) error {
-	_, err := sqlutil.TxStmt(txn, s.purgeReceiptsStmt).ExecContext(ctx, roomID)
+	_, err := sqlutil.TxStmt(txn, s.purgeReceiptsStmt).ExecContext(ctx, frameID)
 	return err
 }

@@ -15,13 +15,11 @@ import (
 )
 
 // Type represents an auth type
-// https://matrix.org/docs/spec/client_server/r0.6.1#authentication-types
 type Type interface {
 	// Name returns the name of the auth type e.g `m.login.password`
 	Name() string
 	// Login with the auth type, returning an error response on failure.
 	// Not all types support login, only m.login.password and m.login.token
-	// See https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-login
 	// This function will be called when doing login and when doing 'sudo' style
 	// actions e.g deleting devices. The response must be a 401 as per:
 	// "If the homeserver decides that an attempt on a stage was unsuccessful, but the
@@ -38,7 +36,6 @@ type Type interface {
 type LoginCleanupFunc func(context.Context, *xutil.JSONResponse)
 
 // LoginIdentifier represents identifier types
-// https://matrix.org/docs/spec/client_server/r0.6.1#identifier-types
 type LoginIdentifier struct {
 	Type string `json:"type"`
 	// when type = m.id.user
@@ -210,7 +207,6 @@ func (u *UserInteractive) Verify(ctx context.Context, bodyBytes []byte, device *
 	// TODO: rate limit
 
 	// "A client should first make a request with no auth parameter. The homeserver returns an HTTP 401 response, with a JSON body"
-	// https://matrix.org/docs/spec/client_server/r0.6.1#user-interactive-api-in-the-rest-api
 	hasResponse := gjson.GetBytes(bodyBytes, "auth").Exists()
 	if !hasResponse {
 		return nil, u.NewSession()

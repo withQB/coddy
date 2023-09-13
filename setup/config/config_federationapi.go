@@ -49,7 +49,7 @@ func (c *FederationAPI) Defaults(opts DefaultOpts) {
 	if opts.Generate {
 		c.KeyPerspectives = KeyPerspectives{
 			{
-				ServerName: "matrix.org",
+				ServerName: "coddy",
 				Keys: []KeyPerspectiveTrustKey{
 					{
 						KeyID:     "ed25519:auto",

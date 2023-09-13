@@ -4,16 +4,16 @@ import (
 	"net/http"
 
 	"github.com/withqb/coddy/apis/userapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
 )
 
-func LeaveRoomByID(
+func LeaveFrameByID(
 	req *http.Request,
 	device *api.Device,
-	rsAPI roomserverAPI.ClientRoomserverAPI,
-	roomID string,
+	rsAPI dataframeAPI.ClientDataframeAPI,
+	frameID string,
 ) xutil.JSONResponse {
 	userID, err := spec.NewUserID(device.UserID, true)
 	if err != nil {
@@ -23,14 +23,14 @@ func LeaveRoomByID(
 		}
 	}
 
-	// Prepare to ask the roomserver to perform the room join.
-	leaveReq := roomserverAPI.PerformLeaveRequest{
-		RoomID: roomID,
+	// Prepare to ask the dataframe to perform the frame join.
+	leaveReq := dataframeAPI.PerformLeaveRequest{
+		FrameID: frameID,
 		Leaver: *userID,
 	}
-	leaveRes := roomserverAPI.PerformLeaveResponse{}
+	leaveRes := dataframeAPI.PerformLeaveResponse{}
 
-	// Ask the roomserver to perform the leave.
+	// Ask the dataframe to perform the leave.
 	if err := rsAPI.PerformLeave(req.Context(), &leaveReq, &leaveRes); err != nil {
 		if leaveRes.Code != 0 {
 			return xutil.JSONResponse{

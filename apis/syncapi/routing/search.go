@@ -20,12 +20,12 @@ import (
 	"github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/fulltext"
 	"github.com/withqb/coddy/internal/sqlutil"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 )
 
 // nolint:gocyclo
-func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts fulltext.Indexer, from *string, rsAPI roomserverAPI.SyncRoomserverAPI) xutil.JSONResponse {
+func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts fulltext.Indexer, from *string, rsAPI dataframeAPI.SyncDataframeAPI) xutil.JSONResponse {
 	start := time.Now()
 	var (
 		searchReq SearchRequest
@@ -49,8 +49,8 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 		}
 	}
 
-	if searchReq.SearchCategories.RoomEvents.Filter.Limit == 0 {
-		searchReq.SearchCategories.RoomEvents.Filter.Limit = 5
+	if searchReq.SearchCategories.FrameEvents.Filter.Limit == 0 {
+		searchReq.SearchCategories.FrameEvents.Filter.Limit = 5
 	}
 
 	snapshot, err := syncDB.NewDatabaseSnapshot(req.Context())
@@ -63,49 +63,49 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 	var succeeded bool
 	defer sqlutil.EndTransactionWithCheck(snapshot, &succeeded, &err)
 
-	// only search rooms the user is actually joined to
-	joinedRooms, err := snapshot.RoomIDsWithMembership(ctx, device.UserID, "join")
+	// only search frames the user is actually joined to
+	joinedFrames, err := snapshot.FrameIDsWithMembership(ctx, device.UserID, "join")
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
 	}
-	if len(joinedRooms) == 0 {
+	if len(joinedFrames) == 0 {
 		return xutil.JSONResponse{
 			Code: http.StatusNotFound,
-			JSON: spec.NotFound("User not joined to any rooms."),
+			JSON: spec.NotFound("User not joined to any frames."),
 		}
 	}
-	joinedRoomsMap := make(map[string]struct{}, len(joinedRooms))
-	for _, roomID := range joinedRooms {
-		joinedRoomsMap[roomID] = struct{}{}
+	joinedFramesMap := make(map[string]struct{}, len(joinedFrames))
+	for _, frameID := range joinedFrames {
+		joinedFramesMap[frameID] = struct{}{}
 	}
-	rooms := []string{}
-	if searchReq.SearchCategories.RoomEvents.Filter.Rooms != nil {
-		for _, roomID := range *searchReq.SearchCategories.RoomEvents.Filter.Rooms {
-			if _, ok := joinedRoomsMap[roomID]; ok {
-				rooms = append(rooms, roomID)
+	frames := []string{}
+	if searchReq.SearchCategories.FrameEvents.Filter.Frames != nil {
+		for _, frameID := range *searchReq.SearchCategories.FrameEvents.Filter.Frames {
+			if _, ok := joinedFramesMap[frameID]; ok {
+				frames = append(frames, frameID)
 			}
 		}
 	} else {
-		rooms = joinedRooms
+		frames = joinedFrames
 	}
 
-	if len(rooms) == 0 {
+	if len(frames) == 0 {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Unknown("User not allowed to search in this room(s)."),
+			JSON: spec.Unknown("User not allowed to search in this frame(s)."),
 		}
 	}
 
-	orderByTime := searchReq.SearchCategories.RoomEvents.OrderBy == "recent"
+	orderByTime := searchReq.SearchCategories.FrameEvents.OrderBy == "recent"
 
 	result, err := fts.Search(
-		searchReq.SearchCategories.RoomEvents.SearchTerm,
-		rooms,
-		searchReq.SearchCategories.RoomEvents.Keys,
-		searchReq.SearchCategories.RoomEvents.Filter.Limit,
+		searchReq.SearchCategories.FrameEvents.SearchTerm,
+		frames,
+		searchReq.SearchCategories.FrameEvents.Keys,
+		searchReq.SearchCategories.FrameEvents.Filter.Limit,
 		nextBatch,
 		orderByTime,
 	)
@@ -124,7 +124,7 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 			Code: http.StatusOK,
 			JSON: SearchResponse{
 				SearchCategories: SearchCategoriesResponse{
-					RoomEvents: RoomEventsResponse{
+					FrameEvents: FrameEventsResponse{
 						Count:     int(result.Total),
 						NextBatch: nil,
 					},
@@ -143,11 +143,11 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 		eventScore[hit.ID] = hit
 	}
 
-	// Filter on m.room.message, as otherwise we also get events like m.reaction
+	// Filter on m.frame.message, as otherwise we also get events like m.reaction
 	// which "breaks" displaying results in Element Web.
-	types := []string{"m.room.message"}
-	roomFilter := &synctypes.RoomEventFilter{
-		Rooms: &rooms,
+	types := []string{"m.frame.message"}
+	frameFilter := &synctypes.FrameEventFilter{
+		Frames: &frames,
 		Types: &types,
 	}
 
@@ -160,7 +160,7 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 		}
 	}
 
-	groups := make(map[string]RoomResult)
+	groups := make(map[string]FrameResult)
 	knownUsersProfiles := make(map[string]ProfileInfoResponse)
 
 	// Sort the events by depth, as the returned values aren't ordered
@@ -170,9 +170,9 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 		})
 	}
 
-	stateForRooms := make(map[string][]synctypes.ClientEvent)
+	stateForFrames := make(map[string][]synctypes.ClientEvent)
 	for _, event := range evs {
-		eventsBefore, eventsAfter, err := contextEvents(ctx, snapshot, event, roomFilter, searchReq)
+		eventsBefore, eventsAfter, err := contextEvents(ctx, snapshot, event, frameFilter, searchReq)
 		if err != nil {
 			logrus.WithError(err).Error("failed to get context events")
 			return xutil.JSONResponse{
@@ -191,12 +191,12 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 
 		profileInfos := make(map[string]ProfileInfoResponse)
 		for _, ev := range append(eventsBefore, eventsAfter...) {
-			validRoomID, roomErr := spec.NewRoomID(ev.RoomID())
+			validFrameID, frameErr := spec.NewFrameID(ev.FrameID())
 			if err != nil {
-				logrus.WithError(roomErr).WithField("room_id", ev.RoomID()).Warn("failed to query userprofile")
+				logrus.WithError(frameErr).WithField("frame_id", ev.FrameID()).Warn("failed to query userprofile")
 				continue
 			}
-			userID, queryErr := rsAPI.QueryUserIDForSender(req.Context(), *validRoomID, ev.SenderID())
+			userID, queryErr := rsAPI.QueryUserIDForSender(req.Context(), *validFrameID, ev.SenderID())
 			if queryErr != nil {
 				logrus.WithError(queryErr).WithField("sender_id", ev.SenderID()).Warn("failed to query userprofile")
 				continue
@@ -204,7 +204,7 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 
 			profile, ok := knownUsersProfiles[userID.String()]
 			if !ok {
-				stateEvent, stateErr := snapshot.GetStateEvent(ctx, ev.RoomID(), spec.MRoomMember, string(ev.SenderID()))
+				stateEvent, stateErr := snapshot.GetStateEvent(ctx, ev.FrameID(), spec.MFrameMember, string(ev.SenderID()))
 				if stateErr != nil {
 					logrus.WithError(stateErr).WithField("sender_id", event.SenderID()).Warn("failed to query userprofile")
 					continue
@@ -222,19 +222,19 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 		}
 
 		sender := spec.UserID{}
-		validRoomID, roomErr := spec.NewRoomID(event.RoomID())
+		validFrameID, frameErr := spec.NewFrameID(event.FrameID())
 		if err != nil {
-			logrus.WithError(roomErr).WithField("room_id", event.RoomID()).Warn("failed to query userprofile")
+			logrus.WithError(frameErr).WithField("frame_id", event.FrameID()).Warn("failed to query userprofile")
 			continue
 		}
-		userID, err := rsAPI.QueryUserIDForSender(req.Context(), *validRoomID, event.SenderID())
+		userID, err := rsAPI.QueryUserIDForSender(req.Context(), *validFrameID, event.SenderID())
 		if err == nil && userID != nil {
 			sender = *userID
 		}
 
 		sk := event.StateKey()
 		if sk != nil && *sk != "" {
-			skUserID, err := rsAPI.QueryUserIDForSender(req.Context(), *validRoomID, spec.SenderID(*event.StateKey()))
+			skUserID, err := rsAPI.QueryUserIDForSender(req.Context(), *validFrameID, spec.SenderID(*event.StateKey()))
 			if err == nil && skUserID != nil {
 				skString := skUserID.String()
 				sk = &skString
@@ -244,23 +244,23 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 			Context: SearchContextResponse{
 				Start: startToken.String(),
 				End:   endToken.String(),
-				EventsAfter: synctypes.ToClientEvents(xtools.ToPDUs(eventsAfter), synctypes.FormatSync, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-					return rsAPI.QueryUserIDForSender(req.Context(), roomID, senderID)
+				EventsAfter: synctypes.ToClientEvents(xtools.ToPDUs(eventsAfter), synctypes.FormatSync, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+					return rsAPI.QueryUserIDForSender(req.Context(), frameID, senderID)
 				}),
-				EventsBefore: synctypes.ToClientEvents(xtools.ToPDUs(eventsBefore), synctypes.FormatSync, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-					return rsAPI.QueryUserIDForSender(req.Context(), roomID, senderID)
+				EventsBefore: synctypes.ToClientEvents(xtools.ToPDUs(eventsBefore), synctypes.FormatSync, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+					return rsAPI.QueryUserIDForSender(req.Context(), frameID, senderID)
 				}),
 				ProfileInfo: profileInfos,
 			},
 			Rank:   eventScore[event.EventID()].Score,
 			Result: synctypes.ToClientEvent(event, synctypes.FormatAll, sender.String(), sk, event.Unsigned()),
 		})
-		roomGroup := groups[event.RoomID()]
-		roomGroup.Results = append(roomGroup.Results, event.EventID())
-		groups[event.RoomID()] = roomGroup
-		if _, ok := stateForRooms[event.RoomID()]; searchReq.SearchCategories.RoomEvents.IncludeState && !ok {
+		frameGroup := groups[event.FrameID()]
+		frameGroup.Results = append(frameGroup.Results, event.EventID())
+		groups[event.FrameID()] = frameGroup
+		if _, ok := stateForFrames[event.FrameID()]; searchReq.SearchCategories.FrameEvents.IncludeState && !ok {
 			stateFilter := synctypes.DefaultStateFilter()
-			state, err := snapshot.CurrentState(ctx, event.RoomID(), &stateFilter, nil)
+			state, err := snapshot.CurrentState(ctx, event.FrameID(), &stateFilter, nil)
 			if err != nil {
 				logrus.WithError(err).Error("unable to get current state")
 				return xutil.JSONResponse{
@@ -268,8 +268,8 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 					JSON: spec.InternalServerError{},
 				}
 			}
-			stateForRooms[event.RoomID()] = synctypes.ToClientEvents(xtools.ToPDUs(state), synctypes.FormatSync, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-				return rsAPI.QueryUserIDForSender(req.Context(), roomID, senderID)
+			stateForFrames[event.FrameID()] = synctypes.ToClientEvents(xtools.ToPDUs(state), synctypes.FormatSync, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+				return rsAPI.QueryUserIDForSender(req.Context(), frameID, senderID)
 			})
 		}
 	}
@@ -286,13 +286,13 @@ func Search(req *http.Request, device *api.Device, syncDB storage.Database, fts 
 
 	res := SearchResponse{
 		SearchCategories: SearchCategoriesResponse{
-			RoomEvents: RoomEventsResponse{
+			FrameEvents: FrameEventsResponse{
 				Count:      int(result.Total),
-				Groups:     Groups{RoomID: groups},
+				Groups:     Groups{FrameID: groups},
 				Results:    results,
 				NextBatch:  nextBatchResult,
 				Highlights: fts.GetHighlights(result),
-				State:      stateForRooms,
+				State:      stateForFrames,
 			},
 		},
 	}
@@ -311,22 +311,22 @@ func contextEvents(
 	ctx context.Context,
 	snapshot storage.DatabaseTransaction,
 	event *types.HeaderedEvent,
-	roomFilter *synctypes.RoomEventFilter,
+	frameFilter *synctypes.FrameEventFilter,
 	searchReq SearchRequest,
 ) ([]*types.HeaderedEvent, []*types.HeaderedEvent, error) {
-	id, _, err := snapshot.SelectContextEvent(ctx, event.RoomID(), event.EventID())
+	id, _, err := snapshot.SelectContextEvent(ctx, event.FrameID(), event.EventID())
 	if err != nil {
 		logrus.WithError(err).Error("failed to query context event")
 		return nil, nil, err
 	}
-	roomFilter.Limit = searchReq.SearchCategories.RoomEvents.EventContext.BeforeLimit
-	eventsBefore, err := snapshot.SelectContextBeforeEvent(ctx, id, event.RoomID(), roomFilter)
+	frameFilter.Limit = searchReq.SearchCategories.FrameEvents.EventContext.BeforeLimit
+	eventsBefore, err := snapshot.SelectContextBeforeEvent(ctx, id, event.FrameID(), frameFilter)
 	if err != nil {
 		logrus.WithError(err).Error("failed to query before context event")
 		return nil, nil, err
 	}
-	roomFilter.Limit = searchReq.SearchCategories.RoomEvents.EventContext.AfterLimit
-	_, eventsAfter, err := snapshot.SelectContextAfterEvent(ctx, id, event.RoomID(), roomFilter)
+	frameFilter.Limit = searchReq.SearchCategories.FrameEvents.EventContext.AfterLimit
+	_, eventsAfter, err := snapshot.SelectContextAfterEvent(ctx, id, event.FrameID(), frameFilter)
 	if err != nil {
 		logrus.WithError(err).Error("failed to query after context event")
 		return nil, nil, err
@@ -348,9 +348,9 @@ type Groupings struct {
 	GroupBy []GroupBy `json:"group_by"`
 }
 
-type RoomEvents struct {
+type FrameEvents struct {
 	EventContext EventContext              `json:"event_context"`
-	Filter       synctypes.RoomEventFilter `json:"filter"`
+	Filter       synctypes.FrameEventFilter `json:"filter"`
 	Groupings    Groupings                 `json:"groupings"`
 	IncludeState bool                      `json:"include_state"`
 	Keys         []string                  `json:"keys"`
@@ -359,7 +359,7 @@ type RoomEvents struct {
 }
 
 type SearchCategories struct {
-	RoomEvents RoomEvents `json:"room_events"`
+	FrameEvents FrameEvents `json:"frame_events"`
 }
 
 type SearchRequest struct {
@@ -369,14 +369,14 @@ type SearchRequest struct {
 type SearchResponse struct {
 	SearchCategories SearchCategoriesResponse `json:"search_categories"`
 }
-type RoomResult struct {
+type FrameResult struct {
 	NextBatch *string  `json:"next_batch,omitempty"`
 	Order     int      `json:"order"`
 	Results   []string `json:"results"`
 }
 
 type Groups struct {
-	RoomID map[string]RoomResult `json:"room_id"`
+	FrameID map[string]FrameResult `json:"frame_id"`
 }
 
 type Result struct {
@@ -398,7 +398,7 @@ type ProfileInfoResponse struct {
 	DisplayName string `json:"display_name"`
 }
 
-type RoomEventsResponse struct {
+type FrameEventsResponse struct {
 	Count      int                                `json:"count"`
 	Groups     Groups                             `json:"groups"`
 	Highlights []string                           `json:"highlights"`
@@ -407,5 +407,5 @@ type RoomEventsResponse struct {
 	State      map[string][]synctypes.ClientEvent `json:"state,omitempty"`
 }
 type SearchCategoriesResponse struct {
-	RoomEvents RoomEventsResponse `json:"room_events"`
+	FrameEvents FrameEventsResponse `json:"frame_events"`
 }

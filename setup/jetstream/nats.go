@@ -213,7 +213,7 @@ func setupNATS(process *process.ProcessContext, cfg *config.JetStream, nc *natsc
 		OutputReceiptEvent:      {"SyncAPIEDUServerReceiptConsumer", "FederationAPIEDUServerConsumer"},
 		OutputSendToDeviceEvent: {"SyncAPIEDUServerSendToDeviceConsumer", "FederationAPIEDUServerConsumer"},
 		OutputTypingEvent:       {"SyncAPIEDUServerTypingConsumer", "FederationAPIEDUServerConsumer"},
-		OutputRoomEvent:         {"AppserviceRoomserverConsumer"},
+		OutputFrameEvent:         {"AppserviceDataframeConsumer"},
 		OutputStreamEvent:       {"UserAPISyncAPIStreamEventConsumer"},
 		OutputReadUpdate:        {"UserAPISyncAPIReadUpdateConsumer"},
 	} {

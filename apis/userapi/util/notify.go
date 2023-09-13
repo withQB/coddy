@@ -46,7 +46,7 @@ func NotifyUserCountsAsync(ctx context.Context, pgClient pushgateway.Client, loc
 		defer cancel()
 
 		// TODO: we could batch all devices with the same URL, but
-		// Sytest requires consumers/roomserver.go to do it
+		// Sytest requires consumers/dataframe.go to do it
 		// one-by-one, so we do the same here.
 		for _, pusherDevice := range pusherDevices {
 			// TODO: support "email".

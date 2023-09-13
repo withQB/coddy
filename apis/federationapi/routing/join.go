@@ -28,8 +28,8 @@ import (
 	"github.com/withqb/xutil"
 
 	"github.com/withqb/coddy/internal/eventutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 )
 
@@ -38,26 +38,26 @@ func MakeJoin(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
 	cfg *config.FederationAPI,
-	rsAPI api.FederationRoomserverAPI,
-	roomID spec.RoomID, userID spec.UserID,
-	remoteVersions []xtools.RoomVersion,
+	rsAPI api.FederationDataframeAPI,
+	frameID spec.FrameID, userID spec.UserID,
+	remoteVersions []xtools.FrameVersion,
 ) xutil.JSONResponse {
-	roomVersion, err := rsAPI.QueryRoomVersionForRoom(httpReq.Context(), roomID.String())
+	frameVersion, err := rsAPI.QueryFrameVersionForFrame(httpReq.Context(), frameID.String())
 	if err != nil {
-		xutil.GetLogger(httpReq.Context()).WithError(err).Error("failed obtaining room version")
+		xutil.GetLogger(httpReq.Context()).WithError(err).Error("failed obtaining frame version")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
 	}
 
-	req := api.QueryServerJoinedToRoomRequest{
+	req := api.QueryServerJoinedToFrameRequest{
 		ServerName: request.Destination(),
-		RoomID:     roomID.String(),
+		FrameID:     frameID.String(),
 	}
-	res := api.QueryServerJoinedToRoomResponse{}
-	if err = rsAPI.QueryServerJoinedToRoom(httpReq.Context(), &req, &res); err != nil {
-		xutil.GetLogger(httpReq.Context()).WithError(err).Error("rsAPI.QueryServerJoinedToRoom failed")
+	res := api.QueryServerJoinedToFrameResponse{}
+	if err = rsAPI.QueryServerJoinedToFrame(httpReq.Context(), &req, &res); err != nil {
+		xutil.GetLogger(httpReq.Context()).WithError(err).Error("rsAPI.QueryServerJoinedToFrame failed")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -72,14 +72,14 @@ func MakeJoin(
 		}
 
 		queryRes := api.QueryLatestEventsAndStateResponse{
-			RoomVersion: roomVersion,
+			FrameVersion: frameVersion,
 		}
 		event, signErr := eventutil.QueryAndBuildEvent(httpReq.Context(), proto, identity, time.Now(), rsAPI, &queryRes)
 		switch e := signErr.(type) {
 		case nil:
-		case eventutil.ErrRoomNoExists:
+		case eventutil.ErrFrameNoExists:
 			xutil.GetLogger(httpReq.Context()).WithError(signErr).Error("eventutil.BuildEvent failed")
-			return nil, nil, spec.NotFound("Room does not exist")
+			return nil, nil, spec.NotFound("Frame does not exist")
 		case xtools.BadJSONError:
 			xutil.GetLogger(httpReq.Context()).WithError(signErr).Error("eventutil.BuildEvent failed")
 			return nil, nil, spec.BadJSON(e.Error())
@@ -95,11 +95,11 @@ func MakeJoin(
 		return event, stateEvents, nil
 	}
 
-	roomQuerier := api.JoinRoomQuerier{
-		Roomserver: rsAPI,
+	frameQuerier := api.JoinFrameQuerier{
+		Dataframe: rsAPI,
 	}
 
-	senderIDPtr, err := rsAPI.QuerySenderIDForUser(httpReq.Context(), roomID, userID)
+	senderIDPtr, err := rsAPI.QuerySenderIDForUser(httpReq.Context(), frameID, userID)
 	if err != nil {
 		xutil.GetLogger(httpReq.Context()).WithError(err).Error("rsAPI.QuerySenderIDForUser failed")
 		return xutil.JSONResponse{
@@ -119,15 +119,15 @@ func MakeJoin(
 		Context:           httpReq.Context(),
 		UserID:            userID,
 		SenderID:          senderID,
-		RoomID:            roomID,
-		RoomVersion:       roomVersion,
+		FrameID:            frameID,
+		FrameVersion:       frameVersion,
 		RemoteVersions:    remoteVersions,
 		RequestOrigin:     request.Origin(),
 		LocalServerName:   cfg.Matrix.ServerName,
-		LocalServerInRoom: res.RoomExists && res.IsInRoom,
-		RoomQuerier:       &roomQuerier,
-		UserIDQuerier: func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return rsAPI.QueryUserIDForSender(httpReq.Context(), roomID, senderID)
+		LocalServerInFrame: res.FrameExists && res.IsInFrame,
+		FrameQuerier:       &frameQuerier,
+		UserIDQuerier: func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return rsAPI.QueryUserIDForSender(httpReq.Context(), frameID, senderID)
 		},
 		BuildEventTemplate: createJoinTemplate,
 	}
@@ -140,7 +140,7 @@ func MakeJoin(
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
-	case spec.MatrixError:
+	case spec.CoddyError:
 		xutil.GetLogger(httpReq.Context()).WithError(internalErr).Error("failed to handle make_join request")
 		code := http.StatusInternalServerError
 		switch e.ErrCode {
@@ -158,7 +158,7 @@ func MakeJoin(
 			Code: code,
 			JSON: e,
 		}
-	case spec.IncompatibleRoomVersionError:
+	case spec.IncompatibleFrameVersionError:
 		xutil.GetLogger(httpReq.Context()).WithError(internalErr).Error("failed to handle make_join request")
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
@@ -184,7 +184,7 @@ func MakeJoin(
 		Code: http.StatusOK,
 		JSON: map[string]interface{}{
 			"event":        response.JoinTemplateEvent,
-			"room_version": response.RoomVersion,
+			"frame_version": response.FrameVersion,
 		},
 	}
 }
@@ -194,14 +194,14 @@ func SendJoin(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
 	cfg *config.FederationAPI,
-	rsAPI api.FederationRoomserverAPI,
+	rsAPI api.FederationDataframeAPI,
 	keys xtools.JSONVerifier,
-	roomID spec.RoomID,
+	frameID spec.FrameID,
 	eventID string,
 ) xutil.JSONResponse {
-	roomVersion, err := rsAPI.QueryRoomVersionForRoom(httpReq.Context(), roomID.String())
+	frameVersion, err := rsAPI.QueryFrameVersionForFrame(httpReq.Context(), frameID.String())
 	if err != nil {
-		xutil.GetLogger(httpReq.Context()).WithError(err).Error("rsAPI.QueryRoomVersionForRoom failed")
+		xutil.GetLogger(httpReq.Context()).WithError(err).Error("rsAPI.QueryFrameVersionForFrame failed")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -210,25 +210,25 @@ func SendJoin(
 
 	input := xtools.HandleSendJoinInput{
 		Context:           httpReq.Context(),
-		RoomID:            roomID,
+		FrameID:            frameID,
 		EventID:           eventID,
 		JoinEvent:         request.Content(),
-		RoomVersion:       roomVersion,
+		FrameVersion:       frameVersion,
 		RequestOrigin:     request.Origin(),
 		LocalServerName:   cfg.Matrix.ServerName,
 		KeyID:             cfg.Matrix.KeyID,
 		PrivateKey:        cfg.Matrix.PrivateKey,
 		Verifier:          keys,
-		MembershipQuerier: &api.MembershipQuerier{Roomserver: rsAPI},
-		UserIDQuerier: func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return rsAPI.QueryUserIDForSender(httpReq.Context(), roomID, senderID)
+		MembershipQuerier: &api.MembershipQuerier{Dataframe: rsAPI},
+		UserIDQuerier: func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return rsAPI.QueryUserIDForSender(httpReq.Context(), frameID, senderID)
 		},
-		StoreSenderIDFromPublicID: func(ctx context.Context, senderID spec.SenderID, userIDRaw string, roomID spec.RoomID) error {
+		StoreSenderIDFromPublicID: func(ctx context.Context, senderID spec.SenderID, userIDRaw string, frameID spec.FrameID) error {
 			userID, userErr := spec.NewUserID(userIDRaw, true)
 			if userErr != nil {
 				return userErr
 			}
-			return rsAPI.StoreUserRoomPublicKey(ctx, senderID, *userID, roomID)
+			return rsAPI.StoreUserFramePublicKey(ctx, senderID, *userID, frameID)
 		},
 	}
 	response, joinErr := xtools.HandleSendJoin(input)
@@ -240,7 +240,7 @@ func SendJoin(
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
-	case spec.MatrixError:
+	case spec.CoddyError:
 		xutil.GetLogger(httpReq.Context()).WithError(joinErr)
 		code := http.StatusInternalServerError
 		switch e.ErrCode {
@@ -248,7 +248,7 @@ func SendJoin(
 			code = http.StatusForbidden
 		case spec.ErrorNotFound:
 			code = http.StatusNotFound
-		case spec.ErrorUnsupportedRoomVersion:
+		case spec.ErrorUnsupportedFrameVersion:
 			code = http.StatusInternalServerError
 		case spec.ErrorBadJSON:
 			code = http.StatusBadRequest
@@ -281,7 +281,7 @@ func SendJoin(
 	err = rsAPI.QueryStateAndAuthChain(httpReq.Context(), &api.QueryStateAndAuthChainRequest{
 		PrevEventIDs: response.JoinEvent.PrevEventIDs(),
 		AuthEventIDs: response.JoinEvent.AuthEventIDs(),
-		RoomID:       roomID.String(),
+		FrameID:       frameID.String(),
 		ResolveState: true,
 	}, &stateAndAuthChainResponse)
 	if err != nil {
@@ -292,10 +292,10 @@ func SendJoin(
 		}
 	}
 
-	if !stateAndAuthChainResponse.RoomExists {
+	if !stateAndAuthChainResponse.FrameExists {
 		return xutil.JSONResponse{
 			Code: http.StatusNotFound,
-			JSON: spec.NotFound("Room does not exist"),
+			JSON: spec.NotFound("Frame does not exist"),
 		}
 	}
 	if !stateAndAuthChainResponse.StateKnown {
@@ -305,13 +305,13 @@ func SendJoin(
 		}
 	}
 
-	// Send the events to the room server.
+	// Send the events to the frame server.
 	// We are responsible for notifying other servers that the user has joined
-	// the room, so set SendAsServer to cfg.Matrix.ServerName
+	// the frame, so set SendAsServer to cfg.Matrix.ServerName
 	if !response.AlreadyJoined {
-		var rsResponse api.InputRoomEventsResponse
-		rsAPI.InputRoomEvents(httpReq.Context(), &api.InputRoomEventsRequest{
-			InputRoomEvents: []api.InputRoomEvent{
+		var rsResponse api.InputFrameEventsResponse
+		rsAPI.InputFrameEvents(httpReq.Context(), &api.InputFrameEventsRequest{
+			InputFrameEvents: []api.InputFrameEvent{
 				{
 					Kind:          api.KindNew,
 					Event:         &types.HeaderedEvent{PDU: response.JoinEvent},
@@ -341,7 +341,6 @@ func SendJoin(
 	sort.Sort(eventsByDepth(stateAndAuthChainResponse.StateEvents))
 	sort.Sort(eventsByDepth(stateAndAuthChainResponse.AuthChainEvents))
 
-	// https://matrix.org/docs/spec/server_server/latest#put-matrix-federation-v1-send-join-roomid-eventid
 	return xutil.JSONResponse{
 		Code: http.StatusOK,
 		JSON: fclient.RespSendJoin{

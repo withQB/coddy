@@ -9,7 +9,7 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/synctypes"
 	"github.com/withqb/coddy/apis/syncapi/types"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
@@ -19,7 +19,6 @@ type getMembershipResponse struct {
 	Chunk []synctypes.ClientEvent `json:"chunk"`
 }
 
-// https://matrix.org/docs/spec/client_server/r0.6.0#get-matrix-client-r0-rooms-roomid-joined-members
 type getJoinedMembersResponse struct {
 	Joined map[string]joinedMember `json:"joined"`
 }
@@ -38,11 +37,11 @@ type databaseJoinedMember struct {
 
 // GetMemberships implements
 //
-//	GET /rooms/{roomId}/members
-//	GET /rooms/{roomId}/joined_members
+//	GET /frames/{frameId}/members
+//	GET /frames/{frameId}/joined_members
 func GetMemberships(
-	req *http.Request, device *userapi.Device, roomID string,
-	syncDB storage.Database, rsAPI api.SyncRoomserverAPI,
+	req *http.Request, device *userapi.Device, frameID string,
+	syncDB storage.Database, rsAPI api.SyncDataframeAPI,
 	joinedOnly bool, membership, notMembership *string, at string,
 ) xutil.JSONResponse {
 	userID, err := spec.NewUserID(device.UserID, true)
@@ -53,30 +52,30 @@ func GetMemberships(
 		}
 	}
 	queryReq := api.QueryMembershipForUserRequest{
-		RoomID: roomID,
+		FrameID: frameID,
 		UserID: *userID,
 	}
 
 	var queryRes api.QueryMembershipForUserResponse
 	if queryErr := rsAPI.QueryMembershipForUser(req.Context(), &queryReq, &queryRes); queryErr != nil {
-		xutil.GetLogger(req.Context()).WithError(queryErr).Error("rsAPI.QueryMembershipsForRoom failed")
+		xutil.GetLogger(req.Context()).WithError(queryErr).Error("rsAPI.QueryMembershipsForFrame failed")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
 	}
 
-	if !queryRes.HasBeenInRoom {
+	if !queryRes.HasBeenInFrame {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden("You aren't a member of the room and weren't previously a member of the room."),
+			JSON: spec.Forbidden("You aren't a member of the frame and weren't previously a member of the frame."),
 		}
 	}
 
-	if joinedOnly && !queryRes.IsInRoom {
+	if joinedOnly && !queryRes.IsInFrame {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden("You aren't a member of the room and weren't previously a member of the room."),
+			JSON: spec.Forbidden("You aren't a member of the frame and weren't previously a member of the frame."),
 		}
 	}
 
@@ -92,8 +91,8 @@ func GetMemberships(
 	atToken, err := types.NewTopologyTokenFromString(at)
 	if err != nil {
 		atToken = types.TopologyToken{Depth: math.MaxInt64, PDUPosition: math.MaxInt64}
-		if queryRes.HasBeenInRoom && !queryRes.IsInRoom {
-			// If you have left the room then this will be the members of the room when you left.
+		if queryRes.HasBeenInFrame && !queryRes.IsInFrame {
+			// If you have left the frame then this will be the members of the frame when you left.
 			atToken, err = db.EventPositionInTopology(req.Context(), queryRes.EventID)
 			if err != nil {
 				xutil.GetLogger(req.Context()).WithError(err).Error("unable to get 'atToken'")
@@ -105,7 +104,7 @@ func GetMemberships(
 		}
 	}
 
-	eventIDs, err := db.SelectMemberships(req.Context(), roomID, atToken, membership, notMembership)
+	eventIDs, err := db.SelectMemberships(req.Context(), frameID, atToken, membership, notMembership)
 	if err != nil {
 		xutil.GetLogger(req.Context()).WithError(err).Error("db.SelectMemberships failed")
 		return xutil.JSONResponse{
@@ -115,7 +114,7 @@ func GetMemberships(
 	}
 
 	qryRes := &api.QueryEventsByIDResponse{}
-	if err := rsAPI.QueryEventsByID(req.Context(), &api.QueryEventsByIDRequest{EventIDs: eventIDs, RoomID: roomID}, qryRes); err != nil {
+	if err := rsAPI.QueryEventsByID(req.Context(), &api.QueryEventsByIDRequest{EventIDs: eventIDs, FrameID: frameID}, qryRes); err != nil {
 		xutil.GetLogger(req.Context()).WithError(err).Error("rsAPI.QueryEventsByID failed")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
@@ -138,15 +137,15 @@ func GetMemberships(
 				}
 			}
 
-			validRoomID, err := spec.NewRoomID(ev.RoomID())
+			validFrameID, err := spec.NewFrameID(ev.FrameID())
 			if err != nil {
-				xutil.GetLogger(req.Context()).WithError(err).Error("roomID is invalid")
+				xutil.GetLogger(req.Context()).WithError(err).Error("frameID is invalid")
 				return xutil.JSONResponse{
 					Code: http.StatusInternalServerError,
 					JSON: spec.InternalServerError{},
 				}
 			}
-			userID, err := rsAPI.QueryUserIDForSender(req.Context(), *validRoomID, ev.SenderID())
+			userID, err := rsAPI.QueryUserIDForSender(req.Context(), *validFrameID, ev.SenderID())
 			if err != nil || userID == nil {
 				xutil.GetLogger(req.Context()).WithError(err).Error("rsAPI.QueryUserIDForSender failed")
 				return xutil.JSONResponse{
@@ -169,8 +168,8 @@ func GetMemberships(
 	}
 	return xutil.JSONResponse{
 		Code: http.StatusOK,
-		JSON: getMembershipResponse{synctypes.ToClientEvents(xtools.ToPDUs(result), synctypes.FormatAll, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return rsAPI.QueryUserIDForSender(req.Context(), roomID, senderID)
+		JSON: getMembershipResponse{synctypes.ToClientEvents(xtools.ToPDUs(result), synctypes.FormatAll, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return rsAPI.QueryUserIDForSender(req.Context(), frameID, senderID)
 		})},
 	}
 }

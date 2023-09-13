@@ -12,8 +12,8 @@ import (
 	"github.com/withqb/xtools/spec"
 
 	"github.com/withqb/coddy/apis/syncapi/synctypes"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 )
 
 var (
@@ -24,7 +24,7 @@ var (
 )
 
 type StateDelta struct {
-	RoomID      string
+	FrameID      string
 	StateEvents []*types.HeaderedEvent
 	NewlyJoined bool
 	Membership  string
@@ -87,14 +87,14 @@ func (r *Range) High() StreamPosition {
 
 // SyncTokenType represents the type of a sync token.
 // It can be either "s" (representing a position in the whole stream of events)
-// or "t" (representing a position in a room's topology/depth).
+// or "t" (representing a position in a frame's topology/depth).
 type SyncTokenType string
 
 const (
 	// SyncTokenTypeStream represents a position in the server's whole
 	// stream of events
 	SyncTokenTypeStream SyncTokenType = "s"
-	// SyncTokenTypeTopology represents a position in a room's topology.
+	// SyncTokenTypeTopology represents a position in a frame's topology.
 	SyncTokenTypeTopology SyncTokenType = "t"
 )
 
@@ -330,7 +330,7 @@ type DeviceLists struct {
 	Left    []string `json:"left,omitempty"`
 }
 
-type RoomsResponse struct {
+type FramesResponse struct {
 	Join   map[string]*JoinResponse   `json:"join,omitempty"`
 	Peek   map[string]*JoinResponse   `json:"peek,omitempty"`
 	Invite map[string]*InviteResponse `json:"invite,omitempty"`
@@ -341,12 +341,12 @@ type ToDeviceResponse struct {
 	Events []xtools.SendToDeviceEvent `json:"events,omitempty"`
 }
 
-// Response represents a /sync API response. See https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-client-r0-sync
+// Response represents a /sync API response.
 type Response struct {
 	NextBatch           StreamingToken    `json:"next_batch"`
 	AccountData         *ClientEvents     `json:"account_data,omitempty"`
 	Presence            *ClientEvents     `json:"presence,omitempty"`
-	Rooms               *RoomsResponse    `json:"rooms,omitempty"`
+	Frames               *FramesResponse    `json:"frames,omitempty"`
 	ToDevice            *ToDeviceResponse `json:"to_device,omitempty"`
 	DeviceLists         *DeviceLists      `json:"device_lists,omitempty"`
 	DeviceListsOTKCount map[string]int    `json:"device_one_time_keys_count,omitempty"`
@@ -366,10 +366,10 @@ func (r Response) MarshalJSON() ([]byte, error) {
 			a.DeviceLists = nil
 		}
 	}
-	if r.Rooms != nil {
-		if len(r.Rooms.Join) == 0 && len(r.Rooms.Peek) == 0 &&
-			len(r.Rooms.Invite) == 0 && len(r.Rooms.Leave) == 0 {
-			a.Rooms = nil
+	if r.Frames != nil {
+		if len(r.Frames.Join) == 0 && len(r.Frames.Peek) == 0 &&
+			len(r.Frames.Invite) == 0 && len(r.Frames.Leave) == 0 {
+			a.Frames = nil
 		}
 	}
 	if r.ToDevice != nil && len(r.ToDevice.Events) == 0 {
@@ -382,10 +382,10 @@ func (r *Response) HasUpdates() bool {
 	// purposefully exclude DeviceListsOTKCount as we always include them
 	return (len(r.AccountData.Events) > 0 ||
 		len(r.Presence.Events) > 0 ||
-		len(r.Rooms.Invite) > 0 ||
-		len(r.Rooms.Join) > 0 ||
-		len(r.Rooms.Leave) > 0 ||
-		len(r.Rooms.Peek) > 0 ||
+		len(r.Frames.Invite) > 0 ||
+		len(r.Frames.Join) > 0 ||
+		len(r.Frames.Leave) > 0 ||
+		len(r.Frames.Peek) > 0 ||
 		len(r.ToDevice.Events) > 0 ||
 		len(r.DeviceLists.Changed) > 0 ||
 		len(r.DeviceLists.Left) > 0)
@@ -394,9 +394,9 @@ func (r *Response) HasUpdates() bool {
 // NewResponse creates an empty response with initialised maps.
 func NewResponse() *Response {
 	res := Response{}
-	// Pre-initialise the maps. Synapse will return {} even if there are no rooms under a specific section,
+	// Pre-initialise the maps. Synapse will return {} even if there are no frames under a specific section,
 	// so let's do the same thing. Bonus: this means we can't get dreaded 'assignment to entry in nil map' errors.
-	res.Rooms = &RoomsResponse{
+	res.Frames = &FramesResponse{
 		Join:   map[string]*JoinResponse{},
 		Peek:   map[string]*JoinResponse{},
 		Invite: map[string]*InviteResponse{},
@@ -419,9 +419,9 @@ func NewResponse() *Response {
 // IsEmpty returns true if the response is empty, i.e. used to decided whether
 // to return the response immediately to the client or to wait for more data.
 func (r *Response) IsEmpty() bool {
-	return len(r.Rooms.Join) == 0 &&
-		len(r.Rooms.Invite) == 0 &&
-		len(r.Rooms.Leave) == 0 &&
+	return len(r.Frames.Join) == 0 &&
+		len(r.Frames.Invite) == 0 &&
+		len(r.Frames.Leave) == 0 &&
 		len(r.AccountData.Events) == 0 &&
 		len(r.Presence.Events) == 0 &&
 		len(r.ToDevice.Events) == 0
@@ -448,7 +448,7 @@ type Summary struct {
 	InvitedMemberCount *int     `json:"m.invited_member_count,omitempty"`
 }
 
-// JoinResponse represents a /sync response for a room which is under the 'join' or 'peek' key.
+// JoinResponse represents a /sync response for a frame which is under the 'join' or 'peek' key.
 type JoinResponse struct {
 	Summary              *Summary      `json:"summary,omitempty"`
 	State                *ClientEvents `json:"state,omitempty"`
@@ -468,10 +468,10 @@ func (jr JoinResponse) MarshalJSON() ([]byte, error) {
 		a.Ephemeral = nil
 	}
 	if jr.Ephemeral != nil {
-		// Remove the room_id from EDUs, as this seems to cause Element Web
+		// Remove the frame_id from EDUs, as this seems to cause Element Web
 		// to trigger notifications - https://github.com/vector-im/element-web/issues/17263
 		for i := range jr.Ephemeral.Events {
-			jr.Ephemeral.Events[i].RoomID = ""
+			jr.Ephemeral.Events[i].FrameID = ""
 		}
 	}
 	if jr.AccountData != nil && len(jr.AccountData.Events) == 0 {
@@ -510,7 +510,7 @@ func NewJoinResponse() *JoinResponse {
 	}
 }
 
-// InviteResponse represents a /sync response for a room which is under the 'invite' key.
+// InviteResponse represents a /sync response for a frame which is under the 'invite' key.
 type InviteResponse struct {
 	InviteState struct {
 		Events []json.RawMessage `json:"events"`
@@ -522,11 +522,11 @@ func NewInviteResponse(event *types.HeaderedEvent, userID spec.UserID, stateKey 
 	res := InviteResponse{}
 	res.InviteState.Events = []json.RawMessage{}
 
-	// First see if there's invite_room_state in the unsigned key of the invite.
+	// First see if there's invite_frame_state in the unsigned key of the invite.
 	// If there is then unmarshal it into the response. This will contain the
-	// partial room state such as join rules, room name etc.
-	if inviteRoomState := gjson.GetBytes(event.Unsigned(), "invite_room_state"); inviteRoomState.Exists() {
-		_ = json.Unmarshal([]byte(inviteRoomState.Raw), &res.InviteState.Events)
+	// partial frame state such as join rules, frame name etc.
+	if inviteFrameState := gjson.GetBytes(event.Unsigned(), "invite_frame_state"); inviteFrameState.Exists() {
+		_ = json.Unmarshal([]byte(inviteFrameState.Raw), &res.InviteState.Events)
 	}
 
 	// Then we'll see if we can create a partial of the invite event itself.
@@ -540,7 +540,7 @@ func NewInviteResponse(event *types.HeaderedEvent, userID spec.UserID, stateKey 
 	return &res
 }
 
-// LeaveResponse represents a /sync response for a room which is under the 'leave' key.
+// LeaveResponse represents a /sync response for a frame which is under the 'leave' key.
 type LeaveResponse struct {
 	State    *ClientEvents `json:"state,omitempty"`
 	Timeline *Timeline     `json:"timeline,omitempty"`
@@ -580,7 +580,7 @@ type PeekingDevice struct {
 }
 
 type Peek struct {
-	RoomID  string
+	FrameID  string
 	New     bool
 	Deleted bool
 }
@@ -588,7 +588,7 @@ type Peek struct {
 // OutputReceiptEvent is an entry in the receipt output kafka log
 type OutputReceiptEvent struct {
 	UserID    string         `json:"user_id"`
-	RoomID    string         `json:"room_id"`
+	FrameID    string         `json:"frame_id"`
 	EventID   string         `json:"event_id"`
 	Type      string         `json:"type"`
 	Timestamp spec.Timestamp `json:"timestamp"`

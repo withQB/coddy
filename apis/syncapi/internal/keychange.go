@@ -15,7 +15,7 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/synctypes"
 	"github.com/withqb/coddy/apis/syncapi/types"
 	"github.com/withqb/coddy/apis/userapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 )
 
 // DeviceOTKCounts adds one-time key counts to the /sync response
@@ -36,15 +36,15 @@ func DeviceOTKCounts(ctx context.Context, keyAPI api.SyncKeyAPI, userID, deviceI
 // was filled in, else false if there are no new device list changes because there is nothing to catch up on. The response MUST
 // be already filled in with join/leave information.
 func DeviceListCatchup(
-	ctx context.Context, db storage.SharedUsers, userAPI api.SyncKeyAPI, rsAPI roomserverAPI.SyncRoomserverAPI,
+	ctx context.Context, db storage.SharedUsers, userAPI api.SyncKeyAPI, rsAPI dataframeAPI.SyncDataframeAPI,
 	userID string, res *types.Response, from, to types.StreamPosition,
 ) (newPos types.StreamPosition, hasNew bool, err error) {
 
-	// Track users who we didn't track before but now do by virtue of sharing a room with them, or not.
-	newlyJoinedRooms := joinedRooms(res, userID)
-	newlyLeftRooms := leftRooms(res)
-	if len(newlyJoinedRooms) > 0 || len(newlyLeftRooms) > 0 {
-		changed, left, err := TrackChangedUsers(ctx, rsAPI, userID, newlyJoinedRooms, newlyLeftRooms)
+	// Track users who we didn't track before but now do by virtue of sharing a frame with them, or not.
+	newlyJoinedFrames := joinedFrames(res, userID)
+	newlyLeftFrames := leftFrames(res)
+	if len(newlyJoinedFrames) > 0 || len(newlyLeftFrames) > 0 {
+		changed, left, err := TrackChangedUsers(ctx, rsAPI, userID, newlyJoinedFrames, newlyLeftFrames)
 		if err != nil {
 			return to, false, err
 		}
@@ -53,7 +53,7 @@ func DeviceListCatchup(
 		hasNew = len(changed) > 0 || len(left) > 0
 	}
 
-	// now also track users who we already share rooms with but who have updated their devices between the two tokens
+	// now also track users who we already share frames with but who have updated their devices between the two tokens
 	offset := keytypes.OffsetOldest
 	toOffset := keytypes.OffsetNewest
 	if to > 0 && to > from {
@@ -76,8 +76,8 @@ func DeviceListCatchup(
 	// Work out which user IDs we care about — that includes those in the original request,
 	// the response from QueryKeyChanges (which includes ALL users who have changed keys)
 	// as well as every user who has a join or leave event in the current sync response. We
-	// will request information about which rooms these users are joined to, so that we can
-	// see if we still share any rooms with them.
+	// will request information about which frames these users are joined to, so that we can
+	// see if we still share any frames with them.
 	joinUserIDs, leaveUserIDs := membershipEvents(res)
 	queryRes.UserIDs = append(queryRes.UserIDs, joinUserIDs...)
 	queryRes.UserIDs = append(queryRes.UserIDs, leaveUserIDs...)
@@ -95,7 +95,7 @@ func DeviceListCatchup(
 		}
 	}
 	// Finally, add in users who have joined or left.
-	// TODO: This is sub-optimal because we will add users to `changed` even if we already shared a room with them.
+	// TODO: This is sub-optimal because we will add users to `changed` even if we already shared a frame with them.
 	for _, userID := range joinUserIDs {
 		if !userSet[userID] && sharedUsersMap[userID] > 0 {
 			res.DeviceLists.Changed = append(res.DeviceLists.Changed, userID)
@@ -105,7 +105,7 @@ func DeviceListCatchup(
 	}
 	for _, userID := range leaveUserIDs {
 		if sharedUsersMap[userID] == 0 {
-			// we no longer share a room with this user when they left, so add to left list.
+			// we no longer share a frame with this user when they left, so add to left list.
 			res.DeviceLists.Left = append(res.DeviceLists.Left, userID)
 		}
 	}
@@ -122,31 +122,31 @@ func DeviceListCatchup(
 
 // TrackChangedUsers calculates the values of device_lists.changed|left in the /sync response.
 func TrackChangedUsers(
-	ctx context.Context, rsAPI roomserverAPI.SyncRoomserverAPI, userID string, newlyJoinedRooms, newlyLeftRooms []string,
+	ctx context.Context, rsAPI dataframeAPI.SyncDataframeAPI, userID string, newlyJoinedFrames, newlyLeftFrames []string,
 ) (changed, left []string, err error) {
 	// process leaves first, then joins afterwards so if we join/leave/join/leave we err on the side of including users.
 
 	// Leave algorithm:
-	// - Get set of users and number of times they appear in rooms prior to leave. - QuerySharedUsersRequest with 'IncludeRoomID'.
-	// - Get users in newly left room. - QueryCurrentState
-	// - Loop set of users and decrement by 1 for each user in newly left room.
-	// - If count=0 then they share no more rooms so inform BOTH parties of this via 'left'=[...] in /sync.
-	var queryRes roomserverAPI.QuerySharedUsersResponse
-	var stateRes roomserverAPI.QueryBulkStateContentResponse
-	if len(newlyLeftRooms) > 0 {
-		err = rsAPI.QuerySharedUsers(ctx, &roomserverAPI.QuerySharedUsersRequest{
+	// - Get set of users and number of times they appear in frames prior to leave. - QuerySharedUsersRequest with 'IncludeFrameID'.
+	// - Get users in newly left frame. - QueryCurrentState
+	// - Loop set of users and decrement by 1 for each user in newly left frame.
+	// - If count=0 then they share no more frames so inform BOTH parties of this via 'left'=[...] in /sync.
+	var queryRes dataframeAPI.QuerySharedUsersResponse
+	var stateRes dataframeAPI.QueryBulkStateContentResponse
+	if len(newlyLeftFrames) > 0 {
+		err = rsAPI.QuerySharedUsers(ctx, &dataframeAPI.QuerySharedUsersRequest{
 			UserID:         userID,
-			IncludeRoomIDs: newlyLeftRooms,
+			IncludeFrameIDs: newlyLeftFrames,
 		}, &queryRes)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		err = rsAPI.QueryBulkStateContent(ctx, &roomserverAPI.QueryBulkStateContentRequest{
-			RoomIDs: newlyLeftRooms,
+		err = rsAPI.QueryBulkStateContent(ctx, &dataframeAPI.QueryBulkStateContentRequest{
+			FrameIDs: newlyLeftFrames,
 			StateTuples: []xtools.StateKeyTuple{
 				{
-					EventType: spec.MRoomMember,
+					EventType: spec.MFrameMember,
 					StateKey:  "*",
 				},
 			},
@@ -155,16 +155,16 @@ func TrackChangedUsers(
 		if err != nil {
 			return nil, nil, err
 		}
-		for roomID, state := range stateRes.Rooms {
-			validRoomID, roomErr := spec.NewRoomID(roomID)
-			if roomErr != nil {
+		for frameID, state := range stateRes.Frames {
+			validFrameID, frameErr := spec.NewFrameID(frameID)
+			if frameErr != nil {
 				continue
 			}
 			for tuple, membership := range state {
 				if membership != spec.Join {
 					continue
 				}
-				user, queryErr := rsAPI.QueryUserIDForSender(ctx, *validRoomID, spec.SenderID(tuple.StateKey))
+				user, queryErr := rsAPI.QueryUserIDForSender(ctx, *validFrameID, spec.SenderID(tuple.StateKey))
 				if queryErr != nil || user == nil {
 					continue
 				}
@@ -180,23 +180,23 @@ func TrackChangedUsers(
 	}
 
 	// Join algorithm:
-	// - Get the set of all joined users prior to joining room - QuerySharedUsersRequest with 'ExcludeRoomID'.
-	// - Get users in newly joined room - QueryCurrentState
-	// - Loop set of users in newly joined room, do they appear in the set of users prior to joining?
-	// - If yes: then they already shared a room in common, do nothing.
+	// - Get the set of all joined users prior to joining frame - QuerySharedUsersRequest with 'ExcludeFrameID'.
+	// - Get users in newly joined frame - QueryCurrentState
+	// - Loop set of users in newly joined frame, do they appear in the set of users prior to joining?
+	// - If yes: then they already shared a frame in common, do nothing.
 	// - If no: then they are a brand new user so inform BOTH parties of this via 'changed=[...]'
-	err = rsAPI.QuerySharedUsers(ctx, &roomserverAPI.QuerySharedUsersRequest{
+	err = rsAPI.QuerySharedUsers(ctx, &dataframeAPI.QuerySharedUsersRequest{
 		UserID:         userID,
-		ExcludeRoomIDs: newlyJoinedRooms,
+		ExcludeFrameIDs: newlyJoinedFrames,
 	}, &queryRes)
 	if err != nil {
 		return nil, left, err
 	}
-	err = rsAPI.QueryBulkStateContent(ctx, &roomserverAPI.QueryBulkStateContentRequest{
-		RoomIDs: newlyJoinedRooms,
+	err = rsAPI.QueryBulkStateContent(ctx, &dataframeAPI.QueryBulkStateContentRequest{
+		FrameIDs: newlyJoinedFrames,
 		StateTuples: []xtools.StateKeyTuple{
 			{
-				EventType: spec.MRoomMember,
+				EventType: spec.MFrameMember,
 				StateKey:  "*",
 			},
 		},
@@ -205,8 +205,8 @@ func TrackChangedUsers(
 	if err != nil {
 		return nil, left, err
 	}
-	for roomID, state := range stateRes.Rooms {
-		validRoomID, err := spec.NewRoomID(roomID)
+	for frameID, state := range stateRes.Frames {
+		validFrameID, err := spec.NewFrameID(frameID)
 		if err != nil {
 			continue
 		}
@@ -214,9 +214,9 @@ func TrackChangedUsers(
 			if membership != spec.Join {
 				continue
 			}
-			// new user who we weren't previously sharing rooms with
+			// new user who we weren't previously sharing frames with
 			if _, ok := queryRes.UserIDsToCount[tuple.StateKey]; !ok {
-				user, err := rsAPI.QueryUserIDForSender(ctx, *validRoomID, spec.SenderID(tuple.StateKey))
+				user, err := rsAPI.QueryUserIDForSender(ctx, *validFrameID, spec.SenderID(tuple.StateKey))
 				if err != nil || user == nil {
 					continue
 				}
@@ -228,7 +228,7 @@ func TrackChangedUsers(
 }
 
 // filterSharedUsers takes a list of remote users whose keys have changed and filters
-// it down to include only users who the requesting user shares a room with.
+// it down to include only users who the requesting user shares a frame with.
 func filterSharedUsers(
 	ctx context.Context, db storage.SharedUsers, userID string, usersWithChangedKeys []string,
 ) map[string]int {
@@ -237,7 +237,7 @@ func filterSharedUsers(
 		sharedUsersMap[changedUserID] = 0
 		if changedUserID == userID {
 			// We forcibly put ourselves in this list because we should be notified about our own device updates
-			// and if we are in 0 rooms then we don't technically share any room with ourselves so we wouldn't
+			// and if we are in 0 frames then we don't technically share any frame with ourselves so we wouldn't
 			// be notified about key changes.
 			sharedUsersMap[userID] = 1
 		}
@@ -254,39 +254,39 @@ func filterSharedUsers(
 	return sharedUsersMap
 }
 
-func joinedRooms(res *types.Response, userID string) []string {
-	var roomIDs []string
-	for roomID, join := range res.Rooms.Join {
-		// we would expect to see our join event somewhere if we newly joined the room.
-		// Normal events get put in the join section so it's not enough to know the room ID is present in 'join'.
+func joinedFrames(res *types.Response, userID string) []string {
+	var frameIDs []string
+	for frameID, join := range res.Frames.Join {
+		// we would expect to see our join event somewhere if we newly joined the frame.
+		// Normal events get put in the join section so it's not enough to know the frame ID is present in 'join'.
 		newlyJoined := membershipEventPresent(join.State.Events, userID)
 		if newlyJoined {
-			roomIDs = append(roomIDs, roomID)
+			frameIDs = append(frameIDs, frameID)
 			continue
 		}
 		newlyJoined = membershipEventPresent(join.Timeline.Events, userID)
 		if newlyJoined {
-			roomIDs = append(roomIDs, roomID)
+			frameIDs = append(frameIDs, frameID)
 		}
 	}
-	return roomIDs
+	return frameIDs
 }
 
-func leftRooms(res *types.Response) []string {
-	roomIDs := make([]string, len(res.Rooms.Leave))
+func leftFrames(res *types.Response) []string {
+	frameIDs := make([]string, len(res.Frames.Leave))
 	i := 0
-	for roomID := range res.Rooms.Leave {
-		roomIDs[i] = roomID
+	for frameID := range res.Frames.Leave {
+		frameIDs[i] = frameID
 		i++
 	}
-	return roomIDs
+	return frameIDs
 }
 
 func membershipEventPresent(events []synctypes.ClientEvent, userID string) bool {
 	for _, ev := range events {
 		// it's enough to know that we have our member event here, don't need to check membership content
 		// as it's implied by being in the respective section of the sync response.
-		if ev.Type == spec.MRoomMember && ev.StateKey != nil && *ev.StateKey == userID {
+		if ev.Type == spec.MFrameMember && ev.StateKey != nil && *ev.StateKey == userID {
 			// ignore e.g. join -> join changes
 			if gjson.GetBytes(ev.Unsigned, "prev_content.membership").Str == gjson.GetBytes(ev.Content, "membership").Str {
 				continue
@@ -297,15 +297,15 @@ func membershipEventPresent(events []synctypes.ClientEvent, userID string) bool 
 	return false
 }
 
-// returns the user IDs of anyone joining or leaving a room in this response. These users will be added to
-// the 'changed' property because of https://matrix.org/docs/spec/client_server/r0.6.1#id84
+// returns the user IDs of anyone joining or leaving a frame in this response. These users will be added to
+// the 'changed' property
 // "For optimal performance, Alice should be added to changed in Bob's sync only when she adds a new device,
-// or when Alice and Bob now share a room but didn't share any room previously. However, for the sake of simpler
-// logic, a server may add Alice to changed when Alice and Bob share a new room, even if they previously already shared a room."
+// or when Alice and Bob now share a frame but didn't share any frame previously. However, for the sake of simpler
+// logic, a server may add Alice to changed when Alice and Bob share a new frame, even if they previously already shared a frame."
 func membershipEvents(res *types.Response) (joinUserIDs, leaveUserIDs []string) {
-	for _, room := range res.Rooms.Join {
-		for _, ev := range room.Timeline.Events {
-			if ev.Type == spec.MRoomMember && ev.StateKey != nil {
+	for _, frame := range res.Frames.Join {
+		for _, ev := range frame.Timeline.Events {
+			if ev.Type == spec.MFrameMember && ev.StateKey != nil {
 				if strings.Contains(string(ev.Content), `"join"`) {
 					joinUserIDs = append(joinUserIDs, *ev.StateKey)
 				} else if strings.Contains(string(ev.Content), `"invite"`) {

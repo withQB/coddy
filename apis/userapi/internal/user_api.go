@@ -30,7 +30,7 @@ import (
 	"github.com/withqb/coddy/internal/eventutil"
 	"github.com/withqb/coddy/internal/pushgateway"
 	"github.com/withqb/coddy/internal/sqlutil"
-	rsapi "github.com/withqb/coddy/servers/roomserver/api"
+	rsapi "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 )
 
@@ -44,7 +44,7 @@ type UserInternalAPI struct {
 	DisableTLSValidation bool
 	// AppServices is the list of all registered AS
 	AppServices []config.ApplicationService
-	RSAPI       rsapi.UserRoomserverAPI
+	RSAPI       rsapi.UserDataframeAPI
 	PgClient    pushgateway.Client
 	FedClient   fedsenderapi.KeyserverFederationAPI
 	Updater     *DeviceListUpdater
@@ -92,7 +92,7 @@ func (a *UserInternalAPI) InputAccountData(ctx context.Context, req *api.InputAc
 	if req.DataType == "" {
 		return fmt.Errorf("data type must not be empty")
 	}
-	if err := a.DB.SaveAccountData(ctx, local, domain, req.RoomID, req.DataType, req.AccountData); err != nil {
+	if err := a.DB.SaveAccountData(ctx, local, domain, req.FrameID, req.DataType, req.AccountData); err != nil {
 		xutil.GetLogger(ctx).WithError(err).Error("a.DB.SaveAccountData failed")
 		return fmt.Errorf("failed to save account data: %w", err)
 	}
@@ -107,7 +107,7 @@ func (a *UserInternalAPI) InputAccountData(ctx context.Context, req *api.InputAc
 		}
 	}
 	if err := a.SyncProducer.SendAccountData(req.UserID, eventutil.AccountData{
-		RoomID:       req.RoomID,
+		FrameID:       req.FrameID,
 		Type:         req.DataType,
 		IgnoredUsers: ignoredUsers,
 	}); err != nil {
@@ -132,13 +132,13 @@ func (a *UserInternalAPI) setFullyRead(ctx context.Context, req *api.InputAccoun
 		return nil
 	}
 
-	deleted, err := a.DB.DeleteNotificationsUpTo(ctx, localpart, domain, req.RoomID, uint64(spec.AsTimestamp(time.Now())))
+	deleted, err := a.DB.DeleteNotificationsUpTo(ctx, localpart, domain, req.FrameID, uint64(spec.AsTimestamp(time.Now())))
 	if err != nil {
 		logrus.WithError(err).Errorf("UserInternalAPI.setFullyRead: DeleteNotificationsUpTo failed")
 		return err
 	}
 
-	if err = a.SyncProducer.GetAndSendNotificationData(ctx, req.UserID, req.RoomID); err != nil {
+	if err = a.SyncProducer.GetAndSendNotificationData(ctx, req.UserID, req.FrameID); err != nil {
 		logrus.WithError(err).Error("UserInternalAPI.setFullyRead: GetAndSendNotificationData failed")
 		return err
 	}
@@ -155,29 +155,29 @@ func (a *UserInternalAPI) setFullyRead(ctx context.Context, req *api.InputAccoun
 	return nil
 }
 
-func postRegisterJoinRooms(cfg *config.UserAPI, acc *api.Account, rsAPI rsapi.UserRoomserverAPI) {
+func postRegisterJoinFrames(cfg *config.UserAPI, acc *api.Account, rsAPI rsapi.UserDataframeAPI) {
 	// POST register behaviour: check if the user is a normal user.
-	// If the user is a normal user, add user to room specified in the configuration "auto_join_rooms".
+	// If the user is a normal user, add user to frame specified in the configuration "auto_join_frames".
 	if acc.AccountType != api.AccountTypeAppService && acc.AppServiceID == "" {
-		for room := range cfg.AutoJoinRooms {
+		for frame := range cfg.AutoJoinFrames {
 			userID := userutil.MakeUserID(acc.Localpart, cfg.Matrix.ServerName)
-			err := addUserToRoom(context.Background(), rsAPI, cfg.AutoJoinRooms[room], acc.Localpart, userID)
+			err := addUserToFrame(context.Background(), rsAPI, cfg.AutoJoinFrames[frame], acc.Localpart, userID)
 			if err != nil {
 				logrus.WithFields(logrus.Fields{
 					"user_id": userID,
-					"room":    cfg.AutoJoinRooms[room],
-				}).WithError(err).Errorf("user failed to auto-join room")
+					"frame":    cfg.AutoJoinFrames[frame],
+				}).WithError(err).Errorf("user failed to auto-join frame")
 			}
 		}
 	}
 }
 
-// Add user to a room. This function currently working for auto_join_rooms config,
-// which can add a newly registered user to a specified room.
-func addUserToRoom(
+// Add user to a frame. This function currently working for auto_join_frames config,
+// which can add a newly registered user to a specified frame.
+func addUserToFrame(
 	ctx context.Context,
-	rsAPI rsapi.UserRoomserverAPI,
-	roomID string,
+	rsAPI rsapi.UserDataframeAPI,
+	frameID string,
 	username string,
 	userID string,
 ) error {
@@ -186,7 +186,7 @@ func addUserToRoom(
 	// Because the newly-registered user doesn't have an avatar, the avatar_url is not needed.
 	addGroupContent["displayname"] = username
 	joinReq := rsapi.PerformJoinRequest{
-		RoomIDOrAlias: roomID,
+		FrameIDOrAlias: frameID,
 		UserID:        userID,
 		Content:       addGroupContent,
 	}
@@ -245,7 +245,7 @@ func (a *UserInternalAPI) PerformAccountCreation(ctx context.Context, req *api.P
 		return fmt.Errorf("a.DB.SetDisplayName: %w", err)
 	}
 
-	postRegisterJoinRooms(a.Config, acc, a.RSAPI)
+	postRegisterJoinFrames(a.Config, acc, a.RSAPI)
 
 	res.AccountCreated = true
 	res.Account = acc
@@ -519,29 +519,29 @@ func (a *UserInternalAPI) QueryAccountData(ctx context.Context, req *api.QueryAc
 	}
 	if req.DataType != "" {
 		var data json.RawMessage
-		data, err = a.DB.GetAccountDataByType(ctx, local, domain, req.RoomID, req.DataType)
+		data, err = a.DB.GetAccountDataByType(ctx, local, domain, req.FrameID, req.DataType)
 		if err != nil {
 			return err
 		}
-		res.RoomAccountData = make(map[string]map[string]json.RawMessage)
+		res.FrameAccountData = make(map[string]map[string]json.RawMessage)
 		res.GlobalAccountData = make(map[string]json.RawMessage)
 		if data != nil {
-			if req.RoomID != "" {
-				if _, ok := res.RoomAccountData[req.RoomID]; !ok {
-					res.RoomAccountData[req.RoomID] = make(map[string]json.RawMessage)
+			if req.FrameID != "" {
+				if _, ok := res.FrameAccountData[req.FrameID]; !ok {
+					res.FrameAccountData[req.FrameID] = make(map[string]json.RawMessage)
 				}
-				res.RoomAccountData[req.RoomID][req.DataType] = data
+				res.FrameAccountData[req.FrameID][req.DataType] = data
 			} else {
 				res.GlobalAccountData[req.DataType] = data
 			}
 		}
 		return nil
 	}
-	global, rooms, err := a.DB.GetAccountData(ctx, local, domain)
+	global, frames, err := a.DB.GetAccountData(ctx, local, domain)
 	if err != nil {
 		return err
 	}
-	res.RoomAccountData = rooms
+	res.FrameAccountData = frames
 	res.GlobalAccountData = global
 	return nil
 }
@@ -708,7 +708,7 @@ func (a *UserInternalAPI) PerformKeyBackup(ctx context.Context, req *api.Perform
 func (a *UserInternalAPI) UpdateBackupKeyAuthData(ctx context.Context, req *api.PerformKeyBackupRequest) (*api.PerformKeyBackupResponse, error) {
 	res := &api.PerformKeyBackupResponse{}
 	// Update metadata
-	if len(req.Keys.Rooms) == 0 {
+	if len(req.Keys.Frames) == 0 {
 		err := a.DB.UpdateKeyBackupAuthData(ctx, req.UserID, req.Version, req.AuthData)
 		res.Exists = err == nil
 		res.Version = req.Version
@@ -739,10 +739,10 @@ func (a *UserInternalAPI) uploadBackupKeys(ctx context.Context, req *api.Perform
 
 	// map keys to a form we can upload more easily - the map ensures we have no duplicates.
 	var uploads []api.InternalKeyBackupSession
-	for roomID, data := range req.Keys.Rooms {
+	for frameID, data := range req.Keys.Frames {
 		for sessionID, sessionData := range data.Sessions {
 			uploads = append(uploads, api.InternalKeyBackupSession{
-				RoomID:           roomID,
+				FrameID:           frameID,
 				SessionID:        sessionID,
 				KeyBackupSession: sessionData,
 			})
@@ -783,7 +783,7 @@ func (a *UserInternalAPI) QueryKeyBackup(ctx context.Context, req *api.QueryKeyB
 		return res, nil
 	}
 
-	result, err := a.DB.GetBackupKeys(ctx, version, req.UserID, req.KeysForRoomID, req.KeysForSessionID)
+	result, err := a.DB.GetBackupKeys(ctx, version, req.UserID, req.KeysForFrameID, req.KeysForSessionID)
 	if err != nil {
 		return res, fmt.Errorf("failed to query keys: %s", err)
 	}

@@ -30,20 +30,20 @@ const accountDataSchema = `
 CREATE TABLE IF NOT EXISTS syncapi_account_data_type (
     id INTEGER PRIMARY KEY,
     user_id TEXT NOT NULL,
-    room_id TEXT NOT NULL,
+    frame_id TEXT NOT NULL,
     type TEXT NOT NULL,
-    UNIQUE (user_id, room_id, type)
+    UNIQUE (user_id, frame_id, type)
 );
 `
 
 const insertAccountDataSQL = "" +
-	"INSERT INTO syncapi_account_data_type (id, user_id, room_id, type) VALUES ($1, $2, $3, $4)" +
-	" ON CONFLICT (user_id, room_id, type) DO UPDATE" +
+	"INSERT INTO syncapi_account_data_type (id, user_id, frame_id, type) VALUES ($1, $2, $3, $4)" +
+	" ON CONFLICT (user_id, frame_id, type) DO UPDATE" +
 	" SET id = $5"
 
 // further parameters are added by prepareWithFilters
 const selectAccountDataInRangeSQL = "" +
-	"SELECT id, room_id, type FROM syncapi_account_data_type" +
+	"SELECT id, frame_id, type FROM syncapi_account_data_type" +
 	" WHERE user_id = $1 AND id > $2 AND id <= $3"
 
 const selectMaxAccountDataIDSQL = "" +
@@ -75,13 +75,13 @@ func NewSqliteAccountDataTable(db *sql.DB, streamID *StreamIDStatements) (tables
 
 func (s *accountDataStatements) InsertAccountData(
 	ctx context.Context, txn *sql.Tx,
-	userID, roomID, dataType string,
+	userID, frameID, dataType string,
 ) (pos types.StreamPosition, err error) {
 	pos, err = s.streamIDStatements.nextAccountDataID(ctx, txn)
 	if err != nil {
 		return
 	}
-	_, err = sqlutil.TxStmt(txn, s.insertAccountDataStmt).ExecContext(ctx, pos, userID, roomID, dataType, pos)
+	_, err = sqlutil.TxStmt(txn, s.insertAccountDataStmt).ExecContext(ctx, pos, userID, frameID, dataType, pos)
 	return
 }
 
@@ -110,18 +110,18 @@ func (s *accountDataStatements) SelectAccountDataInRange(
 	defer internal.CloseAndLogIfError(ctx, rows, "selectAccountDataInRange: rows.close() failed")
 
 	var dataType string
-	var roomID string
+	var frameID string
 	var id types.StreamPosition
 
 	for rows.Next() {
-		if err = rows.Scan(&id, &roomID, &dataType); err != nil {
+		if err = rows.Scan(&id, &frameID, &dataType); err != nil {
 			return
 		}
 
-		if len(data[roomID]) > 0 {
-			data[roomID] = append(data[roomID], dataType)
+		if len(data[frameID]) > 0 {
+			data[frameID] = append(data[frameID], dataType)
 		} else {
-			data[roomID] = []string{dataType}
+			data[frameID] = []string{dataType}
 		}
 		if id > pos {
 			pos = id

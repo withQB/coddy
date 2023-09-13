@@ -14,7 +14,7 @@ import (
 	"github.com/withqb/coddy/internal/httputil"
 	"github.com/withqb/coddy/internal/sqlutil"
 	"github.com/withqb/coddy/internal/transactions"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	appserviceAPI "github.com/withqb/coddy/services/appservice/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
@@ -33,12 +33,12 @@ type Monolith struct {
 
 	AppserviceAPI appserviceAPI.AppServiceInternalAPI
 	FederationAPI federationAPI.FederationInternalAPI
-	RoomserverAPI roomserverAPI.RoomserverInternalAPI
+	DataframeAPI dataframeAPI.DataframeInternalAPI
 	UserAPI       userapi.UserInternalAPI
 	RelayAPI      relayAPI.RelayInternalAPI
 
 	// Optional
-	ExtPublicRoomsProvider   api.ExtraPublicRoomsProvider
+	ExtPublicFramesProvider   api.ExtraPublicFramesProvider
 	ExtUserDirectoryProvider userapi.QuerySearchProfilesAPI
 }
 
@@ -57,15 +57,15 @@ func (m *Monolith) AddAllPublicRoutes(
 		userDirectoryProvider = m.UserAPI
 	}
 	clientapi.AddPublicRoutes(
-		processCtx, routers, cfg, natsInstance, m.FedClient, m.RoomserverAPI, m.AppserviceAPI, transactions.New(),
+		processCtx, routers, cfg, natsInstance, m.FedClient, m.DataframeAPI, m.AppserviceAPI, transactions.New(),
 		m.FederationAPI, m.UserAPI, userDirectoryProvider,
-		m.ExtPublicRoomsProvider, enableMetrics,
+		m.ExtPublicFramesProvider, enableMetrics,
 	)
 	federationapi.AddPublicRoutes(
-		processCtx, routers, cfg, natsInstance, m.UserAPI, m.FedClient, m.KeyRing, m.RoomserverAPI, m.FederationAPI, enableMetrics,
+		processCtx, routers, cfg, natsInstance, m.UserAPI, m.FedClient, m.KeyRing, m.DataframeAPI, m.FederationAPI, enableMetrics,
 	)
 	mediaapi.AddPublicRoutes(routers.Media, cm, cfg, m.UserAPI, m.Client)
-	syncapi.AddPublicRoutes(processCtx, routers, cfg, cm, natsInstance, m.UserAPI, m.RoomserverAPI, caches, enableMetrics)
+	syncapi.AddPublicRoutes(processCtx, routers, cfg, cm, natsInstance, m.UserAPI, m.DataframeAPI, caches, enableMetrics)
 
 	if m.RelayAPI != nil {
 		relayapi.AddPublicRoutes(routers, cfg, m.KeyRing, m.RelayAPI)

@@ -16,27 +16,27 @@ CREATE TABLE IF NOT EXISTS userapi_account_datas (
     -- The Matrix user ID localpart for this account
     localpart TEXT NOT NULL,
 	server_name TEXT NOT NULL,
-    -- The room ID for this data (empty string if not specific to a room)
-    room_id TEXT,
+    -- The frame ID for this data (empty string if not specific to a frame)
+    frame_id TEXT,
     -- The account data type
     type TEXT NOT NULL,
     -- The account data content
     content TEXT NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS userapi_account_datas_idx ON userapi_account_datas(localpart, server_name, room_id, type);
+CREATE UNIQUE INDEX IF NOT EXISTS userapi_account_datas_idx ON userapi_account_datas(localpart, server_name, frame_id, type);
 `
 
 const insertAccountDataSQL = `
-	INSERT INTO userapi_account_datas(localpart, server_name, room_id, type, content) VALUES($1, $2, $3, $4, $5)
-	ON CONFLICT (localpart, server_name, room_id, type) DO UPDATE SET content = $5
+	INSERT INTO userapi_account_datas(localpart, server_name, frame_id, type, content) VALUES($1, $2, $3, $4, $5)
+	ON CONFLICT (localpart, server_name, frame_id, type) DO UPDATE SET content = $5
 `
 
 const selectAccountDataSQL = "" +
-	"SELECT room_id, type, content FROM userapi_account_datas WHERE localpart = $1 AND server_name = $2"
+	"SELECT frame_id, type, content FROM userapi_account_datas WHERE localpart = $1 AND server_name = $2"
 
 const selectAccountDataByTypeSQL = "" +
-	"SELECT content FROM userapi_account_datas WHERE localpart = $1 AND server_name = $2 AND room_id = $3 AND type = $4"
+	"SELECT content FROM userapi_account_datas WHERE localpart = $1 AND server_name = $2 AND frame_id = $3 AND type = $4"
 
 type accountDataStatements struct {
 	db                          *sql.DB
@@ -63,9 +63,9 @@ func NewSQLiteAccountDataTable(db *sql.DB) (tables.AccountDataTable, error) {
 func (s *accountDataStatements) InsertAccountData(
 	ctx context.Context, txn *sql.Tx,
 	localpart string, serverName spec.ServerName,
-	roomID, dataType string, content json.RawMessage,
+	frameID, dataType string, content json.RawMessage,
 ) error {
-	_, err := sqlutil.TxStmt(txn, s.insertAccountDataStmt).ExecContext(ctx, localpart, serverName, roomID, dataType, content)
+	_, err := sqlutil.TxStmt(txn, s.insertAccountDataStmt).ExecContext(ctx, localpart, serverName, frameID, dataType, content)
 	return err
 }
 
@@ -74,7 +74,7 @@ func (s *accountDataStatements) SelectAccountData(
 	localpart string, serverName spec.ServerName,
 ) (
 	/* global */ map[string]json.RawMessage,
-	/* rooms */ map[string]map[string]json.RawMessage,
+	/* frames */ map[string]map[string]json.RawMessage,
 	error,
 ) {
 	rows, err := s.selectAccountDataStmt.QueryContext(ctx, localpart, serverName)
@@ -83,38 +83,38 @@ func (s *accountDataStatements) SelectAccountData(
 	}
 
 	global := map[string]json.RawMessage{}
-	rooms := map[string]map[string]json.RawMessage{}
+	frames := map[string]map[string]json.RawMessage{}
 
 	for rows.Next() {
-		var roomID string
+		var frameID string
 		var dataType string
 		var content []byte
 
-		if err = rows.Scan(&roomID, &dataType, &content); err != nil {
+		if err = rows.Scan(&frameID, &dataType, &content); err != nil {
 			return nil, nil, err
 		}
 
-		if roomID != "" {
-			if _, ok := rooms[roomID]; !ok {
-				rooms[roomID] = map[string]json.RawMessage{}
+		if frameID != "" {
+			if _, ok := frames[frameID]; !ok {
+				frames[frameID] = map[string]json.RawMessage{}
 			}
-			rooms[roomID][dataType] = content
+			frames[frameID][dataType] = content
 		} else {
 			global[dataType] = content
 		}
 	}
 
-	return global, rooms, nil
+	return global, frames, nil
 }
 
 func (s *accountDataStatements) SelectAccountDataByType(
 	ctx context.Context,
 	localpart string, serverName spec.ServerName,
-	roomID, dataType string,
+	frameID, dataType string,
 ) (data json.RawMessage, err error) {
 	var bytes []byte
 	stmt := s.selectAccountDataByTypeStmt
-	if err = stmt.QueryRowContext(ctx, localpart, serverName, roomID, dataType).Scan(&bytes); err != nil {
+	if err = stmt.QueryRowContext(ctx, localpart, serverName, frameID, dataType).Scan(&bytes); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}

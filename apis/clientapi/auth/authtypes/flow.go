@@ -15,7 +15,6 @@
 package authtypes
 
 // Flow represents one possible way that the client can authenticate a request.
-// https://matrix.org/docs/spec/client_server/r0.3.0.html#user-interactive-authentication-api
 type Flow struct {
 	Stages []LoginType `json:"stages"`
 }

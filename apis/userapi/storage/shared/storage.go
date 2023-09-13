@@ -266,17 +266,17 @@ func (d *Database) QueryPushRules(
 	return &pushRules, nil
 }
 
-// SaveAccountData saves new account data for a given user and a given room.
-// If the account data is not specific to a room, the room ID should be an empty string
-// If an account data already exists for a given set (user, room, data type), it will
+// SaveAccountData saves new account data for a given user and a given frame.
+// If the account data is not specific to a frame, the frame ID should be an empty string
+// If an account data already exists for a given set (user, frame, data type), it will
 // update the corresponding row with the new content
 // Returns a SQL error if there was an issue with the insertion/update
 func (d *Database) SaveAccountData(
 	ctx context.Context, localpart string, serverName spec.ServerName,
-	roomID, dataType string, content json.RawMessage,
+	frameID, dataType string, content json.RawMessage,
 ) error {
 	return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		return d.AccountDatas.InsertAccountData(ctx, txn, localpart, serverName, roomID, dataType, content)
+		return d.AccountDatas.InsertAccountData(ctx, txn, localpart, serverName, frameID, dataType, content)
 	})
 }
 
@@ -285,22 +285,22 @@ func (d *Database) SaveAccountData(
 // Returns an error if there was an issue with the retrieval
 func (d *Database) GetAccountData(ctx context.Context, localpart string, serverName spec.ServerName) (
 	global map[string]json.RawMessage,
-	rooms map[string]map[string]json.RawMessage,
+	frames map[string]map[string]json.RawMessage,
 	err error,
 ) {
 	return d.AccountDatas.SelectAccountData(ctx, localpart, serverName)
 }
 
 // GetAccountDataByType returns account data matching a given
-// localpart, room ID and type.
+// localpart, frame ID and type.
 // If no account data could be found, returns nil
 // Returns an error if there was an issue with the retrieval
 func (d *Database) GetAccountDataByType(
 	ctx context.Context, localpart string, serverName spec.ServerName,
-	roomID, dataType string,
+	frameID, dataType string,
 ) (data json.RawMessage, err error) {
 	return d.AccountDatas.SelectAccountDataByType(
-		ctx, localpart, serverName, roomID, dataType,
+		ctx, localpart, serverName, frameID, dataType,
 	)
 }
 
@@ -481,15 +481,15 @@ func (d *Database) GetKeyBackup(
 }
 
 func (d *Database) GetBackupKeys(
-	ctx context.Context, version, userID, filterRoomID, filterSessionID string,
+	ctx context.Context, version, userID, filterFrameID, filterSessionID string,
 ) (result map[string]map[string]api.KeyBackupSession, err error) {
 	err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
 		if filterSessionID != "" {
-			result, err = d.KeyBackups.SelectKeysByRoomIDAndSessionID(ctx, txn, userID, version, filterRoomID, filterSessionID)
+			result, err = d.KeyBackups.SelectKeysByFrameIDAndSessionID(ctx, txn, userID, version, filterFrameID, filterSessionID)
 			return err
 		}
-		if filterRoomID != "" {
-			result, err = d.KeyBackups.SelectKeysByRoomID(ctx, txn, userID, version, filterRoomID)
+		if filterFrameID != "" {
+			result, err = d.KeyBackups.SelectKeysByFrameID(ctx, txn, userID, version, filterFrameID)
 			return err
 		}
 		result, err = d.KeyBackups.SelectKeys(ctx, txn, userID, version)
@@ -533,12 +533,12 @@ func (d *Database) UpsertBackupKeys(
 		changed := false
 		// loop over all the new keys (which should be smaller than the set of backed up keys)
 		for _, newKey := range uploads {
-			// if we have a matching (room_id, session_id), we may need to update the key if it meets some rules, check them.
-			existingRoom := existingKeys[newKey.RoomID]
-			if existingRoom != nil {
-				existingSession, ok := existingRoom[newKey.SessionID]
+			// if we have a matching (frame_id, session_id), we may need to update the key if it meets some rules, check them.
+			existingFrame := existingKeys[newKey.FrameID]
+			if existingFrame != nil {
+				existingSession, ok := existingFrame[newKey.SessionID]
 				if ok {
-					if existingSession.ShouldReplaceRoomKey(&newKey.KeyBackupSession) {
+					if existingSession.ShouldReplaceFrameKey(&newKey.KeyBackupSession) {
 						err = d.KeyBackups.UpdateBackupKey(ctx, txn, userID, version, newKey)
 						changed = true
 						if err != nil {
@@ -549,7 +549,7 @@ func (d *Database) UpsertBackupKeys(
 					continue
 				}
 			}
-			// if we're here, either the room or session are new, either way, we insert
+			// if we're here, either the frame or session are new, either way, we insert
 			err = d.KeyBackups.InsertBackupKey(ctx, txn, userID, version, newKey)
 			changed = true
 			if err != nil {
@@ -803,17 +803,17 @@ func (d *Database) InsertNotification(ctx context.Context, localpart string, ser
 	})
 }
 
-func (d *Database) DeleteNotificationsUpTo(ctx context.Context, localpart string, serverName spec.ServerName, roomID string, pos uint64) (affected bool, err error) {
+func (d *Database) DeleteNotificationsUpTo(ctx context.Context, localpart string, serverName spec.ServerName, frameID string, pos uint64) (affected bool, err error) {
 	err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		affected, err = d.Notifications.DeleteUpTo(ctx, txn, localpart, serverName, roomID, pos)
+		affected, err = d.Notifications.DeleteUpTo(ctx, txn, localpart, serverName, frameID, pos)
 		return err
 	})
 	return
 }
 
-func (d *Database) SetNotificationsRead(ctx context.Context, localpart string, serverName spec.ServerName, roomID string, pos uint64, b bool) (affected bool, err error) {
+func (d *Database) SetNotificationsRead(ctx context.Context, localpart string, serverName spec.ServerName, frameID string, pos uint64, b bool) (affected bool, err error) {
 	err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		affected, err = d.Notifications.UpdateRead(ctx, txn, localpart, serverName, roomID, pos, b)
+		affected, err = d.Notifications.UpdateRead(ctx, txn, localpart, serverName, frameID, pos, b)
 		return err
 	})
 	return
@@ -827,8 +827,8 @@ func (d *Database) GetNotificationCount(ctx context.Context, localpart string, s
 	return d.Notifications.SelectCount(ctx, nil, localpart, serverName, filter)
 }
 
-func (d *Database) GetRoomNotificationCounts(ctx context.Context, localpart string, serverName spec.ServerName, roomID string) (total int64, highlight int64, _ error) {
-	return d.Notifications.SelectRoomCounts(ctx, nil, localpart, serverName, roomID)
+func (d *Database) GetFrameNotificationCounts(ctx context.Context, localpart string, serverName spec.ServerName, frameID string) (total int64, highlight int64, _ error) {
+	return d.Notifications.SelectFrameCounts(ctx, nil, localpart, serverName, frameID)
 }
 
 func (d *Database) DeleteOldNotifications(ctx context.Context) error {
@@ -872,7 +872,6 @@ func (d *Database) GetPushers(
 
 // RemovePusher deletes one pusher
 // Invoked when `append` is true and `kind` is null in
-// https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-pushers-set
 func (d *Database) RemovePusher(
 	ctx context.Context, appid, pushkey, localpart string, serverName spec.ServerName,
 ) error {
@@ -887,7 +886,6 @@ func (d *Database) RemovePusher(
 
 // RemovePushers deletes all pushers that match given App Id and Push Key pair.
 // Invoked when `append` parameter is false in
-// https://matrix.org/docs/spec/client_server/r0.6.1#post-matrix-client-r0-pushers-set
 func (d *Database) RemovePushers(
 	ctx context.Context, appid, pushkey string,
 ) error {
@@ -901,16 +899,16 @@ func (d *Database) UserStatistics(ctx context.Context) (*types.UserStatistics, *
 	return d.Stats.UserStatistics(ctx, nil)
 }
 
-func (d *Database) UpsertDailyRoomsMessages(ctx context.Context, serverName spec.ServerName, stats types.MessageStats, activeRooms, activeE2EERooms int64) error {
+func (d *Database) UpsertDailyFramesMessages(ctx context.Context, serverName spec.ServerName, stats types.MessageStats, activeFrames, activeE2EEFrames int64) error {
 	return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		return d.Stats.UpsertDailyStats(ctx, txn, serverName, stats, activeRooms, activeE2EERooms)
+		return d.Stats.UpsertDailyStats(ctx, txn, serverName, stats, activeFrames, activeE2EEFrames)
 	})
 }
 
-func (d *Database) DailyRoomsMessages(
+func (d *Database) DailyFramesMessages(
 	ctx context.Context, serverName spec.ServerName,
-) (stats types.MessageStats, activeRooms, activeE2EERooms int64, err error) {
-	return d.Stats.DailyRoomsMessages(ctx, nil, serverName)
+) (stats types.MessageStats, activeFrames, activeE2EEFrames int64, err error) {
+	return d.Stats.DailyFramesMessages(ctx, nil, serverName)
 }
 
 //
@@ -1127,7 +1125,7 @@ func (d *KeyDatabase) StoreCrossSigningSigsForTarget(
 	})
 }
 
-// DeleteStaleDeviceLists deletes stale device list entries for users we don't share a room with anymore.
+// DeleteStaleDeviceLists deletes stale device list entries for users we don't share a frame with anymore.
 func (d *KeyDatabase) DeleteStaleDeviceLists(
 	ctx context.Context,
 	userIDs []string,

@@ -97,10 +97,10 @@ func lookupMapPath(path []string, m map[string]interface{}) (interface{}, error)
 	return v, nil
 }
 
-// parseRoomMemberCountCondition parses a string like "2", "==2", "<2"
+// parseFrameMemberCountCondition parses a string like "2", "==2", "<2"
 // into a function that checks if the argument to it fulfils the
 // condition.
-func parseRoomMemberCountCondition(s string) (func(int) bool, error) {
+func parseFrameMemberCountCondition(s string) (func(int) bool, error) {
 	var b int
 	var cmp = func(a int) bool { return a == b }
 	switch {

@@ -24,7 +24,7 @@ import (
 	federationAPI "github.com/withqb/coddy/apis/federationapi/api"
 	"github.com/withqb/coddy/internal/httputil"
 	"github.com/withqb/coddy/internal/transactions"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	appserviceAPI "github.com/withqb/coddy/services/appservice/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
@@ -40,7 +40,7 @@ type WellKnownSlidingSyncProxy struct {
 
 type WellKnownClientResponse struct {
 	Homeserver       WellKnownClientHomeserver  `json:"m.homeserver"`
-	SlidingSyncProxy *WellKnownSlidingSyncProxy `json:"org.matrix.msc3575.proxy,omitempty"`
+	SlidingSyncProxy *WellKnownSlidingSyncProxy `json:"org.coddy.msc3575.proxy,omitempty"`
 }
 
 // Setup registers HTTP handlers with the given ServeMux. It also supplies the given http.Client
@@ -52,7 +52,7 @@ type WellKnownClientResponse struct {
 func Setup(
 	routers httputil.Routers,
 	dendriteCfg *config.Dendrite,
-	rsAPI roomserverAPI.ClientRoomserverAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI,
 	asAPI appserviceAPI.AppServiceInternalAPI,
 	userAPI userapi.ClientUserAPI,
 	userDirectoryProvider userapi.QuerySearchProfilesAPI,
@@ -60,7 +60,7 @@ func Setup(
 	syncProducer *producers.SyncAPIProducer,
 	transactionsCache *transactions.Cache,
 	federationSender federationAPI.ClientFederationAPI,
-	extRoomsProvider api.ExtraPublicRoomsProvider,
+	extFramesProvider api.ExtraPublicFramesProvider,
 	natsClient *nats.Conn, enableMetrics bool,
 ) {
 	cfg := &dendriteCfg.ClientAPI
@@ -78,25 +78,25 @@ func Setup(
 	userInteractiveAuth := auth.NewUserInteractive(userAPI, cfg)
 
 	unstableFeatures := map[string]bool{
-		"org.matrix.e2e_cross_signing": true,
-		"org.matrix.msc2285.stable":    true,
+		"org.coddy.e2e_cross_signing": true,
+		"org.coddy.msc2285.stable":    true,
 	}
 	for _, msc := range cfg.MSCs.MSCs {
-		unstableFeatures["org.matrix."+msc] = true
+		unstableFeatures["org.coddy."+msc] = true
 	}
 
 	// singleflight protects /join endpoints from being invoked
-	// multiple times from the same user and room, otherwise
+	// multiple times from the same user and frame, otherwise
 	// a state reset can occur. This also avoids unneeded
 	// state calculations.
-	// TODO: actually fix this in the roomserver, as there are
+	// TODO: actually fix this in the dataframe, as there are
 	// 		 possibly other ways that can result in a stat reset.
 	sf := singleflight.Group{}
 
 	if cfg.Matrix.WellKnownClientName != "" {
-		logrus.Infof("Setting m.homeserver base_url as %s at /.well-known/matrix/client", cfg.Matrix.WellKnownClientName)
+		logrus.Infof("Setting m.homeserver base_url as %s at /.well-known/coddy/client", cfg.Matrix.WellKnownClientName)
 		if cfg.Matrix.WellKnownSlidingSyncProxy != "" {
-			logrus.Infof("Setting org.matrix.msc3575.proxy url as %s at /.well-known/matrix/client", cfg.Matrix.WellKnownSlidingSyncProxy)
+			logrus.Infof("Setting org.coddy.msc3575.proxy url as %s at /.well-known/coddy/client", cfg.Matrix.WellKnownSlidingSyncProxy)
 		}
 		wkMux.Handle("/client", httputil.MakeExternalAPI("wellknown", func(r *http.Request) xutil.JSONResponse {
 			response := WellKnownClientResponse{
@@ -185,7 +185,7 @@ func Setup(
 			case http.MethodDelete:
 				return AdminDeleteRegistrationToken(req, cfg, userAPI)
 			default:
-				return xutil.MatrixErrorResponse(
+				return xutil.CoddyErrorResponse(
 					404,
 					string(spec.ErrorNotFound),
 					"unknown method",
@@ -194,9 +194,9 @@ func Setup(
 		}),
 	).Methods(http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodOptions)
 
-	dendriteAdminRouter.Handle("/admin/evacuateRoom/{roomID}",
-		httputil.MakeAdminAPI("admin_evacuate_room", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
-			return AdminEvacuateRoom(req, rsAPI)
+	dendriteAdminRouter.Handle("/admin/evacuateFrame/{frameID}",
+		httputil.MakeAdminAPI("admin_evacuate_frame", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+			return AdminEvacuateFrame(req, rsAPI)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
 
@@ -206,9 +206,9 @@ func Setup(
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
 
-	dendriteAdminRouter.Handle("/admin/purgeRoom/{roomID}",
-		httputil.MakeAdminAPI("admin_purge_room", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
-			return AdminPurgeRoom(req, rsAPI)
+	dendriteAdminRouter.Handle("/admin/purgeFrame/{frameID}",
+		httputil.MakeAdminAPI("admin_purge_frame", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+			return AdminPurgeFrame(req, rsAPI)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
 
@@ -218,7 +218,7 @@ func Setup(
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
 
-	dendriteAdminRouter.Handle("/admin/downloadState/{serverName}/{roomID}",
+	dendriteAdminRouter.Handle("/admin/downloadState/{serverName}/{frameID}",
 		httputil.MakeAdminAPI("admin_download_state", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			return AdminDownloadState(req, device, rsAPI)
 		}),
@@ -293,12 +293,12 @@ func Setup(
 
 	unstableMux := publicAPIMux.PathPrefix("/unstable").Subrouter()
 
-	v3mux.Handle("/createRoom",
-		httputil.MakeAuthAPI("createRoom", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
-			return CreateRoom(req, device, cfg, userAPI, rsAPI, asAPI)
+	v3mux.Handle("/createFrame",
+		httputil.MakeAuthAPI("createFrame", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+			return CreateFrame(req, device, cfg, userAPI, rsAPI, asAPI)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/join/{roomIDOrAlias}",
+	v3mux.Handle("/join/{frameIDOrAlias}",
 		httputil.MakeAuthAPI(spec.Join, userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			if r := rateLimits.Limit(req, device); r != nil {
 				return *r
@@ -307,22 +307,22 @@ func Setup(
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			// Only execute a join for roomIDOrAlias and UserID once. If there is a join in progress
+			// Only execute a join for frameIDOrAlias and UserID once. If there is a join in progress
 			// it waits for it to complete and returns that result for subsequent requests.
-			resp, _, _ := sf.Do(vars["roomIDOrAlias"]+device.UserID, func() (any, error) {
-				return JoinRoomByIDOrAlias(
-					req, device, rsAPI, userAPI, vars["roomIDOrAlias"],
+			resp, _, _ := sf.Do(vars["frameIDOrAlias"]+device.UserID, func() (any, error) {
+				return JoinFrameByIDOrAlias(
+					req, device, rsAPI, userAPI, vars["frameIDOrAlias"],
 				), nil
 			})
 			// once all joins are processed, drop them from the cache. Further requests
 			// will be processed as usual.
-			sf.Forget(vars["roomIDOrAlias"] + device.UserID)
+			sf.Forget(vars["frameIDOrAlias"] + device.UserID)
 			return resp.(xutil.JSONResponse)
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodPost, http.MethodOptions)
 
 	if mscCfg.Enabled("msc2753") {
-		v3mux.Handle("/peek/{roomIDOrAlias}",
+		v3mux.Handle("/peek/{frameIDOrAlias}",
 			httputil.MakeAuthAPI(spec.Peek, userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 				if r := rateLimits.Limit(req, device); r != nil {
 					return *r
@@ -331,18 +331,18 @@ func Setup(
 				if err != nil {
 					return xutil.ErrorResponse(err)
 				}
-				return PeekRoomByIDOrAlias(
-					req, device, rsAPI, vars["roomIDOrAlias"],
+				return PeekFrameByIDOrAlias(
+					req, device, rsAPI, vars["frameIDOrAlias"],
 				)
 			}),
 		).Methods(http.MethodPost, http.MethodOptions)
 	}
-	v3mux.Handle("/joined_rooms",
-		httputil.MakeAuthAPI("joined_rooms", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
-			return GetJoinedRooms(req, device, rsAPI)
+	v3mux.Handle("/joined_frames",
+		httputil.MakeAuthAPI("joined_frames", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+			return GetJoinedFrames(req, device, rsAPI)
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodGet, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/join",
+	v3mux.Handle("/frames/{frameID}/join",
 		httputil.MakeAuthAPI(spec.Join, userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			if r := rateLimits.Limit(req, device); r != nil {
 				return *r
@@ -351,20 +351,20 @@ func Setup(
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			// Only execute a join for roomID and UserID once. If there is a join in progress
+			// Only execute a join for frameID and UserID once. If there is a join in progress
 			// it waits for it to complete and returns that result for subsequent requests.
-			resp, _, _ := sf.Do(vars["roomID"]+device.UserID, func() (any, error) {
-				return JoinRoomByIDOrAlias(
-					req, device, rsAPI, userAPI, vars["roomID"],
+			resp, _, _ := sf.Do(vars["frameID"]+device.UserID, func() (any, error) {
+				return JoinFrameByIDOrAlias(
+					req, device, rsAPI, userAPI, vars["frameID"],
 				), nil
 			})
 			// once all joins are processed, drop them from the cache. Further requests
 			// will be processed as usual.
-			sf.Forget(vars["roomID"] + device.UserID)
+			sf.Forget(vars["frameID"] + device.UserID)
 			return resp.(xutil.JSONResponse)
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/leave",
+	v3mux.Handle("/frames/{frameID}/leave",
 		httputil.MakeAuthAPI("membership", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			if r := rateLimits.Limit(req, device); r != nil {
 				return *r
@@ -373,32 +373,32 @@ func Setup(
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return LeaveRoomByID(
-				req, device, rsAPI, vars["roomID"],
+			return LeaveFrameByID(
+				req, device, rsAPI, vars["frameID"],
 			)
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/unpeek",
+	v3mux.Handle("/frames/{frameID}/unpeek",
 		httputil.MakeAuthAPI("unpeek", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return UnpeekRoomByID(
-				req, device, rsAPI, vars["roomID"],
+			return UnpeekFrameByID(
+				req, device, rsAPI, vars["frameID"],
 			)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/ban",
+	v3mux.Handle("/frames/{frameID}/ban",
 		httputil.MakeAuthAPI("membership", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SendBan(req, userAPI, device, vars["roomID"], cfg, rsAPI, asAPI)
+			return SendBan(req, userAPI, device, vars["frameID"], cfg, rsAPI, asAPI)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/invite",
+	v3mux.Handle("/frames/{frameID}/invite",
 		httputil.MakeAuthAPI("membership", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			if r := rateLimits.Limit(req, device); r != nil {
 				return *r
@@ -407,65 +407,65 @@ func Setup(
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SendInvite(req, userAPI, device, vars["roomID"], cfg, rsAPI, asAPI)
+			return SendInvite(req, userAPI, device, vars["frameID"], cfg, rsAPI, asAPI)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/kick",
+	v3mux.Handle("/frames/{frameID}/kick",
 		httputil.MakeAuthAPI("membership", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SendKick(req, userAPI, device, vars["roomID"], cfg, rsAPI, asAPI)
+			return SendKick(req, userAPI, device, vars["frameID"], cfg, rsAPI, asAPI)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/unban",
+	v3mux.Handle("/frames/{frameID}/unban",
 		httputil.MakeAuthAPI("membership", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SendUnban(req, userAPI, device, vars["roomID"], cfg, rsAPI, asAPI)
+			return SendUnban(req, userAPI, device, vars["frameID"], cfg, rsAPI, asAPI)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/send/{eventType}",
+	v3mux.Handle("/frames/{frameID}/send/{eventType}",
 		httputil.MakeAuthAPI("send_message", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SendEvent(req, device, vars["roomID"], vars["eventType"], nil, nil, cfg, rsAPI, nil)
+			return SendEvent(req, device, vars["frameID"], vars["eventType"], nil, nil, cfg, rsAPI, nil)
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/send/{eventType}/{txnID}",
+	v3mux.Handle("/frames/{frameID}/send/{eventType}/{txnID}",
 		httputil.MakeAuthAPI("send_message", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
 			txnID := vars["txnID"]
-			return SendEvent(req, device, vars["roomID"], vars["eventType"], &txnID,
+			return SendEvent(req, device, vars["frameID"], vars["eventType"], &txnID,
 				nil, cfg, rsAPI, transactionsCache)
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodPut, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/state", httputil.MakeAuthAPI("room_state", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/frames/{frameID}/state", httputil.MakeAuthAPI("frame_state", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 		vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 		if err != nil {
 			return xutil.ErrorResponse(err)
 		}
-		return OnIncomingStateRequest(req.Context(), device, rsAPI, vars["roomID"])
+		return OnIncomingStateRequest(req.Context(), device, rsAPI, vars["frameID"])
 	}, httputil.WithAllowGuests())).Methods(http.MethodGet, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/aliases", httputil.MakeAuthAPI("aliases", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/frames/{frameID}/aliases", httputil.MakeAuthAPI("aliases", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 		vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 		if err != nil {
 			return xutil.ErrorResponse(err)
 		}
-		return GetAliases(req, rsAPI, device, vars["roomID"])
+		return GetAliases(req, rsAPI, device, vars["frameID"])
 	})).Methods(http.MethodGet, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/state/{type:[^/]+/?}", httputil.MakeAuthAPI("room_state", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/frames/{frameID}/state/{type:[^/]+/?}", httputil.MakeAuthAPI("frame_state", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 		vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 		if err != nil {
 			return xutil.ErrorResponse(err)
@@ -473,19 +473,19 @@ func Setup(
 		// If there's a trailing slash, remove it
 		eventType := strings.TrimSuffix(vars["type"], "/")
 		eventFormat := req.URL.Query().Get("format") == "event"
-		return OnIncomingStateTypeRequest(req.Context(), device, rsAPI, vars["roomID"], eventType, "", eventFormat)
+		return OnIncomingStateTypeRequest(req.Context(), device, rsAPI, vars["frameID"], eventType, "", eventFormat)
 	}, httputil.WithAllowGuests())).Methods(http.MethodGet, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/state/{type}/{stateKey}", httputil.MakeAuthAPI("room_state", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/frames/{frameID}/state/{type}/{stateKey}", httputil.MakeAuthAPI("frame_state", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 		vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 		if err != nil {
 			return xutil.ErrorResponse(err)
 		}
 		eventFormat := req.URL.Query().Get("format") == "event"
-		return OnIncomingStateTypeRequest(req.Context(), device, rsAPI, vars["roomID"], vars["type"], vars["stateKey"], eventFormat)
+		return OnIncomingStateTypeRequest(req.Context(), device, rsAPI, vars["frameID"], vars["type"], vars["stateKey"], eventFormat)
 	}, httputil.WithAllowGuests())).Methods(http.MethodGet, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/state/{eventType:[^/]+/?}",
+	v3mux.Handle("/frames/{frameID}/state/{eventType:[^/]+/?}",
 		httputil.MakeAuthAPI("send_message", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
@@ -493,31 +493,31 @@ func Setup(
 			}
 			emptyString := ""
 			eventType := strings.TrimSuffix(vars["eventType"], "/")
-			return SendEvent(req, device, vars["roomID"], eventType, nil, &emptyString, cfg, rsAPI, nil)
+			return SendEvent(req, device, vars["frameID"], eventType, nil, &emptyString, cfg, rsAPI, nil)
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodPut, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/state/{eventType}/{stateKey}",
+	v3mux.Handle("/frames/{frameID}/state/{eventType}/{stateKey}",
 		httputil.MakeAuthAPI("send_message", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
 			stateKey := vars["stateKey"]
-			return SendEvent(req, device, vars["roomID"], vars["eventType"], nil, &stateKey, cfg, rsAPI, nil)
+			return SendEvent(req, device, vars["frameID"], vars["eventType"], nil, &stateKey, cfg, rsAPI, nil)
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodPut, http.MethodOptions)
 
 	// Defined outside of handler to persist between calls
 	// TODO: clear based on some criteria
-	roomHierarchyPaginationCache := NewRoomHierarchyPaginationCache()
-	v1mux.Handle("/rooms/{roomID}/hierarchy",
+	frameHierarchyPaginationCache := NewFrameHierarchyPaginationCache()
+	v1mux.Handle("/frames/{frameID}/hierarchy",
 		httputil.MakeAuthAPI("spaces", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return QueryRoomHierarchy(req, device, vars["roomID"], rsAPI, &roomHierarchyPaginationCache)
+			return QueryFrameHierarchy(req, device, vars["frameID"], rsAPI, &frameHierarchyPaginationCache)
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodGet, http.MethodOptions)
 
@@ -535,78 +535,78 @@ func Setup(
 		return RegisterAvailable(req, cfg, userAPI)
 	})).Methods(http.MethodGet, http.MethodOptions)
 
-	v3mux.Handle("/directory/room/{roomAlias}",
-		httputil.MakeExternalAPI("directory_room", func(req *http.Request) xutil.JSONResponse {
+	v3mux.Handle("/directory/frame/{frameAlias}",
+		httputil.MakeExternalAPI("directory_frame", func(req *http.Request) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return DirectoryRoom(req, vars["roomAlias"], federation, cfg, rsAPI, federationSender)
+			return DirectoryFrame(req, vars["frameAlias"], federation, cfg, rsAPI, federationSender)
 		}),
 	).Methods(http.MethodGet, http.MethodOptions)
 
-	v3mux.Handle("/directory/room/{roomAlias}",
-		httputil.MakeAuthAPI("directory_room", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/directory/frame/{frameAlias}",
+		httputil.MakeAuthAPI("directory_frame", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SetLocalAlias(req, device, vars["roomAlias"], cfg, rsAPI)
+			return SetLocalAlias(req, device, vars["frameAlias"], cfg, rsAPI)
 		}),
 	).Methods(http.MethodPut, http.MethodOptions)
 
-	v3mux.Handle("/directory/room/{roomAlias}",
-		httputil.MakeAuthAPI("directory_room", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/directory/frame/{frameAlias}",
+		httputil.MakeAuthAPI("directory_frame", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return RemoveLocalAlias(req, device, vars["roomAlias"], rsAPI)
+			return RemoveLocalAlias(req, device, vars["frameAlias"], rsAPI)
 		}),
 	).Methods(http.MethodDelete, http.MethodOptions)
-	v3mux.Handle("/directory/list/room/{roomID}",
+	v3mux.Handle("/directory/list/frame/{frameID}",
 		httputil.MakeExternalAPI("directory_list", func(req *http.Request) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return GetVisibility(req, rsAPI, vars["roomID"])
+			return GetVisibility(req, rsAPI, vars["frameID"])
 		}),
 	).Methods(http.MethodGet, http.MethodOptions)
 
-	v3mux.Handle("/directory/list/room/{roomID}",
+	v3mux.Handle("/directory/list/frame/{frameID}",
 		httputil.MakeAuthAPI("directory_list", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SetVisibility(req, rsAPI, device, vars["roomID"])
+			return SetVisibility(req, rsAPI, device, vars["frameID"])
 		}),
 	).Methods(http.MethodPut, http.MethodOptions)
-	v3mux.Handle("/directory/list/appservice/{networkID}/{roomID}",
+	v3mux.Handle("/directory/list/appservice/{networkID}/{frameID}",
 		httputil.MakeAuthAPI("directory_list", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SetVisibilityAS(req, rsAPI, device, vars["networkID"], vars["roomID"])
+			return SetVisibilityAS(req, rsAPI, device, vars["networkID"], vars["frameID"])
 		}),
 	).Methods(http.MethodPut, http.MethodOptions)
 
 	// Undocumented endpoint
-	v3mux.Handle("/directory/list/appservice/{networkID}/{roomID}",
+	v3mux.Handle("/directory/list/appservice/{networkID}/{frameID}",
 		httputil.MakeAuthAPI("directory_list", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SetVisibilityAS(req, rsAPI, device, vars["networkID"], vars["roomID"])
+			return SetVisibilityAS(req, rsAPI, device, vars["networkID"], vars["frameID"])
 		}),
 	).Methods(http.MethodDelete, http.MethodOptions)
 
-	v3mux.Handle("/publicRooms",
-		httputil.MakeExternalAPI("public_rooms", func(req *http.Request) xutil.JSONResponse {
-			return GetPostPublicRooms(req, rsAPI, extRoomsProvider, federation, cfg)
+	v3mux.Handle("/publicFrames",
+		httputil.MakeExternalAPI("public_frames", func(req *http.Request) xutil.JSONResponse {
+			return GetPostPublicFrames(req, rsAPI, extFramesProvider, federation, cfg)
 		}),
 	).Methods(http.MethodGet, http.MethodPost, http.MethodOptions)
 
@@ -622,8 +622,8 @@ func Setup(
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/typing/{userID}",
-		httputil.MakeAuthAPI("rooms_typing", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/frames/{frameID}/typing/{userID}",
+		httputil.MakeAuthAPI("frames_typing", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			if r := rateLimits.Limit(req, device); r != nil {
 				return *r
 			}
@@ -631,26 +631,26 @@ func Setup(
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SendTyping(req, device, vars["roomID"], vars["userID"], rsAPI, syncProducer)
+			return SendTyping(req, device, vars["frameID"], vars["userID"], rsAPI, syncProducer)
 		}),
 	).Methods(http.MethodPut, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/redact/{eventID}",
-		httputil.MakeAuthAPI("rooms_redact", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/frames/{frameID}/redact/{eventID}",
+		httputil.MakeAuthAPI("frames_redact", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SendRedaction(req, device, vars["roomID"], vars["eventID"], cfg, rsAPI, nil, nil)
+			return SendRedaction(req, device, vars["frameID"], vars["eventID"], cfg, rsAPI, nil, nil)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomID}/redact/{eventID}/{txnId}",
-		httputil.MakeAuthAPI("rooms_redact", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/frames/{frameID}/redact/{eventID}/{txnId}",
+		httputil.MakeAuthAPI("frames_redact", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
 			txnID := vars["txnId"]
-			return SendRedaction(req, device, vars["roomID"], vars["eventID"], cfg, rsAPI, &txnID, transactionsCache)
+			return SendRedaction(req, device, vars["frameID"], vars["eventID"], cfg, rsAPI, &txnID, transactionsCache)
 		}),
 	).Methods(http.MethodPut, http.MethodOptions)
 
@@ -1005,9 +1005,9 @@ func Setup(
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodGet, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/initialSync",
-		httputil.MakeExternalAPI("rooms_initial_sync", func(req *http.Request) xutil.JSONResponse {
-			// TODO: Allow people to peek into rooms.
+	v3mux.Handle("/frames/{frameID}/initialSync",
+		httputil.MakeExternalAPI("frames_initial_sync", func(req *http.Request) xutil.JSONResponse {
+			// TODO: Allow people to peek into frames.
 			return xutil.JSONResponse{
 				Code: http.StatusForbidden,
 				JSON: spec.GuestAccessForbidden("Guest access not implemented"),
@@ -1025,13 +1025,13 @@ func Setup(
 		}),
 	).Methods(http.MethodPut, http.MethodOptions)
 
-	v3mux.Handle("/user/{userID}/rooms/{roomID}/account_data/{type}",
+	v3mux.Handle("/user/{userID}/frames/{frameID}/account_data/{type}",
 		httputil.MakeAuthAPI("user_account_data", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SaveAccountData(req, userAPI, device, vars["userID"], vars["roomID"], vars["type"], syncProducer)
+			return SaveAccountData(req, userAPI, device, vars["userID"], vars["frameID"], vars["type"], syncProducer)
 		}),
 	).Methods(http.MethodPut, http.MethodOptions)
 
@@ -1045,13 +1045,13 @@ func Setup(
 		}),
 	).Methods(http.MethodGet)
 
-	v3mux.Handle("/user/{userID}/rooms/{roomID}/account_data/{type}",
+	v3mux.Handle("/user/{userID}/frames/{frameID}/account_data/{type}",
 		httputil.MakeAuthAPI("user_account_data", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return GetAccountData(req, userAPI, device, vars["userID"], vars["roomID"], vars["type"])
+			return GetAccountData(req, userAPI, device, vars["userID"], vars["frameID"], vars["type"])
 		}),
 	).Methods(http.MethodGet)
 
@@ -1104,8 +1104,8 @@ func Setup(
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/read_markers",
-		httputil.MakeAuthAPI("rooms_read_markers", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/frames/{frameID}/read_markers",
+		httputil.MakeAuthAPI("frames_read_markers", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			if r := rateLimits.Limit(req, device); r != nil {
 				return *r
 			}
@@ -1113,12 +1113,12 @@ func Setup(
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SaveReadMarker(req, userAPI, rsAPI, syncProducer, device, vars["roomID"])
+			return SaveReadMarker(req, userAPI, rsAPI, syncProducer, device, vars["frameID"])
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/forget",
-		httputil.MakeAuthAPI("rooms_forget", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/frames/{frameID}/forget",
+		httputil.MakeAuthAPI("frames_forget", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			if r := rateLimits.Limit(req, device); r != nil {
 				return *r
 			}
@@ -1126,17 +1126,17 @@ func Setup(
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return SendForget(req, device, vars["roomID"], rsAPI)
+			return SendForget(req, device, vars["frameID"], rsAPI)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
 
-	v3mux.Handle("/rooms/{roomID}/upgrade",
-		httputil.MakeAuthAPI("rooms_upgrade", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	v3mux.Handle("/frames/{frameID}/upgrade",
+		httputil.MakeAuthAPI("frames_upgrade", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return UpgradeRoom(req, device, cfg, vars["roomID"], userAPI, rsAPI, asAPI)
+			return UpgradeFrame(req, device, cfg, vars["frameID"], userAPI, rsAPI, asAPI)
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
 
@@ -1222,33 +1222,33 @@ func Setup(
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodGet, http.MethodOptions)
 
-	v3mux.Handle("/user/{userId}/rooms/{roomId}/tags",
+	v3mux.Handle("/user/{userId}/frames/{frameId}/tags",
 		httputil.MakeAuthAPI("get_tags", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return GetTags(req, userAPI, device, vars["userId"], vars["roomId"], syncProducer)
+			return GetTags(req, userAPI, device, vars["userId"], vars["frameId"], syncProducer)
 		}),
 	).Methods(http.MethodGet, http.MethodOptions)
 
-	v3mux.Handle("/user/{userId}/rooms/{roomId}/tags/{tag}",
+	v3mux.Handle("/user/{userId}/frames/{frameId}/tags/{tag}",
 		httputil.MakeAuthAPI("put_tag", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return PutTag(req, userAPI, device, vars["userId"], vars["roomId"], vars["tag"], syncProducer)
+			return PutTag(req, userAPI, device, vars["userId"], vars["frameId"], vars["tag"], syncProducer)
 		}),
 	).Methods(http.MethodPut, http.MethodOptions)
 
-	v3mux.Handle("/user/{userId}/rooms/{roomId}/tags/{tag}",
+	v3mux.Handle("/user/{userId}/frames/{frameId}/tags/{tag}",
 		httputil.MakeAuthAPI("delete_tag", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 			if err != nil {
 				return xutil.ErrorResponse(err)
 			}
-			return DeleteTag(req, userAPI, device, vars["userId"], vars["roomId"], vars["tag"], syncProducer)
+			return DeleteTag(req, userAPI, device, vars["userId"], vars["frameId"], vars["tag"], syncProducer)
 		}),
 	).Methods(http.MethodDelete, http.MethodOptions)
 
@@ -1295,21 +1295,21 @@ func Setup(
 		return CreateKeyBackupVersion(req, userAPI, device)
 	})
 
-	v3mux.Handle("/room_keys/version/{version}", getBackupKeysVersion).Methods(http.MethodGet, http.MethodOptions)
-	v3mux.Handle("/room_keys/version", getLatestBackupKeysVersion).Methods(http.MethodGet, http.MethodOptions)
-	v3mux.Handle("/room_keys/version/{version}", putBackupKeysVersion).Methods(http.MethodPut)
-	v3mux.Handle("/room_keys/version/{version}", deleteBackupKeysVersion).Methods(http.MethodDelete)
-	v3mux.Handle("/room_keys/version", postNewBackupKeysVersion).Methods(http.MethodPost, http.MethodOptions)
+	v3mux.Handle("/frame_keys/version/{version}", getBackupKeysVersion).Methods(http.MethodGet, http.MethodOptions)
+	v3mux.Handle("/frame_keys/version", getLatestBackupKeysVersion).Methods(http.MethodGet, http.MethodOptions)
+	v3mux.Handle("/frame_keys/version/{version}", putBackupKeysVersion).Methods(http.MethodPut)
+	v3mux.Handle("/frame_keys/version/{version}", deleteBackupKeysVersion).Methods(http.MethodDelete)
+	v3mux.Handle("/frame_keys/version", postNewBackupKeysVersion).Methods(http.MethodPost, http.MethodOptions)
 
-	unstableMux.Handle("/room_keys/version/{version}", getBackupKeysVersion).Methods(http.MethodGet, http.MethodOptions)
-	unstableMux.Handle("/room_keys/version", getLatestBackupKeysVersion).Methods(http.MethodGet, http.MethodOptions)
-	unstableMux.Handle("/room_keys/version/{version}", putBackupKeysVersion).Methods(http.MethodPut)
-	unstableMux.Handle("/room_keys/version/{version}", deleteBackupKeysVersion).Methods(http.MethodDelete)
-	unstableMux.Handle("/room_keys/version", postNewBackupKeysVersion).Methods(http.MethodPost, http.MethodOptions)
+	unstableMux.Handle("/frame_keys/version/{version}", getBackupKeysVersion).Methods(http.MethodGet, http.MethodOptions)
+	unstableMux.Handle("/frame_keys/version", getLatestBackupKeysVersion).Methods(http.MethodGet, http.MethodOptions)
+	unstableMux.Handle("/frame_keys/version/{version}", putBackupKeysVersion).Methods(http.MethodPut)
+	unstableMux.Handle("/frame_keys/version/{version}", deleteBackupKeysVersion).Methods(http.MethodDelete)
+	unstableMux.Handle("/frame_keys/version", postNewBackupKeysVersion).Methods(http.MethodPost, http.MethodOptions)
 
 	// Inserting E2E Backup Keys
 
-	// Bulk room and session
+	// Bulk frame and session
 	putBackupKeys := httputil.MakeAuthAPI("put_backup_keys", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 		version := req.URL.Query().Get("version")
 		if version == "" {
@@ -1326,8 +1326,8 @@ func Setup(
 		return UploadBackupKeys(req, userAPI, device, version, &reqBody)
 	})
 
-	// Single room bulk session
-	putBackupKeysRoom := httputil.MakeAuthAPI("put_backup_keys_room", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	// Single frame bulk session
+	putBackupKeysFrame := httputil.MakeAuthAPI("put_backup_keys_frame", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 		vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 		if err != nil {
 			return xutil.ErrorResponse(err)
@@ -1339,27 +1339,27 @@ func Setup(
 				JSON: spec.InvalidParam("version must be specified"),
 			}
 		}
-		roomID := vars["roomID"]
+		frameID := vars["frameID"]
 		var reqBody keyBackupSessionRequest
-		reqBody.Rooms = make(map[string]struct {
+		reqBody.Frames = make(map[string]struct {
 			Sessions map[string]userapi.KeyBackupSession `json:"sessions"`
 		})
-		reqBody.Rooms[roomID] = struct {
+		reqBody.Frames[frameID] = struct {
 			Sessions map[string]userapi.KeyBackupSession `json:"sessions"`
 		}{
 			Sessions: map[string]userapi.KeyBackupSession{},
 		}
-		body := reqBody.Rooms[roomID]
+		body := reqBody.Frames[frameID]
 		resErr := clientxutil.UnmarshalJSONRequest(req, &body)
 		if resErr != nil {
 			return *resErr
 		}
-		reqBody.Rooms[roomID] = body
+		reqBody.Frames[frameID] = body
 		return UploadBackupKeys(req, userAPI, device, version, &reqBody)
 	})
 
-	// Single room, single session
-	putBackupKeysRoomSession := httputil.MakeAuthAPI("put_backup_keys_room_session", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	// Single frame, single session
+	putBackupKeysFrameSession := httputil.MakeAuthAPI("put_backup_keys_frame_session", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 		vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 		if err != nil {
 			return xutil.ErrorResponse(err)
@@ -1376,28 +1376,28 @@ func Setup(
 		if resErr != nil {
 			return *resErr
 		}
-		roomID := vars["roomID"]
+		frameID := vars["frameID"]
 		sessionID := vars["sessionID"]
 		var keyReq keyBackupSessionRequest
-		keyReq.Rooms = make(map[string]struct {
+		keyReq.Frames = make(map[string]struct {
 			Sessions map[string]userapi.KeyBackupSession `json:"sessions"`
 		})
-		keyReq.Rooms[roomID] = struct {
+		keyReq.Frames[frameID] = struct {
 			Sessions map[string]userapi.KeyBackupSession `json:"sessions"`
 		}{
 			Sessions: make(map[string]userapi.KeyBackupSession),
 		}
-		keyReq.Rooms[roomID].Sessions[sessionID] = reqBody
+		keyReq.Frames[frameID].Sessions[sessionID] = reqBody
 		return UploadBackupKeys(req, userAPI, device, version, &keyReq)
 	})
 
-	v3mux.Handle("/room_keys/keys", putBackupKeys).Methods(http.MethodPut)
-	v3mux.Handle("/room_keys/keys/{roomID}", putBackupKeysRoom).Methods(http.MethodPut)
-	v3mux.Handle("/room_keys/keys/{roomID}/{sessionID}", putBackupKeysRoomSession).Methods(http.MethodPut)
+	v3mux.Handle("/frame_keys/keys", putBackupKeys).Methods(http.MethodPut)
+	v3mux.Handle("/frame_keys/keys/{frameID}", putBackupKeysFrame).Methods(http.MethodPut)
+	v3mux.Handle("/frame_keys/keys/{frameID}/{sessionID}", putBackupKeysFrameSession).Methods(http.MethodPut)
 
-	unstableMux.Handle("/room_keys/keys", putBackupKeys).Methods(http.MethodPut)
-	unstableMux.Handle("/room_keys/keys/{roomID}", putBackupKeysRoom).Methods(http.MethodPut)
-	unstableMux.Handle("/room_keys/keys/{roomID}/{sessionID}", putBackupKeysRoomSession).Methods(http.MethodPut)
+	unstableMux.Handle("/frame_keys/keys", putBackupKeys).Methods(http.MethodPut)
+	unstableMux.Handle("/frame_keys/keys/{frameID}", putBackupKeysFrame).Methods(http.MethodPut)
+	unstableMux.Handle("/frame_keys/keys/{frameID}/{sessionID}", putBackupKeysFrameSession).Methods(http.MethodPut)
 
 	// Querying E2E Backup Keys
 
@@ -1405,29 +1405,29 @@ func Setup(
 		return GetBackupKeys(req, userAPI, device, req.URL.Query().Get("version"), "", "")
 	})
 
-	getBackupKeysRoom := httputil.MakeAuthAPI("get_backup_keys_room", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	getBackupKeysFrame := httputil.MakeAuthAPI("get_backup_keys_frame", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 		vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 		if err != nil {
 			return xutil.ErrorResponse(err)
 		}
-		return GetBackupKeys(req, userAPI, device, req.URL.Query().Get("version"), vars["roomID"], "")
+		return GetBackupKeys(req, userAPI, device, req.URL.Query().Get("version"), vars["frameID"], "")
 	})
 
-	getBackupKeysRoomSession := httputil.MakeAuthAPI("get_backup_keys_room_session", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
+	getBackupKeysFrameSession := httputil.MakeAuthAPI("get_backup_keys_frame_session", userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 		vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 		if err != nil {
 			return xutil.ErrorResponse(err)
 		}
-		return GetBackupKeys(req, userAPI, device, req.URL.Query().Get("version"), vars["roomID"], vars["sessionID"])
+		return GetBackupKeys(req, userAPI, device, req.URL.Query().Get("version"), vars["frameID"], vars["sessionID"])
 	})
 
-	v3mux.Handle("/room_keys/keys", getBackupKeys).Methods(http.MethodGet, http.MethodOptions)
-	v3mux.Handle("/room_keys/keys/{roomID}", getBackupKeysRoom).Methods(http.MethodGet, http.MethodOptions)
-	v3mux.Handle("/room_keys/keys/{roomID}/{sessionID}", getBackupKeysRoomSession).Methods(http.MethodGet, http.MethodOptions)
+	v3mux.Handle("/frame_keys/keys", getBackupKeys).Methods(http.MethodGet, http.MethodOptions)
+	v3mux.Handle("/frame_keys/keys/{frameID}", getBackupKeysFrame).Methods(http.MethodGet, http.MethodOptions)
+	v3mux.Handle("/frame_keys/keys/{frameID}/{sessionID}", getBackupKeysFrameSession).Methods(http.MethodGet, http.MethodOptions)
 
-	unstableMux.Handle("/room_keys/keys", getBackupKeys).Methods(http.MethodGet, http.MethodOptions)
-	unstableMux.Handle("/room_keys/keys/{roomID}", getBackupKeysRoom).Methods(http.MethodGet, http.MethodOptions)
-	unstableMux.Handle("/room_keys/keys/{roomID}/{sessionID}", getBackupKeysRoomSession).Methods(http.MethodGet, http.MethodOptions)
+	unstableMux.Handle("/frame_keys/keys", getBackupKeys).Methods(http.MethodGet, http.MethodOptions)
+	unstableMux.Handle("/frame_keys/keys/{frameID}", getBackupKeysFrame).Methods(http.MethodGet, http.MethodOptions)
+	unstableMux.Handle("/frame_keys/keys/{frameID}/{sessionID}", getBackupKeysFrameSession).Methods(http.MethodGet, http.MethodOptions)
 
 	// Deleting E2E Backup Keys
 
@@ -1468,7 +1468,7 @@ func Setup(
 			return ClaimKeys(req, userAPI)
 		}, httputil.WithAllowGuests()),
 	).Methods(http.MethodPost, http.MethodOptions)
-	v3mux.Handle("/rooms/{roomId}/receipt/{receiptType}/{eventId}",
+	v3mux.Handle("/frames/{frameId}/receipt/{receiptType}/{eventId}",
 		httputil.MakeAuthAPI(spec.Join, userAPI, func(req *http.Request, device *userapi.Device) xutil.JSONResponse {
 			if r := rateLimits.Limit(req, device); r != nil {
 				return *r
@@ -1478,7 +1478,7 @@ func Setup(
 				return xutil.ErrorResponse(err)
 			}
 
-			return SetReceipt(req, userAPI, syncProducer, device, vars["roomId"], vars["receiptType"], vars["eventId"])
+			return SetReceipt(req, userAPI, syncProducer, device, vars["frameId"], vars["receiptType"], vars["eventId"])
 		}),
 	).Methods(http.MethodPost, http.MethodOptions)
 	v3mux.Handle("/presence/{userId}/status",

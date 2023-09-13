@@ -75,7 +75,7 @@ func (d *SyncServerDatasource) prepare(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	roomState, err := NewSqliteCurrentRoomStateTable(d.db, &d.streamID)
+	frameState, err := NewSqliteCurrentFrameStateTable(d.db, &d.streamID)
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func (d *SyncServerDatasource) prepare(ctx context.Context) (err error) {
 	m.AddMigrations(
 		sqlutil.Migration{
 			Version: "syncapi: set history visibility for existing events",
-			Up:      deltas.UpSetHistoryVisibility, // Requires current_room_state and output_room_events to be created.
+			Up:      deltas.UpSetHistoryVisibility, // Requires current_frame_state and output_frame_events to be created.
 		},
 	)
 	err = m.Up(ctx)
@@ -148,7 +148,7 @@ func (d *SyncServerDatasource) prepare(ctx context.Context) (err error) {
 		AccountData:         accountData,
 		OutputEvents:        events,
 		BackwardExtremities: bwExtrem,
-		CurrentRoomState:    roomState,
+		CurrentFrameState:    frameState,
 		Topology:            topology,
 		Filter:              filter,
 		SendToDevice:        sendToDevice,

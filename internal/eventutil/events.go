@@ -7,33 +7,33 @@ import (
 	"time"
 
 	"github.com/withqb/coddy/apis/syncapi/synctypes"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
 
 	"github.com/withqb/xtools"
 )
 
-// ErrRoomNoExists is returned when trying to lookup the state of a room that
+// ErrFrameNoExists is returned when trying to lookup the state of a frame that
 // doesn't exist
-var errRoomNoExists = fmt.Errorf("room does not exist")
+var errFrameNoExists = fmt.Errorf("frame does not exist")
 
-type ErrRoomNoExists struct{}
+type ErrFrameNoExists struct{}
 
-func (e ErrRoomNoExists) Error() string {
-	return errRoomNoExists.Error()
+func (e ErrFrameNoExists) Error() string {
+	return errFrameNoExists.Error()
 }
 
-func (e ErrRoomNoExists) Unwrap() error {
-	return errRoomNoExists
+func (e ErrFrameNoExists) Unwrap() error {
+	return errFrameNoExists
 }
 
-// QueryAndBuildEvent builds a Matrix event using the event builder and roomserver query
-// API client provided. If also fills roomserver query API response (if provided)
+// QueryAndBuildEvent builds a Matrix event using the event builder and dataframe query
+// API client provided. If also fills dataframe query API response (if provided)
 // in case the function calling FillBuilder needs to use it.
-// Returns ErrRoomNoExists if the state of the room could not be retrieved because
-// the room doesn't exist
+// Returns ErrFrameNoExists if the state of the frame could not be retrieved because
+// the frame doesn't exist
 // Returns an error if something else went wrong
 func QueryAndBuildEvent(
 	ctx context.Context,
@@ -47,7 +47,7 @@ func QueryAndBuildEvent(
 
 	eventsNeeded, err := queryRequiredEventsForBuilder(ctx, proto, rsAPI, queryRes)
 	if err != nil {
-		// This can pass through a ErrRoomNoExists to the caller
+		// This can pass through a ErrFrameNoExists to the caller
 		return nil, err
 	}
 	return BuildEvent(ctx, proto, identity, evTime, eventsNeeded, queryRes)
@@ -65,7 +65,7 @@ func BuildEvent(
 		return nil, err
 	}
 
-	verImpl, err := xtools.GetRoomVersion(queryRes.RoomVersion)
+	verImpl, err := xtools.GetFrameVersion(queryRes.FrameVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func BuildEvent(
 	return &types.HeaderedEvent{PDU: event}, nil
 }
 
-// queryRequiredEventsForBuilder queries the roomserver for auth/prev events needed for this builder.
+// queryRequiredEventsForBuilder queries the dataframe for auth/prev events needed for this builder.
 func queryRequiredEventsForBuilder(
 	ctx context.Context,
 	proto *xtools.ProtoEvent,
@@ -97,9 +97,9 @@ func queryRequiredEventsForBuilder(
 		return nil, errors.New("expecting state tuples for event builder, got none")
 	}
 
-	// Ask the roomserver for information about this room
+	// Ask the dataframe for information about this frame
 	queryReq := api.QueryLatestEventsAndStateRequest{
-		RoomID:       proto.RoomID,
+		FrameID:       proto.FrameID,
 		StateToFetch: eventsNeeded.Tuples(),
 	}
 	return &eventsNeeded, rsAPI.QueryLatestEventsAndState(ctx, &queryReq, queryRes)
@@ -111,8 +111,8 @@ func addPrevEventsToEvent(
 	eventsNeeded *xtools.StateNeeded,
 	queryRes *api.QueryLatestEventsAndStateResponse,
 ) error {
-	if !queryRes.RoomExists {
-		return ErrRoomNoExists{}
+	if !queryRes.FrameExists {
+		return ErrFrameNoExists{}
 	}
 
 	builder.Depth = queryRes.Depth
@@ -139,7 +139,7 @@ func addPrevEventsToEvent(
 // truncateAuthAndPrevEvents limits the number of events we add into
 // an event as prev_events or auth_events.
 // NOTSPEC: The limits here feel a bit arbitrary but they are currently
-// here because of https://github.com/withqb/matrix-doc/issues/2307
+// here because of https://github.com/withqb/coddy-doc/issues/2307
 // and because Synapse will just drop events that don't comply.
 func truncateAuthAndPrevEvents(auth, prev []string) (
 	truncAuth, truncPrev []string,
@@ -155,18 +155,18 @@ func truncateAuthAndPrevEvents(auth, prev []string) (
 }
 
 // RedactEvent redacts the given event and sets the unsigned field appropriately. This should be used by
-// downstream components to the roomserver when an OutputTypeRedactedEvent occurs.
+// downstream components to the dataframe when an OutputTypeRedactedEvent occurs.
 func RedactEvent(ctx context.Context, redactionEvent, redactedEvent xtools.PDU, querier api.QuerySenderIDAPI) error {
 	// sanity check
-	if redactionEvent.Type() != spec.MRoomRedaction {
+	if redactionEvent.Type() != spec.MFrameRedaction {
 		return fmt.Errorf("RedactEvent: redactionEvent isn't a redaction event, is '%s'", redactionEvent.Type())
 	}
 	redactedEvent.Redact()
-	validRoomID, err := spec.NewRoomID(redactionEvent.RoomID())
+	validFrameID, err := spec.NewFrameID(redactionEvent.FrameID())
 	if err != nil {
 		return err
 	}
-	senderID, err := querier.QueryUserIDForSender(ctx, *validRoomID, redactionEvent.SenderID())
+	senderID, err := querier.QueryUserIDForSender(ctx, *validFrameID, redactionEvent.SenderID())
 	if err != nil {
 		return err
 	}

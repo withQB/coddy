@@ -31,18 +31,18 @@ func (p *TypingStreamProvider) IncrementalSync(
 	from, to types.StreamPosition,
 ) types.StreamPosition {
 	var err error
-	for roomID, membership := range req.Rooms {
+	for frameID, membership := range req.Frames {
 		if membership != spec.Join {
 			continue
 		}
 
-		jr, ok := req.Response.Rooms.Join[roomID]
+		jr, ok := req.Response.Frames.Join[frameID]
 		if !ok {
 			jr = types.NewJoinResponse()
 		}
 
 		if users, updated := p.EDUCache.GetTypingUsersIfUpdatedAfter(
-			roomID, int64(from),
+			frameID, int64(from),
 		); updated {
 			typingUsers := make([]string, 0, len(users))
 			for i := range users {
@@ -63,7 +63,7 @@ func (p *TypingStreamProvider) IncrementalSync(
 			}
 
 			jr.Ephemeral.Events = append(jr.Ephemeral.Events, ev)
-			req.Response.Rooms.Join[roomID] = jr
+			req.Response.Frames.Join[frameID] = jr
 		}
 	}
 

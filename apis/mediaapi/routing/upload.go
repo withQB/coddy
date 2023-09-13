@@ -25,7 +25,6 @@ import (
 )
 
 // uploadRequest metadata included in or derivable from an upload request
-// https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-media-r0-upload
 // NOTE: The members come from HTTP request metadata such as headers, query parameters or can be derived from such
 type uploadRequest struct {
 	MediaMetadata *types.MediaMetadata
@@ -33,7 +32,6 @@ type uploadRequest struct {
 }
 
 // uploadResponse defines the format of the JSON response
-// https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-media-r0-upload
 type uploadResponse struct {
 	ContentURI string `json:"content_uri"`
 }

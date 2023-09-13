@@ -17,7 +17,7 @@ import (
 
 	"github.com/withqb/coddy/apis/federationapi"
 	"github.com/withqb/coddy/apis/userapi"
-	"github.com/withqb/coddy/servers/roomserver"
+	"github.com/withqb/coddy/servers/dataframe"
 	"github.com/withqb/coddy/services/appservice"
 	"github.com/withqb/coddy/setup"
 	basepkg "github.com/withqb/coddy/setup/base"
@@ -136,14 +136,14 @@ func main() {
 
 	caches := caching.NewRistrettoCache(cfg.Global.Cache.EstimatedMaxSize, cfg.Global.Cache.MaxAge, caching.EnableMetrics)
 	natsInstance := jetstream.NATSInstance{}
-	rsAPI := roomserver.NewInternalAPI(processCtx, cfg, cm, &natsInstance, caches, caching.EnableMetrics)
+	rsAPI := dataframe.NewInternalAPI(processCtx, cfg, cm, &natsInstance, caches, caching.EnableMetrics)
 	fsAPI := federationapi.NewInternalAPI(
 		processCtx, cfg, cm, &natsInstance, federationClient, rsAPI, caches, nil, false,
 	)
 
 	keyRing := fsAPI.KeyRing()
 
-	// The underlying roomserver implementation needs to be able to call the fedsender.
+	// The underlying dataframe implementation needs to be able to call the fedsender.
 	// This is different to rsAPI which can be the http client which doesn't need this
 	// dependency. Other components also need updating after their dependencies are up.
 	rsAPI.SetFederationAPI(fsAPI, keyRing)
@@ -164,7 +164,7 @@ func main() {
 		// always use the concrete impl here even in -http mode because adding public routes
 		// must be done on the concrete impl not an HTTP client else fedapi will call itself
 		FederationAPI: fsAPI,
-		RoomserverAPI: rsAPI,
+		DataframeAPI: rsAPI,
 		UserAPI:       userAPI,
 	}
 	monolith.AddAllPublicRoutes(processCtx, cfg, routers, cm, &natsInstance, caches, caching.EnableMetrics)
@@ -185,7 +185,7 @@ func main() {
 	upCounter.Add(1)
 	prometheus.MustRegister(upCounter)
 
-	// Expose the matrix APIs directly rather than putting them under a /api path.
+	// Expose the coddy APIs directly rather than putting them under a /api path.
 	go func() {
 		basepkg.SetupAndServeHTTP(processCtx, cfg, routers, httpAddr, nil, nil)
 	}()

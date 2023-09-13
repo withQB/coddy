@@ -20,7 +20,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
@@ -31,18 +31,18 @@ import (
 func GetEvent(
 	ctx context.Context,
 	request *fclient.FederationRequest,
-	rsAPI api.FederationRoomserverAPI,
+	rsAPI api.FederationDataframeAPI,
 	eventID string,
 	origin spec.ServerName,
 ) xutil.JSONResponse {
-	// /_matrix/federation/v1/event/{eventId} doesn't have a roomID, we use an empty string,
-	// which results in `QueryEventsByID` to first get the event and use that to determine the roomID.
+	// /_coddy/federation/v1/event/{eventId} doesn't have a frameID, we use an empty string,
+	// which results in `QueryEventsByID` to first get the event and use that to determine the frameID.
 	event, err := fetchEvent(ctx, rsAPI, "", eventID)
 	if err != nil {
 		return *err
 	}
 
-	err = allowedToSeeEvent(ctx, request.Origin(), rsAPI, eventID, event.RoomID())
+	err = allowedToSeeEvent(ctx, request.Origin(), rsAPI, eventID, event.FrameID())
 	if err != nil {
 		return *err
 	}
@@ -61,11 +61,11 @@ func GetEvent(
 func allowedToSeeEvent(
 	ctx context.Context,
 	origin spec.ServerName,
-	rsAPI api.FederationRoomserverAPI,
+	rsAPI api.FederationDataframeAPI,
 	eventID string,
-	roomID string,
+	frameID string,
 ) *xutil.JSONResponse {
-	allowed, err := rsAPI.QueryServerAllowedToSeeEvent(ctx, origin, eventID, roomID)
+	allowed, err := rsAPI.QueryServerAllowedToSeeEvent(ctx, origin, eventID, frameID)
 	if err != nil {
 		resErr := xutil.ErrorResponse(err)
 		return &resErr
@@ -80,11 +80,11 @@ func allowedToSeeEvent(
 }
 
 // fetchEvent fetches the event without auth checks. Returns an error if the event cannot be found.
-func fetchEvent(ctx context.Context, rsAPI api.FederationRoomserverAPI, roomID, eventID string) (xtools.PDU, *xutil.JSONResponse) {
+func fetchEvent(ctx context.Context, rsAPI api.FederationDataframeAPI, frameID, eventID string) (xtools.PDU, *xutil.JSONResponse) {
 	var eventsResponse api.QueryEventsByIDResponse
 	err := rsAPI.QueryEventsByID(
 		ctx,
-		&api.QueryEventsByIDRequest{EventIDs: []string{eventID}, RoomID: roomID},
+		&api.QueryEventsByIDRequest{EventIDs: []string{eventID}, FrameID: frameID},
 		&eventsResponse,
 	)
 	if err != nil {

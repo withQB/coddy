@@ -13,8 +13,8 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/types"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/eventutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 )
 
 type DatabaseTransaction struct {
@@ -85,66 +85,66 @@ func (d *DatabaseTransaction) MaxStreamPositionForNotificationData(ctx context.C
 	return types.StreamPosition(id), nil
 }
 
-func (d *DatabaseTransaction) CurrentState(ctx context.Context, roomID string, stateFilterPart *synctypes.StateFilter, excludeEventIDs []string) ([]*rstypes.HeaderedEvent, error) {
-	return d.CurrentRoomState.SelectCurrentState(ctx, d.txn, roomID, stateFilterPart, excludeEventIDs)
+func (d *DatabaseTransaction) CurrentState(ctx context.Context, frameID string, stateFilterPart *synctypes.StateFilter, excludeEventIDs []string) ([]*rstypes.HeaderedEvent, error) {
+	return d.CurrentFrameState.SelectCurrentState(ctx, d.txn, frameID, stateFilterPart, excludeEventIDs)
 }
 
-func (d *DatabaseTransaction) RoomIDsWithMembership(ctx context.Context, userID string, membership string) ([]string, error) {
-	return d.CurrentRoomState.SelectRoomIDsWithMembership(ctx, d.txn, userID, membership)
+func (d *DatabaseTransaction) FrameIDsWithMembership(ctx context.Context, userID string, membership string) ([]string, error) {
+	return d.CurrentFrameState.SelectFrameIDsWithMembership(ctx, d.txn, userID, membership)
 }
 
-func (d *DatabaseTransaction) MembershipCount(ctx context.Context, roomID, membership string, pos types.StreamPosition) (int, error) {
-	return d.Memberships.SelectMembershipCount(ctx, d.txn, roomID, membership, pos)
+func (d *DatabaseTransaction) MembershipCount(ctx context.Context, frameID, membership string, pos types.StreamPosition) (int, error) {
+	return d.Memberships.SelectMembershipCount(ctx, d.txn, frameID, membership, pos)
 }
 
-func (d *DatabaseTransaction) GetRoomSummary(ctx context.Context, roomID, userID string) (*types.Summary, error) {
+func (d *DatabaseTransaction) GetFrameSummary(ctx context.Context, frameID, userID string) (*types.Summary, error) {
 	summary := &types.Summary{Heroes: []string{}}
 
-	joinCount, err := d.CurrentRoomState.SelectMembershipCount(ctx, d.txn, roomID, spec.Join)
+	joinCount, err := d.CurrentFrameState.SelectMembershipCount(ctx, d.txn, frameID, spec.Join)
 	if err != nil {
 		return summary, err
 	}
-	inviteCount, err := d.CurrentRoomState.SelectMembershipCount(ctx, d.txn, roomID, spec.Invite)
+	inviteCount, err := d.CurrentFrameState.SelectMembershipCount(ctx, d.txn, frameID, spec.Invite)
 	if err != nil {
 		return summary, err
 	}
 	summary.InvitedMemberCount = &inviteCount
 	summary.JoinedMemberCount = &joinCount
 
-	// Get the room name and canonical alias, if any
+	// Get the frame name and canonical alias, if any
 	filter := synctypes.DefaultStateFilter()
-	filterTypes := []string{spec.MRoomName, spec.MRoomCanonicalAlias}
-	filterRooms := []string{roomID}
+	filterTypes := []string{spec.MFrameName, spec.MFrameCanonicalAlias}
+	filterFrames := []string{frameID}
 
 	filter.Types = &filterTypes
-	filter.Rooms = &filterRooms
-	evs, err := d.CurrentRoomState.SelectCurrentState(ctx, d.txn, roomID, &filter, nil)
+	filter.Frames = &filterFrames
+	evs, err := d.CurrentFrameState.SelectCurrentState(ctx, d.txn, frameID, &filter, nil)
 	if err != nil {
 		return summary, err
 	}
 
 	for _, ev := range evs {
 		switch ev.Type() {
-		case spec.MRoomName:
+		case spec.MFrameName:
 			if gjson.GetBytes(ev.Content(), "name").Str != "" {
 				return summary, nil
 			}
-		case spec.MRoomCanonicalAlias:
+		case spec.MFrameCanonicalAlias:
 			if gjson.GetBytes(ev.Content(), "alias").Str != "" {
 				return summary, nil
 			}
 		}
 	}
 
-	// If there's no room name or canonical alias, get the room heroes, excluding the user
-	heroes, err := d.CurrentRoomState.SelectRoomHeroes(ctx, d.txn, roomID, userID, []string{spec.Join, spec.Invite})
+	// If there's no frame name or canonical alias, get the frame heroes, excluding the user
+	heroes, err := d.CurrentFrameState.SelectFrameHeroes(ctx, d.txn, frameID, userID, []string{spec.Join, spec.Invite})
 	if err != nil {
 		return summary, err
 	}
 
 	// "When no joined or invited members are available, this should consist of the banned and left users"
 	if len(heroes) == 0 {
-		heroes, err = d.CurrentRoomState.SelectRoomHeroes(ctx, d.txn, roomID, userID, []string{spec.Leave, spec.Ban})
+		heroes, err = d.CurrentFrameState.SelectFrameHeroes(ctx, d.txn, frameID, userID, []string{spec.Leave, spec.Ban})
 		if err != nil {
 			return summary, err
 		}
@@ -154,8 +154,8 @@ func (d *DatabaseTransaction) GetRoomSummary(ctx context.Context, roomID, userID
 	return summary, nil
 }
 
-func (d *DatabaseTransaction) RecentEvents(ctx context.Context, roomIDs []string, r types.Range, eventFilter *synctypes.RoomEventFilter, chronologicalOrder bool, onlySyncEvents bool) (map[string]types.RecentEvents, error) {
-	return d.OutputEvents.SelectRecentEvents(ctx, d.txn, roomIDs, r, eventFilter, chronologicalOrder, onlySyncEvents)
+func (d *DatabaseTransaction) RecentEvents(ctx context.Context, frameIDs []string, r types.Range, eventFilter *synctypes.FrameEventFilter, chronologicalOrder bool, onlySyncEvents bool) (map[string]types.RecentEvents, error) {
+	return d.OutputEvents.SelectRecentEvents(ctx, d.txn, frameIDs, r, eventFilter, chronologicalOrder, onlySyncEvents)
 }
 
 func (d *DatabaseTransaction) PositionInTopology(ctx context.Context, eventID string) (pos types.StreamPosition, spos types.StreamPosition, err error) {
@@ -170,8 +170,8 @@ func (d *DatabaseTransaction) PeeksInRange(ctx context.Context, userID, deviceID
 	return d.Peeks.SelectPeeksInRange(ctx, d.txn, userID, deviceID, r)
 }
 
-func (d *DatabaseTransaction) RoomReceiptsAfter(ctx context.Context, roomIDs []string, streamPos types.StreamPosition) (types.StreamPosition, []types.OutputReceiptEvent, error) {
-	return d.Receipts.SelectRoomReceiptsAfter(ctx, d.txn, roomIDs, streamPos)
+func (d *DatabaseTransaction) FrameReceiptsAfter(ctx context.Context, frameIDs []string, streamPos types.StreamPosition) (types.StreamPosition, []types.OutputReceiptEvent, error) {
+	return d.Receipts.SelectFrameReceiptsAfter(ctx, d.txn, frameIDs, streamPos)
 }
 
 // Events lookups a list of event by their event ID.
@@ -190,38 +190,38 @@ func (d *DatabaseTransaction) Events(ctx context.Context, eventIDs []string) ([]
 	return d.StreamEventsToEvents(ctx, nil, streamEvents, nil), nil
 }
 
-func (d *DatabaseTransaction) AllJoinedUsersInRooms(ctx context.Context) (map[string][]string, error) {
-	return d.CurrentRoomState.SelectJoinedUsers(ctx, d.txn)
+func (d *DatabaseTransaction) AllJoinedUsersInFrames(ctx context.Context) (map[string][]string, error) {
+	return d.CurrentFrameState.SelectJoinedUsers(ctx, d.txn)
 }
 
-func (d *DatabaseTransaction) AllJoinedUsersInRoom(ctx context.Context, roomIDs []string) (map[string][]string, error) {
-	return d.CurrentRoomState.SelectJoinedUsersInRoom(ctx, d.txn, roomIDs)
+func (d *DatabaseTransaction) AllJoinedUsersInFrame(ctx context.Context, frameIDs []string) (map[string][]string, error) {
+	return d.CurrentFrameState.SelectJoinedUsersInFrame(ctx, d.txn, frameIDs)
 }
 
-func (d *DatabaseTransaction) AllPeekingDevicesInRooms(ctx context.Context) (map[string][]types.PeekingDevice, error) {
+func (d *DatabaseTransaction) AllPeekingDevicesInFrames(ctx context.Context) (map[string][]types.PeekingDevice, error) {
 	return d.Peeks.SelectPeekingDevices(ctx, d.txn)
 }
 
 func (d *DatabaseTransaction) SharedUsers(ctx context.Context, userID string, otherUserIDs []string) ([]string, error) {
-	return d.CurrentRoomState.SelectSharedUsers(ctx, d.txn, userID, otherUserIDs)
+	return d.CurrentFrameState.SelectSharedUsers(ctx, d.txn, userID, otherUserIDs)
 }
 
 func (d *DatabaseTransaction) GetStateEvent(
-	ctx context.Context, roomID, evType, stateKey string,
+	ctx context.Context, frameID, evType, stateKey string,
 ) (*rstypes.HeaderedEvent, error) {
-	return d.CurrentRoomState.SelectStateEvent(ctx, d.txn, roomID, evType, stateKey)
+	return d.CurrentFrameState.SelectStateEvent(ctx, d.txn, frameID, evType, stateKey)
 }
 
-func (d *DatabaseTransaction) GetStateEventsForRoom(
-	ctx context.Context, roomID string, stateFilter *synctypes.StateFilter,
+func (d *DatabaseTransaction) GetStateEventsForFrame(
+	ctx context.Context, frameID string, stateFilter *synctypes.StateFilter,
 ) (stateEvents []*rstypes.HeaderedEvent, err error) {
-	stateEvents, err = d.CurrentRoomState.SelectCurrentState(ctx, d.txn, roomID, stateFilter, nil)
+	stateEvents, err = d.CurrentFrameState.SelectCurrentState(ctx, d.txn, frameID, stateFilter, nil)
 	return
 }
 
 // GetAccountDataInRange returns all account data for a given user inserted or
 // updated between two given positions
-// Returns a map following the format data[roomID] = []dataTypes
+// Returns a map following the format data[frameID] = []dataTypes
 // If no data is retrieved, returns an empty map
 // If there was an issue with the retrieval, returns an error
 func (d *DatabaseTransaction) GetAccountDataInRange(
@@ -234,8 +234,8 @@ func (d *DatabaseTransaction) GetAccountDataInRange(
 func (d *DatabaseTransaction) GetEventsInTopologicalRange(
 	ctx context.Context,
 	from, to *types.TopologyToken,
-	roomID string,
-	filter *synctypes.RoomEventFilter,
+	frameID string,
+	filter *synctypes.FrameEventFilter,
 	backwardOrdering bool,
 ) (events []types.StreamEvent, start, end types.TopologyToken, err error) {
 	var minDepth, maxDepth, maxStreamPosForMaxDepth types.StreamPosition
@@ -256,7 +256,7 @@ func (d *DatabaseTransaction) GetEventsInTopologicalRange(
 	// Select the event IDs from the defined range.
 	var eIDs []string
 	eIDs, start, end, err = d.Topology.SelectEventIDsInRange(
-		ctx, d.txn, roomID, minDepth, maxDepth, maxStreamPosForMaxDepth, filter.Limit, !backwardOrdering,
+		ctx, d.txn, frameID, minDepth, maxDepth, maxStreamPosForMaxDepth, filter.Limit, !backwardOrdering,
 	)
 	if err != nil {
 		return
@@ -271,10 +271,10 @@ func (d *DatabaseTransaction) GetEventsInTopologicalRange(
 	return
 }
 
-func (d *DatabaseTransaction) BackwardExtremitiesForRoom(
-	ctx context.Context, roomID string,
+func (d *DatabaseTransaction) BackwardExtremitiesForFrame(
+	ctx context.Context, frameID string,
 ) (backwardExtremities map[string][]string, err error) {
-	return d.BackwardExtremities.SelectBackwardExtremitiesForRoom(ctx, d.txn, roomID)
+	return d.BackwardExtremities.SelectBackwardExtremitiesForFrame(ctx, d.txn, frameID)
 }
 
 func (d *DatabaseTransaction) EventPositionInTopology(
@@ -288,9 +288,9 @@ func (d *DatabaseTransaction) EventPositionInTopology(
 }
 
 func (d *DatabaseTransaction) StreamToTopologicalPosition(
-	ctx context.Context, roomID string, streamPos types.StreamPosition, backwardOrdering bool,
+	ctx context.Context, frameID string, streamPos types.StreamPosition, backwardOrdering bool,
 ) (types.TopologyToken, error) {
-	topoPos, err := d.Topology.SelectStreamToTopologicalPosition(ctx, d.txn, roomID, streamPos, backwardOrdering)
+	topoPos, err := d.Topology.SelectStreamToTopologicalPosition(ctx, d.txn, frameID, streamPos, backwardOrdering)
 	switch {
 	case err == sql.ErrNoRows && backwardOrdering: // no events in range, going backward
 		return types.TopologyToken{PDUPosition: streamPos}, nil
@@ -304,7 +304,7 @@ func (d *DatabaseTransaction) StreamToTopologicalPosition(
 }
 
 // GetBackwardTopologyPos retrieves the backward topology position, i.e. the position of the
-// oldest event in the room's topology.
+// oldest event in the frame's topology.
 func (d *DatabaseTransaction) GetBackwardTopologyPos(
 	ctx context.Context,
 	events []*rstypes.HeaderedEvent,
@@ -323,27 +323,27 @@ func (d *DatabaseTransaction) GetBackwardTopologyPos(
 }
 
 // GetStateDeltas returns the state deltas between fromPos and toPos,
-// exclusive of oldPos, inclusive of newPos, for the rooms in which
+// exclusive of oldPos, inclusive of newPos, for the frames in which
 // the user has new membership events.
-// A list of joined room IDs is also returned in case the caller needs it.
+// A list of joined frame IDs is also returned in case the caller needs it.
 // nolint:gocyclo
 func (d *DatabaseTransaction) GetStateDeltas(
 	ctx context.Context, device *userapi.Device,
 	r types.Range, userID string,
-	stateFilter *synctypes.StateFilter, rsAPI api.SyncRoomserverAPI,
-) (deltas []types.StateDelta, joinedRoomsIDs []string, err error) {
+	stateFilter *synctypes.StateFilter, rsAPI api.SyncDataframeAPI,
+) (deltas []types.StateDelta, joinedFramesIDs []string, err error) {
 	// Implement membership change algorithm: https://github.com/withqb/synapse/blob/v0.19.3/synapse/handlers/sync.py#L821
 	// - Get membership list changes for this user in this sync response
-	// - For each room which has membership list changes:
-	//     * Check if the room is 'newly joined' (insufficient to just check for a join event because we allow dupe joins TODO).
-	//       If it is, then we need to send the full room state down (and 'limited' is always true).
-	//     * Check if user is still CURRENTLY invited to the room. If so, add room to 'invited' block.
-	//     * Check if the user is CURRENTLY (TODO) left/banned. If so, add room to 'archived' block.
-	// - Get all CURRENTLY joined rooms, and add them to 'joined' block.
+	// - For each frame which has membership list changes:
+	//     * Check if the frame is 'newly joined' (insufficient to just check for a join event because we allow dupe joins TODO).
+	//       If it is, then we need to send the full frame state down (and 'limited' is always true).
+	//     * Check if user is still CURRENTLY invited to the frame. If so, add frame to 'invited' block.
+	//     * Check if the user is CURRENTLY (TODO) left/banned. If so, add frame to 'archived' block.
+	// - Get all CURRENTLY joined frames, and add them to 'joined' block.
 
-	// Look up all memberships for the user. We only care about rooms that a
+	// Look up all memberships for the user. We only care about frames that a
 	// user has ever interacted with — joined to, kicked/banned from, left.
-	memberships, err := d.CurrentRoomState.SelectRoomIDsWithAnyMembership(ctx, d.txn, userID)
+	memberships, err := d.CurrentFrameState.SelectFrameIDsWithAnyMembership(ctx, d.txn, userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil, nil
@@ -351,17 +351,17 @@ func (d *DatabaseTransaction) GetStateDeltas(
 		return nil, nil, err
 	}
 
-	allRoomIDs := make([]string, 0, len(memberships))
-	joinedRoomIDs := make([]string, 0, len(memberships))
-	for roomID, membership := range memberships {
-		allRoomIDs = append(allRoomIDs, roomID)
+	allFrameIDs := make([]string, 0, len(memberships))
+	joinedFrameIDs := make([]string, 0, len(memberships))
+	for frameID, membership := range memberships {
+		allFrameIDs = append(allFrameIDs, frameID)
 		if membership == spec.Join {
-			joinedRoomIDs = append(joinedRoomIDs, roomID)
+			joinedFrameIDs = append(joinedFrameIDs, frameID)
 		}
 	}
 
-	// get all the state events ever (i.e. for all available rooms) between these two positions
-	stateNeeded, eventMap, err := d.OutputEvents.SelectStateInRange(ctx, d.txn, r, nil, allRoomIDs)
+	// get all the state events ever (i.e. for all available frames) between these two positions
+	stateNeeded, eventMap, err := d.OutputEvents.SelectStateInRange(ctx, d.txn, r, nil, allFrameIDs)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil, nil
@@ -376,13 +376,13 @@ func (d *DatabaseTransaction) GetStateDeltas(
 		return nil, nil, err
 	}
 
-	// get all the state events ever (i.e. for all available rooms) between these two positions
+	// get all the state events ever (i.e. for all available frames) between these two positions
 	stateFiltered := state
 	// avoid hitting the database if the result would be the same as above
 	if !isStatefilterEmpty(stateFilter) {
 		var stateNeededFiltered map[string]map[string]bool
 		var eventMapFiltered map[string]types.StreamEvent
-		stateNeededFiltered, eventMapFiltered, err = d.OutputEvents.SelectStateInRange(ctx, d.txn, r, stateFilter, allRoomIDs)
+		stateNeededFiltered, eventMapFiltered, err = d.OutputEvents.SelectStateInRange(ctx, d.txn, r, stateFilter, allFrameIDs)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return nil, nil, nil
@@ -398,7 +398,7 @@ func (d *DatabaseTransaction) GetStateDeltas(
 		}
 	}
 
-	// find out which rooms this user is peeking, if any.
+	// find out which frames this user is peeking, if any.
 	// We do this before joins so any peeks get overwritten
 	peeks, err := d.Peeks.SelectPeeksInRange(ctx, d.txn, userID, device.ID, r)
 	if err != nil && err != sql.ErrNoRows {
@@ -408,29 +408,29 @@ func (d *DatabaseTransaction) GetStateDeltas(
 	// add peek blocks
 	for _, peek := range peeks {
 		if peek.New {
-			// send full room state down instead of a delta
+			// send full frame state down instead of a delta
 			var s []types.StreamEvent
-			s, err = d.currentStateStreamEventsForRoom(ctx, peek.RoomID, stateFilter)
+			s, err = d.currentStateStreamEventsForFrame(ctx, peek.FrameID, stateFilter)
 			if err != nil {
 				if err == sql.ErrNoRows {
 					continue
 				}
 				return nil, nil, err
 			}
-			state[peek.RoomID] = s
+			state[peek.FrameID] = s
 		}
 		if !peek.Deleted {
 			deltas = append(deltas, types.StateDelta{
 				Membership:  spec.Peek,
-				StateEvents: d.StreamEventsToEvents(ctx, device, state[peek.RoomID], rsAPI),
-				RoomID:      peek.RoomID,
+				StateEvents: d.StreamEventsToEvents(ctx, device, state[peek.FrameID], rsAPI),
+				FrameID:      peek.FrameID,
 			})
 		}
 	}
 
-	// handle newly joined rooms and non-joined rooms
-	newlyJoinedRooms := make(map[string]bool, len(state))
-	for roomID, stateStreamEvents := range state {
+	// handle newly joined frames and non-joined frames
+	newlyJoinedFrames := make(map[string]bool, len(state))
+	for frameID, stateStreamEvents := range state {
 		for _, ev := range stateStreamEvents {
 			// Look for our membership in the state events and skip over any
 			// membership events that are not related to us.
@@ -441,25 +441,25 @@ func (d *DatabaseTransaction) GetStateDeltas(
 
 			if membership == spec.Join {
 				// If our membership is now join but the previous membership wasn't
-				// then this is a "join transition", so we'll insert this room.
+				// then this is a "join transition", so we'll insert this frame.
 				if prevMembership != membership {
-					newlyJoinedRooms[roomID] = true
-					// Get the full room state, as we'll send that down for a newly
-					// joined room instead of a delta.
+					newlyJoinedFrames[frameID] = true
+					// Get the full frame state, as we'll send that down for a newly
+					// joined frame instead of a delta.
 					var s []types.StreamEvent
-					if s, err = d.currentStateStreamEventsForRoom(ctx, roomID, stateFilter); err != nil {
+					if s, err = d.currentStateStreamEventsForFrame(ctx, frameID, stateFilter); err != nil {
 						if err == sql.ErrNoRows {
 							continue
 						}
 						return nil, nil, err
 					}
 
-					// Add the information for this room into the state so that
-					// it will get added with all of the rest of the joined rooms.
-					stateFiltered[roomID] = s
+					// Add the information for this frame into the state so that
+					// it will get added with all of the rest of the joined frames.
+					stateFiltered[frameID] = s
 				}
 
-				// We won't add joined rooms into the delta at this point as they
+				// We won't add joined frames into the delta at this point as they
 				// are added later on.
 				continue
 			}
@@ -467,39 +467,39 @@ func (d *DatabaseTransaction) GetStateDeltas(
 			deltas = append(deltas, types.StateDelta{
 				Membership:    membership,
 				MembershipPos: ev.StreamPosition,
-				StateEvents:   d.StreamEventsToEvents(ctx, device, stateFiltered[roomID], rsAPI),
-				RoomID:        roomID,
+				StateEvents:   d.StreamEventsToEvents(ctx, device, stateFiltered[frameID], rsAPI),
+				FrameID:        frameID,
 			})
 			break
 		}
 	}
 
-	// Finally, add in currently joined rooms, including those from the
+	// Finally, add in currently joined frames, including those from the
 	// join transitions above.
-	for _, joinedRoomID := range joinedRoomIDs {
+	for _, joinedFrameID := range joinedFrameIDs {
 		deltas = append(deltas, types.StateDelta{
 			Membership:  spec.Join,
-			StateEvents: d.StreamEventsToEvents(ctx, device, stateFiltered[joinedRoomID], rsAPI),
-			RoomID:      joinedRoomID,
-			NewlyJoined: newlyJoinedRooms[joinedRoomID],
+			StateEvents: d.StreamEventsToEvents(ctx, device, stateFiltered[joinedFrameID], rsAPI),
+			FrameID:      joinedFrameID,
+			NewlyJoined: newlyJoinedFrames[joinedFrameID],
 		})
 	}
 
-	return deltas, joinedRoomIDs, nil
+	return deltas, joinedFrameIDs, nil
 }
 
 // GetStateDeltasForFullStateSync is a variant of getStateDeltas used for /sync
 // requests with full_state=true.
-// Fetches full state for all joined rooms and uses selectStateInRange to get
-// updates for other rooms.
+// Fetches full state for all joined frames and uses selectStateInRange to get
+// updates for other frames.
 func (d *DatabaseTransaction) GetStateDeltasForFullStateSync(
 	ctx context.Context, device *userapi.Device,
 	r types.Range, userID string,
-	stateFilter *synctypes.StateFilter, rsAPI api.SyncRoomserverAPI,
+	stateFilter *synctypes.StateFilter, rsAPI api.SyncDataframeAPI,
 ) ([]types.StateDelta, []string, error) {
-	// Look up all memberships for the user. We only care about rooms that a
+	// Look up all memberships for the user. We only care about frames that a
 	// user has ever interacted with — joined to, kicked/banned from, left.
-	memberships, err := d.CurrentRoomState.SelectRoomIDsWithAnyMembership(ctx, d.txn, userID)
+	memberships, err := d.CurrentFrameState.SelectFrameIDsWithAnyMembership(ctx, d.txn, userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil, nil
@@ -507,12 +507,12 @@ func (d *DatabaseTransaction) GetStateDeltasForFullStateSync(
 		return nil, nil, err
 	}
 
-	allRoomIDs := make([]string, 0, len(memberships))
-	joinedRoomIDs := make([]string, 0, len(memberships))
-	for roomID, membership := range memberships {
-		allRoomIDs = append(allRoomIDs, roomID)
+	allFrameIDs := make([]string, 0, len(memberships))
+	joinedFrameIDs := make([]string, 0, len(memberships))
+	for frameID, membership := range memberships {
+		allFrameIDs = append(allFrameIDs, frameID)
 		if membership == spec.Join {
-			joinedRoomIDs = append(joinedRoomIDs, roomID)
+			joinedFrameIDs = append(joinedFrameIDs, frameID)
 		}
 	}
 
@@ -524,26 +524,26 @@ func (d *DatabaseTransaction) GetStateDeltasForFullStateSync(
 		return nil, nil, err
 	}
 
-	// Add full states for all peeking rooms
+	// Add full states for all peeking frames
 	for _, peek := range peeks {
 		if !peek.Deleted {
-			s, stateErr := d.currentStateStreamEventsForRoom(ctx, peek.RoomID, stateFilter)
+			s, stateErr := d.currentStateStreamEventsForFrame(ctx, peek.FrameID, stateFilter)
 			if stateErr != nil {
 				if stateErr == sql.ErrNoRows {
 					continue
 				}
 				return nil, nil, stateErr
 			}
-			deltas[peek.RoomID] = types.StateDelta{
+			deltas[peek.FrameID] = types.StateDelta{
 				Membership:  spec.Peek,
 				StateEvents: d.StreamEventsToEvents(ctx, device, s, rsAPI),
-				RoomID:      peek.RoomID,
+				FrameID:      peek.FrameID,
 			}
 		}
 	}
 
 	// Get all the state events ever between these two positions
-	stateNeeded, eventMap, err := d.OutputEvents.SelectStateInRange(ctx, d.txn, r, stateFilter, allRoomIDs)
+	stateNeeded, eventMap, err := d.OutputEvents.SelectStateInRange(ctx, d.txn, r, stateFilter, allFrameIDs)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil, nil
@@ -558,15 +558,15 @@ func (d *DatabaseTransaction) GetStateDeltasForFullStateSync(
 		return nil, nil, err
 	}
 
-	for roomID, stateStreamEvents := range state {
+	for frameID, stateStreamEvents := range state {
 		for _, ev := range stateStreamEvents {
 			if membership, _ := getMembershipFromEvent(ctx, ev.PDU, userID, rsAPI); membership != "" {
-				if membership != spec.Join { // We've already added full state for all joined rooms above.
-					deltas[roomID] = types.StateDelta{
+				if membership != spec.Join { // We've already added full state for all joined frames above.
+					deltas[frameID] = types.StateDelta{
 						Membership:    membership,
 						MembershipPos: ev.StreamPosition,
 						StateEvents:   d.StreamEventsToEvents(ctx, device, stateStreamEvents, rsAPI),
-						RoomID:        roomID,
+						FrameID:        frameID,
 					}
 				}
 
@@ -575,19 +575,19 @@ func (d *DatabaseTransaction) GetStateDeltasForFullStateSync(
 		}
 	}
 
-	// Add full states for all joined rooms
-	for _, joinedRoomID := range joinedRoomIDs {
-		s, stateErr := d.currentStateStreamEventsForRoom(ctx, joinedRoomID, stateFilter)
+	// Add full states for all joined frames
+	for _, joinedFrameID := range joinedFrameIDs {
+		s, stateErr := d.currentStateStreamEventsForFrame(ctx, joinedFrameID, stateFilter)
 		if stateErr != nil {
 			if stateErr == sql.ErrNoRows {
 				continue
 			}
 			return nil, nil, stateErr
 		}
-		deltas[joinedRoomID] = types.StateDelta{
+		deltas[joinedFrameID] = types.StateDelta{
 			Membership:  spec.Join,
 			StateEvents: d.StreamEventsToEvents(ctx, device, s, rsAPI),
-			RoomID:      joinedRoomID,
+			FrameID:      joinedFrameID,
 		}
 	}
 
@@ -599,14 +599,14 @@ func (d *DatabaseTransaction) GetStateDeltasForFullStateSync(
 		i++
 	}
 
-	return result, joinedRoomIDs, nil
+	return result, joinedFrameIDs, nil
 }
 
-func (d *DatabaseTransaction) currentStateStreamEventsForRoom(
-	ctx context.Context, roomID string,
+func (d *DatabaseTransaction) currentStateStreamEventsForFrame(
+	ctx context.Context, frameID string,
 	stateFilter *synctypes.StateFilter,
 ) ([]types.StreamEvent, error) {
-	allState, err := d.CurrentRoomState.SelectCurrentState(ctx, d.txn, roomID, stateFilter, nil)
+	allState, err := d.CurrentFrameState.SelectCurrentState(ctx, d.txn, frameID, stateFilter, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -634,20 +634,20 @@ func (d *DatabaseTransaction) SendToDeviceUpdatesForSync(
 	return lastPos, events, nil
 }
 
-func (d *DatabaseTransaction) GetRoomReceipts(ctx context.Context, roomIDs []string, streamPos types.StreamPosition) ([]types.OutputReceiptEvent, error) {
-	_, receipts, err := d.Receipts.SelectRoomReceiptsAfter(ctx, d.txn, roomIDs, streamPos)
+func (d *DatabaseTransaction) GetFrameReceipts(ctx context.Context, frameIDs []string, streamPos types.StreamPosition) ([]types.OutputReceiptEvent, error) {
+	_, receipts, err := d.Receipts.SelectFrameReceiptsAfter(ctx, d.txn, frameIDs, streamPos)
 	return receipts, err
 }
 
-func (d *DatabaseTransaction) GetUserUnreadNotificationCountsForRooms(ctx context.Context, userID string, rooms map[string]string) (map[string]*eventutil.NotificationData, error) {
-	roomIDs := make([]string, 0, len(rooms))
-	for roomID, membership := range rooms {
+func (d *DatabaseTransaction) GetUserUnreadNotificationCountsForFrames(ctx context.Context, userID string, frames map[string]string) (map[string]*eventutil.NotificationData, error) {
+	frameIDs := make([]string, 0, len(frames))
+	for frameID, membership := range frames {
 		if membership != spec.Join {
 			continue
 		}
-		roomIDs = append(roomIDs, roomID)
+		frameIDs = append(frameIDs, frameID)
 	}
-	return d.NotificationData.SelectUserUnreadCountsForRooms(ctx, d.txn, userID, roomIDs)
+	return d.NotificationData.SelectUserUnreadCountsForFrames(ctx, d.txn, userID, frameIDs)
 }
 
 func (d *DatabaseTransaction) GetPresences(ctx context.Context, userIDs []string) ([]*types.PresenceInternal, error) {
@@ -662,48 +662,48 @@ func (d *DatabaseTransaction) MaxStreamPositionForPresence(ctx context.Context) 
 	return d.Presence.GetMaxPresenceID(ctx, d.txn)
 }
 
-func (d *Database) PurgeRoom(ctx context.Context, roomID string) error {
+func (d *Database) PurgeFrame(ctx context.Context, frameID string) error {
 	return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		if err := d.BackwardExtremities.PurgeBackwardExtremities(ctx, txn, roomID); err != nil {
+		if err := d.BackwardExtremities.PurgeBackwardExtremities(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge backward extremities: %w", err)
 		}
-		if err := d.CurrentRoomState.DeleteRoomStateForRoom(ctx, txn, roomID); err != nil {
-			return fmt.Errorf("failed to purge current room state: %w", err)
+		if err := d.CurrentFrameState.DeleteFrameStateForFrame(ctx, txn, frameID); err != nil {
+			return fmt.Errorf("failed to purge current frame state: %w", err)
 		}
-		if err := d.Invites.PurgeInvites(ctx, txn, roomID); err != nil {
+		if err := d.Invites.PurgeInvites(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge invites: %w", err)
 		}
-		if err := d.Memberships.PurgeMemberships(ctx, txn, roomID); err != nil {
+		if err := d.Memberships.PurgeMemberships(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge memberships: %w", err)
 		}
-		if err := d.NotificationData.PurgeNotificationData(ctx, txn, roomID); err != nil {
+		if err := d.NotificationData.PurgeNotificationData(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge notification data: %w", err)
 		}
-		if err := d.OutputEvents.PurgeEvents(ctx, txn, roomID); err != nil {
+		if err := d.OutputEvents.PurgeEvents(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge events: %w", err)
 		}
-		if err := d.Topology.PurgeEventsTopology(ctx, txn, roomID); err != nil {
+		if err := d.Topology.PurgeEventsTopology(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge events topology: %w", err)
 		}
-		if err := d.Peeks.PurgePeeks(ctx, txn, roomID); err != nil {
+		if err := d.Peeks.PurgePeeks(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge peeks: %w", err)
 		}
-		if err := d.Receipts.PurgeReceipts(ctx, txn, roomID); err != nil {
+		if err := d.Receipts.PurgeReceipts(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge receipts: %w", err)
 		}
 		return nil
 	})
 }
 
-func (d *Database) PurgeRoomState(
-	ctx context.Context, roomID string,
+func (d *Database) PurgeFrameState(
+	ctx context.Context, frameID string,
 ) error {
 	return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
 		// If the event is a create event then we'll delete all of the existing
-		// data for the room. The only reason that a create event would be replayed
-		// to us in this way is if we're about to receive the entire room state.
-		if err := d.CurrentRoomState.DeleteRoomStateForRoom(ctx, txn, roomID); err != nil {
-			return fmt.Errorf("d.CurrentRoomState.DeleteRoomStateForRoom: %w", err)
+		// data for the frame. The only reason that a create event would be replayed
+		// to us in this way is if we're about to receive the entire frame state.
+		if err := d.CurrentFrameState.DeleteFrameStateForFrame(ctx, txn, frameID); err != nil {
+			return fmt.Errorf("d.CurrentFrameState.DeleteFrameStateForFrame: %w", err)
 		}
 		return nil
 	})
@@ -727,7 +727,7 @@ func isStatefilterEmpty(filter *synctypes.StateFilter) bool {
 		return false
 	case filter.NotSenders != nil && len(*filter.NotSenders) > 0:
 		return false
-	case filter.NotRooms != nil && len(*filter.NotRooms) > 0:
+	case filter.NotFrames != nil && len(*filter.NotFrames) > 0:
 		return false
 	case filter.ContainsURL != nil:
 		return false
@@ -736,7 +736,7 @@ func isStatefilterEmpty(filter *synctypes.StateFilter) bool {
 	}
 }
 
-func (d *DatabaseTransaction) RelationsFor(ctx context.Context, roomID, eventID, relType, eventType string, from, to types.StreamPosition, backwards bool, limit int) (
+func (d *DatabaseTransaction) RelationsFor(ctx context.Context, frameID, eventID, relType, eventType string, from, to types.StreamPosition, backwards bool, limit int) (
 	events []types.StreamEvent, prevBatch, nextBatch string, err error,
 ) {
 	r := types.Range{
@@ -767,7 +767,7 @@ func (d *DatabaseTransaction) RelationsFor(ctx context.Context, roomID, eventID,
 	// First look up any relations from the database. We add one to the limit here
 	// so that we can tell if we're overflowing, as we will only set the "next_batch"
 	// in the response if we are.
-	relations, _, err := d.Relations.SelectRelationsInRange(ctx, d.txn, roomID, eventID, relType, eventType, r, limit+1)
+	relations, _, err := d.Relations.SelectRelationsInRange(ctx, d.txn, frameID, eventID, relType, eventType, r, limit+1)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("d.Relations.SelectRelationsInRange: %w", err)
 	}

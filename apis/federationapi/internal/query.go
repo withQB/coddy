@@ -11,13 +11,13 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// QueryJoinedHostServerNamesInRoom implements api.FederationInternalAPI
-func (f *FederationInternalAPI) QueryJoinedHostServerNamesInRoom(
+// QueryJoinedHostServerNamesInFrame implements api.FederationInternalAPI
+func (f *FederationInternalAPI) QueryJoinedHostServerNamesInFrame(
 	ctx context.Context,
-	request *api.QueryJoinedHostServerNamesInRoomRequest,
-	response *api.QueryJoinedHostServerNamesInRoomResponse,
+	request *api.QueryJoinedHostServerNamesInFrameRequest,
+	response *api.QueryJoinedHostServerNamesInFrameResponse,
 ) (err error) {
-	joinedHosts, err := f.db.GetJoinedHostsForRooms(ctx, []string{request.RoomID}, request.ExcludeSelf, request.ExcludeBlacklisted)
+	joinedHosts, err := f.db.GetJoinedHostsForFrames(ctx, []string{request.FrameID}, request.ExcludeSelf, request.ExcludeBlacklisted)
 	if err != nil {
 		return
 	}

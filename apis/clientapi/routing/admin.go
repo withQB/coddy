@@ -24,7 +24,7 @@ import (
 	clientapi "github.com/withqb/coddy/apis/clientapi/api"
 	"github.com/withqb/coddy/apis/userapi/api"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
 )
@@ -266,22 +266,22 @@ func AdminUpdateRegistrationToken(req *http.Request, cfg *config.ClientAPI, user
 	}
 }
 
-func AdminEvacuateRoom(req *http.Request, rsAPI roomserverAPI.ClientRoomserverAPI) xutil.JSONResponse {
+func AdminEvacuateFrame(req *http.Request, rsAPI dataframeAPI.ClientDataframeAPI) xutil.JSONResponse {
 	vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 	if err != nil {
 		return xutil.ErrorResponse(err)
 	}
 
-	affected, err := rsAPI.PerformAdminEvacuateRoom(req.Context(), vars["roomID"])
+	affected, err := rsAPI.PerformAdminEvacuateFrame(req.Context(), vars["frameID"])
 	switch err.(type) {
 	case nil:
-	case eventutil.ErrRoomNoExists:
+	case eventutil.ErrFrameNoExists:
 		return xutil.JSONResponse{
 			Code: http.StatusNotFound,
 			JSON: spec.NotFound(err.Error()),
 		}
 	default:
-		logrus.WithError(err).WithField("roomID", vars["roomID"]).Error("Failed to evacuate room")
+		logrus.WithError(err).WithField("frameID", vars["frameID"]).Error("Failed to evacuate frame")
 		return xutil.ErrorResponse(err)
 	}
 	return xutil.JSONResponse{
@@ -292,7 +292,7 @@ func AdminEvacuateRoom(req *http.Request, rsAPI roomserverAPI.ClientRoomserverAP
 	}
 }
 
-func AdminEvacuateUser(req *http.Request, rsAPI roomserverAPI.ClientRoomserverAPI) xutil.JSONResponse {
+func AdminEvacuateUser(req *http.Request, rsAPI dataframeAPI.ClientDataframeAPI) xutil.JSONResponse {
 	vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 	if err != nil {
 		return xutil.ErrorResponse(err)
@@ -312,13 +312,13 @@ func AdminEvacuateUser(req *http.Request, rsAPI roomserverAPI.ClientRoomserverAP
 	}
 }
 
-func AdminPurgeRoom(req *http.Request, rsAPI roomserverAPI.ClientRoomserverAPI) xutil.JSONResponse {
+func AdminPurgeFrame(req *http.Request, rsAPI dataframeAPI.ClientDataframeAPI) xutil.JSONResponse {
 	vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 	if err != nil {
 		return xutil.ErrorResponse(err)
 	}
 
-	if err = rsAPI.PerformAdminPurgeRoom(context.Background(), vars["roomID"]); err != nil {
+	if err = rsAPI.PerformAdminPurgeFrame(context.Background(), vars["frameID"]); err != nil {
 		return xutil.ErrorResponse(err)
 	}
 
@@ -457,16 +457,16 @@ func AdminMarkAsStale(req *http.Request, cfg *config.ClientAPI, keyAPI api.Clien
 	}
 }
 
-func AdminDownloadState(req *http.Request, device *api.Device, rsAPI roomserverAPI.ClientRoomserverAPI) xutil.JSONResponse {
+func AdminDownloadState(req *http.Request, device *api.Device, rsAPI dataframeAPI.ClientDataframeAPI) xutil.JSONResponse {
 	vars, err := httputil.URLDecodeMapValues(mux.Vars(req))
 	if err != nil {
 		return xutil.ErrorResponse(err)
 	}
-	roomID, ok := vars["roomID"]
+	frameID, ok := vars["frameID"]
 	if !ok {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.MissingParam("Expecting room ID."),
+			JSON: spec.MissingParam("Expecting frame ID."),
 		}
 	}
 	serverName, ok := vars["serverName"]
@@ -476,8 +476,8 @@ func AdminDownloadState(req *http.Request, device *api.Device, rsAPI roomserverA
 			JSON: spec.MissingParam("Expecting remote server name."),
 		}
 	}
-	if err = rsAPI.PerformAdminDownloadState(req.Context(), roomID, device.UserID, spec.ServerName(serverName)); err != nil {
-		if errors.Is(err, eventutil.ErrRoomNoExists{}) {
+	if err = rsAPI.PerformAdminDownloadState(req.Context(), frameID, device.UserID, spec.ServerName(serverName)); err != nil {
+		if errors.Is(err, eventutil.ErrFrameNoExists{}) {
 			return xutil.JSONResponse{
 				Code: 200,
 				JSON: spec.NotFound(err.Error()),
@@ -486,7 +486,7 @@ func AdminDownloadState(req *http.Request, device *api.Device, rsAPI roomserverA
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"userID":     device.UserID,
 			"serverName": serverName,
-			"roomID":     roomID,
+			"frameID":     frameID,
 		}).Error("failed to download state")
 		return xutil.ErrorResponse(err)
 	}

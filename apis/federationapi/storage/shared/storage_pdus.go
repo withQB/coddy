@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/withqb/coddy/apis/federationapi/storage/shared/receipt"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools/spec"
 )
 

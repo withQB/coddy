@@ -89,11 +89,11 @@ type Global struct {
 func (c *Global) Defaults(opts DefaultOpts) {
 	if opts.Generate {
 		c.ServerName = "localhost"
-		c.PrivateKeyPath = "matrix_key.pem"
+		c.PrivateKeyPath = "coddy_key.pem"
 		_, c.PrivateKey, _ = ed25519.GenerateKey(rand.New(rand.NewSource(0)))
 		c.KeyID = "ed25519:auto"
 		c.TrustedIDServers = []string{
-			"matrix.org",
+			"coddy",
 			"vector.im",
 		}
 	}
@@ -284,8 +284,8 @@ type ServerNotices struct {
 	DisplayName string `yaml:"display_name"`
 	// The avatar of this user
 	AvatarURL string `yaml:"avatar_url"`
-	// The roomname to be used when creating messages
-	RoomName string `yaml:"room_name"`
+	// The framename to be used when creating messages
+	FrameName string `yaml:"frame_name"`
 }
 
 func (c *ServerNotices) Defaults(opts DefaultOpts) {
@@ -293,7 +293,7 @@ func (c *ServerNotices) Defaults(opts DefaultOpts) {
 		c.Enabled = true
 		c.LocalPart = "_server"
 		c.DisplayName = "Server Alert"
-		c.RoomName = "Server Alert"
+		c.FrameName = "Server Alert"
 		c.AvatarURL = ""
 	}
 }
@@ -325,15 +325,10 @@ type ReportStats struct {
 
 func (c *ReportStats) Defaults() {
 	c.Enabled = false
-	c.Endpoint = "https://panopticon.matrix.org/push"
+	c.Endpoint = "https://domain/push"
 }
 
 func (c *ReportStats) Verify(configErrs *ConfigErrors) {
-	// We prefer to hit panopticon (https://github.com/withqb/panopticon) directly over
-	// the "old" matrix.org endpoint.
-	if c.Endpoint == "https://matrix.org/report-usage-stats/push" {
-		c.Endpoint = "https://panopticon.matrix.org/push"
-	}
 	if c.Enabled {
 		checkNotEmpty(configErrs, "global.report_stats.endpoint", c.Endpoint)
 	}

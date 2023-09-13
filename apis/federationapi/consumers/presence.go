@@ -11,7 +11,7 @@ import (
 	"github.com/withqb/coddy/apis/federationapi/storage"
 	fedTypes "github.com/withqb/coddy/apis/federationapi/types"
 	"github.com/withqb/coddy/apis/syncapi/types"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
 	"github.com/withqb/coddy/setup/process"
@@ -28,7 +28,7 @@ type OutputPresenceConsumer struct {
 	db                      storage.Database
 	queues                  *queue.OutgoingQueues
 	isLocalServerName       func(spec.ServerName) bool
-	rsAPI                   roomserverAPI.FederationRoomserverAPI
+	rsAPI                   dataframeAPI.FederationDataframeAPI
 	topic                   string
 	outboundPresenceEnabled bool
 }
@@ -40,7 +40,7 @@ func NewOutputPresenceConsumer(
 	js nats.JetStreamContext,
 	queues *queue.OutgoingQueues,
 	store storage.Database,
-	rsAPI roomserverAPI.FederationRoomserverAPI,
+	rsAPI dataframeAPI.FederationDataframeAPI,
 ) *OutputPresenceConsumer {
 	return &OutputPresenceConsumer{
 		ctx:                     process.Context(),
@@ -87,15 +87,15 @@ func (t *OutputPresenceConsumer) onMessage(ctx context.Context, msgs []*nats.Msg
 		return true
 	}
 
-	roomIDs, err := t.rsAPI.QueryRoomsForUser(t.ctx, *parsedUserID, "join")
+	frameIDs, err := t.rsAPI.QueryFramesForUser(t.ctx, *parsedUserID, "join")
 	if err != nil {
-		log.WithError(err).Error("failed to calculate joined rooms for user")
+		log.WithError(err).Error("failed to calculate joined frames for user")
 		return true
 	}
 
-	roomIDStrs := make([]string, len(roomIDs))
-	for i, roomID := range roomIDs {
-		roomIDStrs[i] = roomID.String()
+	frameIDStrs := make([]string, len(frameIDs))
+	for i, frameID := range frameIDs {
+		frameIDStrs[i] = frameID.String()
 	}
 
 	presence := msg.Header.Get("presence")
@@ -105,8 +105,8 @@ func (t *OutputPresenceConsumer) onMessage(ctx context.Context, msgs []*nats.Msg
 		return true
 	}
 
-	// send this presence to all servers who share rooms with this user.
-	joined, err := t.db.GetJoinedHostsForRooms(t.ctx, roomIDStrs, true, true)
+	// send this presence to all servers who share frames with this user.
+	joined, err := t.db.GetJoinedHostsForFrames(t.ctx, frameIDStrs, true, true)
 	if err != nil {
 		log.WithError(err).Error("failed to get joined hosts")
 		return true

@@ -13,8 +13,8 @@ import (
 	"github.com/withqb/coddy/apis/federationapi/types"
 	syncTypes "github.com/withqb/coddy/apis/syncapi/types"
 	userAPI "github.com/withqb/coddy/apis/userapi/api"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
@@ -43,21 +43,21 @@ var (
 
 type TxnReq struct {
 	xtools.Transaction
-	rsAPI                  api.FederationRoomserverAPI
+	rsAPI                  api.FederationDataframeAPI
 	userAPI                userAPI.FederationUserAPI
 	ourServerName          spec.ServerName
 	keys                   xtools.JSONVerifier
-	roomsMu                *MutexByRoom
+	framesMu                *MutexByFrame
 	producer               *producers.SyncAPIProducer
 	inboundPresenceEnabled bool
 }
 
 func NewTxnReq(
-	rsAPI api.FederationRoomserverAPI,
+	rsAPI api.FederationDataframeAPI,
 	userAPI userAPI.FederationUserAPI,
 	ourServerName spec.ServerName,
 	keys xtools.JSONVerifier,
-	roomsMu *MutexByRoom,
+	framesMu *MutexByFrame,
 	producer *producers.SyncAPIProducer,
 	inboundPresenceEnabled bool,
 	pdus []json.RawMessage,
@@ -71,7 +71,7 @@ func NewTxnReq(
 		userAPI:                userAPI,
 		ourServerName:          ourServerName,
 		keys:                   keys,
-		roomsMu:                roomsMu,
+		framesMu:                framesMu,
 		producer:               producer,
 		inboundPresenceEnabled: inboundPresenceEnabled,
 	}
@@ -96,40 +96,40 @@ func (t *TxnReq) ProcessTransaction(ctx context.Context) (*fclient.RespSend, *xu
 	}()
 
 	results := make(map[string]fclient.PDUResult)
-	roomVersions := make(map[string]xtools.RoomVersion)
-	getRoomVersion := func(roomID string) xtools.RoomVersion {
-		if v, ok := roomVersions[roomID]; ok {
+	frameVersions := make(map[string]xtools.FrameVersion)
+	getFrameVersion := func(frameID string) xtools.FrameVersion {
+		if v, ok := frameVersions[frameID]; ok {
 			return v
 		}
-		roomVersion, err := t.rsAPI.QueryRoomVersionForRoom(ctx, roomID)
+		frameVersion, err := t.rsAPI.QueryFrameVersionForFrame(ctx, frameID)
 		if err != nil {
-			xutil.GetLogger(ctx).WithError(err).Debug("Transaction: Failed to query room version for room", roomID)
+			xutil.GetLogger(ctx).WithError(err).Debug("Transaction: Failed to query frame version for frame", frameID)
 			return ""
 		}
-		roomVersions[roomID] = roomVersion
-		return roomVersion
+		frameVersions[frameID] = frameVersion
+		return frameVersion
 	}
 
 	for _, pdu := range t.PDUs {
 		PDUCountTotal.WithLabelValues("total").Inc()
 		var header struct {
-			RoomID string `json:"room_id"`
+			FrameID string `json:"frame_id"`
 		}
 		if err := json.Unmarshal(pdu, &header); err != nil {
-			xutil.GetLogger(ctx).WithError(err).Debug("Transaction: Failed to extract room ID from event")
+			xutil.GetLogger(ctx).WithError(err).Debug("Transaction: Failed to extract frame ID from event")
 			// We don't know the event ID at this point so we can't return the
 			// failure in the PDU results
 			continue
 		}
-		roomVersion := getRoomVersion(header.RoomID)
-		verImpl, err := xtools.GetRoomVersion(roomVersion)
+		frameVersion := getFrameVersion(header.FrameID)
+		verImpl, err := xtools.GetFrameVersion(frameVersion)
 		if err != nil {
 			continue
 		}
 		event, err := verImpl.NewEventFromUntrustedJSON(pdu)
 		if err != nil {
 			if _, ok := err.(xtools.BadJSONError); ok {
-				// Room version 6 states that homeservers should strictly enforce canonical JSON
+				// Frame version 6 states that homeservers should strictly enforce canonical JSON
 				// on PDUs.
 				//
 				// This enforces that the entire transaction is rejected if a single bad PDU is
@@ -144,17 +144,17 @@ func (t *TxnReq) ProcessTransaction(ctx context.Context) (*fclient.RespSend, *xu
 			xutil.GetLogger(ctx).WithError(err).Debugf("Transaction: Failed to parse event JSON of event %s", string(pdu))
 			continue
 		}
-		if event.Type() == spec.MRoomCreate && event.StateKeyEquals("") {
+		if event.Type() == spec.MFrameCreate && event.StateKeyEquals("") {
 			continue
 		}
-		if api.IsServerBannedFromRoom(ctx, t.rsAPI, event.RoomID(), t.Origin) {
+		if api.IsServerBannedFromFrame(ctx, t.rsAPI, event.FrameID(), t.Origin) {
 			results[event.EventID()] = fclient.PDUResult{
 				Error: "Forbidden by server ACLs",
 			}
 			continue
 		}
-		if err = xtools.VerifyEventSignatures(ctx, event, t.keys, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return t.rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+		if err = xtools.VerifyEventSignatures(ctx, event, t.keys, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return t.rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 		}); err != nil {
 			xutil.GetLogger(ctx).WithError(err).Debugf("Transaction: Couldn't validate signature of event %q", event.EventID())
 			results[event.EventID()] = fclient.PDUResult{
@@ -163,7 +163,7 @@ func (t *TxnReq) ProcessTransaction(ctx context.Context) (*fclient.RespSend, *xu
 			continue
 		}
 
-		// pass the event to the roomserver which will do auth checks
+		// pass the event to the dataframe which will do auth checks
 		// If the event fail auth checks, gmsl.NotAllowed error will be returned which we be silently
 		// discarded by the caller of this function
 		if err = api.SendEvents(
@@ -200,9 +200,8 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 		EDUCountTotal.Inc()
 		switch e.Type {
 		case spec.MTyping:
-			// https://matrix.org/docs/spec/server_server/latest#typing-notifications
 			var typingPayload struct {
-				RoomID string `json:"room_id"`
+				FrameID string `json:"frame_id"`
 				UserID string `json:"user_id"`
 				Typing bool   `json:"typing"`
 			}
@@ -217,11 +216,10 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 			} else if serverName != t.Origin {
 				continue
 			}
-			if err := t.producer.SendTyping(ctx, typingPayload.UserID, typingPayload.RoomID, typingPayload.Typing, 30*1000); err != nil {
+			if err := t.producer.SendTyping(ctx, typingPayload.UserID, typingPayload.FrameID, typingPayload.Typing, 30*1000); err != nil {
 				xutil.GetLogger(ctx).WithError(err).Error("Failed to send typing event to JetStream")
 			}
 		case spec.MDirectToDevice:
-			// https://matrix.org/docs/spec/server_server/r0.1.3#m-direct-to-device-schema
 			var directPayload xtools.ToDeviceMessage
 			if err := json.Unmarshal(e.Content, &directPayload); err != nil {
 				xutil.GetLogger(ctx).WithError(err).Debug("Failed to unmarshal send-to-device events")
@@ -253,7 +251,6 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 				xutil.GetLogger(ctx).WithError(err).Error("failed to InputDeviceListUpdate")
 			}
 		case spec.MReceipt:
-			// https://matrix.org/docs/spec/server_server/r0.1.4#receipts
 			payload := map[string]types.FederationReceiptMRead{}
 
 			if err := json.Unmarshal(e.Content, &payload); err != nil {
@@ -261,7 +258,7 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 				continue
 			}
 
-			for roomID, receipt := range payload {
+			for frameID, receipt := range payload {
 				for userID, mread := range receipt.User {
 					_, domain, err := xtools.SplitID('@', userID)
 					if err != nil {
@@ -272,11 +269,11 @@ func (t *TxnReq) processEDUs(ctx context.Context) {
 						xutil.GetLogger(ctx).Debugf("Dropping receipt event where sender domain (%q) doesn't match origin (%q)", domain, t.Origin)
 						continue
 					}
-					if err := t.processReceiptEvent(ctx, userID, roomID, "m.read", mread.Data.TS, mread.EventIDs); err != nil {
+					if err := t.processReceiptEvent(ctx, userID, frameID, "m.read", mread.Data.TS, mread.EventIDs); err != nil {
 						xutil.GetLogger(ctx).WithError(err).WithFields(logrus.Fields{
 							"sender":  t.Origin,
 							"user_id": userID,
-							"room_id": roomID,
+							"frame_id": frameID,
 							"events":  mread.EventIDs,
 						}).Error("Failed to send receipt event to JetStream")
 						continue
@@ -327,7 +324,7 @@ func (t *TxnReq) processPresence(ctx context.Context, e xtools.EDU) error {
 
 // processReceiptEvent sends receipt events to JetStream
 func (t *TxnReq) processReceiptEvent(ctx context.Context,
-	userID, roomID, receiptType string,
+	userID, frameID, receiptType string,
 	timestamp spec.Timestamp,
 	eventIDs []string,
 ) error {
@@ -340,7 +337,7 @@ func (t *TxnReq) processReceiptEvent(ctx context.Context,
 	}
 	// store every event
 	for _, eventID := range eventIDs {
-		if err := t.producer.SendReceipt(ctx, userID, roomID, eventID, receiptType, timestamp); err != nil {
+		if err := t.producer.SendReceipt(ctx, userID, frameID, eventID, receiptType, timestamp); err != nil {
 			return fmt.Errorf("unable to set receipt event: %w", err)
 		}
 	}

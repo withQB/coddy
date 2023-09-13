@@ -27,7 +27,6 @@ type whoamiResponse struct {
 }
 
 // Whoami implements `/account/whoami` which enables client to query their account user id.
-// https://matrix.org/docs/spec/client_server/r0.3.0.html#get-matrix-client-r0-account-whoami
 func Whoami(req *http.Request, device *api.Device) xutil.JSONResponse {
 	return xutil.JSONResponse{
 		Code: http.StatusOK,

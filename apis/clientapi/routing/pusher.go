@@ -25,7 +25,7 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// GetPushers handles /_matrix/client/r0/pushers
+// GetPushers handles /_coddy/client/r0/pushers
 func GetPushers(
 	req *http.Request, device *userapi.Device,
 	userAPI userapi.ClientUserAPI,
@@ -59,7 +59,7 @@ func GetPushers(
 	}
 }
 
-// SetPusher handles /_matrix/client/r0/pushers/set
+// SetPusher handles /_coddy/client/r0/pushers/set
 // This endpoint allows the creation, modification and deletion of pushers for this user ID.
 // The behaviour of this endpoint varies depending on the values in the JSON body.
 func SetPusher(

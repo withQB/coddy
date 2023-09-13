@@ -69,7 +69,6 @@ type ApplicationServiceNamespace struct {
 }
 
 // ApplicationService represents a Matrix application service.
-// https://matrix.org/docs/spec/application_service/unstable.html
 type ApplicationService struct {
 	// User-defined, unique, persistent ID of the application service
 	ID string `yaml:"id"`
@@ -82,7 +81,7 @@ type ApplicationService struct {
 	// Localpart of application service user
 	SenderLocalpart string `yaml:"sender_localpart"`
 	// Information about an application service's namespaces. Key is either
-	// "users", "aliases" or "rooms"
+	// "users", "aliases" or "frames"
 	NamespaceMap map[string][]ApplicationServiceNamespace `yaml:"namespaces"`
 	// Whether rate limiting is applied to each application service user
 	RateLimited bool `yaml:"rate_limited"`
@@ -124,14 +123,14 @@ func (a *ApplicationService) RequestUrl() string {
 	}
 }
 
-// IsInterestedInRoomID returns a bool on whether an application service's
-// namespace includes the given room ID
-func (a *ApplicationService) IsInterestedInRoomID(
-	roomID string,
+// IsInterestedInFrameID returns a bool on whether an application service's
+// namespace includes the given frame ID
+func (a *ApplicationService) IsInterestedInFrameID(
+	frameID string,
 ) bool {
-	if namespaceSlice, ok := a.NamespaceMap["rooms"]; ok {
+	if namespaceSlice, ok := a.NamespaceMap["frames"]; ok {
 		for _, namespace := range namespaceSlice {
-			if namespace.RegexpObject != nil && namespace.RegexpObject.MatchString(roomID) {
+			if namespace.RegexpObject != nil && namespace.RegexpObject.MatchString(frameID) {
 				return true
 			}
 		}
@@ -172,14 +171,14 @@ func (a *ApplicationService) OwnsNamespaceCoveringUserId(
 	return false
 }
 
-// IsInterestedInRoomAlias returns a bool on whether an application service's
-// namespace includes the given room alias
-func (a *ApplicationService) IsInterestedInRoomAlias(
-	roomAlias string,
+// IsInterestedInFrameAlias returns a bool on whether an application service's
+// namespace includes the given frame alias
+func (a *ApplicationService) IsInterestedInFrameAlias(
+	frameAlias string,
 ) bool {
 	if namespaceSlice, ok := a.NamespaceMap["aliases"]; ok {
 		for _, namespace := range namespaceSlice {
-			if namespace.RegexpObject.MatchString(roomAlias) {
+			if namespace.RegexpObject.MatchString(frameAlias) {
 				return true
 			}
 		}
@@ -225,15 +224,15 @@ func loadAppServices(config *AppServiceAPI, derived *Derived) error {
 }
 
 // setupRegexps will create regex objects for exclusive and non-exclusive
-// usernames, aliases and rooms of all application services, so that other
+// usernames, aliases and frames of all application services, so that other
 // methods can quickly check if a particular string matches any of them.
 func setupRegexps(asAPI *AppServiceAPI, derived *Derived) (err error) {
 	// Combine all exclusive namespaces for later string checking
 	var exclusiveUsernameStrings, exclusiveAliasStrings []string
 
 	// If an application service's regex is marked as exclusive, add
-	// its contents to the overall exlusive regex string. Room regex
-	// not necessary as we aren't denying exclusive room ID creation
+	// its contents to the overall exlusive regex string. Frame regex
+	// not necessary as we aren't denying exclusive frame ID creation
 	for _, appservice := range derived.ApplicationServices {
 		// The sender_localpart can be considered an exclusive regex for a single user, so let's do that
 		// to simplify the code
@@ -268,7 +267,7 @@ func setupRegexps(asAPI *AppServiceAPI, derived *Derived) (err error) {
 	exclusiveAliases := strings.Join(exclusiveAliasStrings, "|")
 
 	// If there are no exclusive regexes, compile string so that it will not match
-	// any valid usernames/aliases/roomIDs
+	// any valid usernames/aliases/frameIDs
 	if exclusiveUsernames == "" {
 		exclusiveUsernames = "^$"
 	}

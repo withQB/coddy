@@ -22,15 +22,15 @@ type SyncRequest struct {
 	WantFullState bool
 
 	// Updated by the PDU stream.
-	Rooms map[string]string
+	Frames map[string]string
 	// Updated by the PDU stream.
 	MembershipChanges map[string]struct{}
 	// Updated by the PDU stream.
 	IgnoredUsers IgnoredUsers
 }
 
-func (r *SyncRequest) IsRoomPresent(roomID string) bool {
-	membership, ok := r.Rooms[roomID]
+func (r *SyncRequest) IsFramePresent(frameID string) bool {
+	membership, ok := r.Frames[frameID]
 	if !ok {
 		return false
 	}

@@ -19,8 +19,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/withqb/coddy/internal/eventutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
@@ -33,25 +33,25 @@ func MakeLeave(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
 	cfg *config.FederationAPI,
-	rsAPI api.FederationRoomserverAPI,
-	roomID spec.RoomID, userID spec.UserID,
+	rsAPI api.FederationDataframeAPI,
+	frameID spec.FrameID, userID spec.UserID,
 ) xutil.JSONResponse {
-	roomVersion, err := rsAPI.QueryRoomVersionForRoom(httpReq.Context(), roomID.String())
+	frameVersion, err := rsAPI.QueryFrameVersionForFrame(httpReq.Context(), frameID.String())
 	if err != nil {
-		xutil.GetLogger(httpReq.Context()).WithError(err).Error("failed obtaining room version")
+		xutil.GetLogger(httpReq.Context()).WithError(err).Error("failed obtaining frame version")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
 	}
 
-	req := api.QueryServerJoinedToRoomRequest{
+	req := api.QueryServerJoinedToFrameRequest{
 		ServerName: request.Destination(),
-		RoomID:     roomID.String(),
+		FrameID:     frameID.String(),
 	}
-	res := api.QueryServerJoinedToRoomResponse{}
-	if err = rsAPI.QueryServerJoinedToRoom(httpReq.Context(), &req, &res); err != nil {
-		xutil.GetLogger(httpReq.Context()).WithError(err).Error("rsAPI.QueryServerJoinedToRoom failed")
+	res := api.QueryServerJoinedToFrameResponse{}
+	if err = rsAPI.QueryServerJoinedToFrame(httpReq.Context(), &req, &res); err != nil {
+		xutil.GetLogger(httpReq.Context()).WithError(err).Error("rsAPI.QueryServerJoinedToFrame failed")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -69,9 +69,9 @@ func MakeLeave(
 		event, buildErr := eventutil.QueryAndBuildEvent(httpReq.Context(), proto, identity, time.Now(), rsAPI, &queryRes)
 		switch e := buildErr.(type) {
 		case nil:
-		case eventutil.ErrRoomNoExists:
+		case eventutil.ErrFrameNoExists:
 			xutil.GetLogger(httpReq.Context()).WithError(buildErr).Error("eventutil.BuildEvent failed")
-			return nil, nil, spec.NotFound("Room does not exist")
+			return nil, nil, spec.NotFound("Frame does not exist")
 		case xtools.BadJSONError:
 			xutil.GetLogger(httpReq.Context()).WithError(buildErr).Error("eventutil.BuildEvent failed")
 			return nil, nil, spec.BadJSON(e.Error())
@@ -87,7 +87,7 @@ func MakeLeave(
 		return event, stateEvents, nil
 	}
 
-	senderID, err := rsAPI.QuerySenderIDForUser(httpReq.Context(), roomID, userID)
+	senderID, err := rsAPI.QuerySenderIDForUser(httpReq.Context(), frameID, userID)
 	if err != nil {
 		xutil.GetLogger(httpReq.Context()).WithError(err).Error("rsAPI.QuerySenderIDForUser failed")
 		return xutil.JSONResponse{
@@ -95,7 +95,7 @@ func MakeLeave(
 			JSON: spec.InternalServerError{},
 		}
 	} else if senderID == nil {
-		xutil.GetLogger(httpReq.Context()).WithField("roomID", roomID).WithField("userID", userID).Error("rsAPI.QuerySenderIDForUser returned nil sender ID")
+		xutil.GetLogger(httpReq.Context()).WithField("frameID", frameID).WithField("userID", userID).Error("rsAPI.QuerySenderIDForUser returned nil sender ID")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -105,14 +105,14 @@ func MakeLeave(
 	input := xtools.HandleMakeLeaveInput{
 		UserID:             userID,
 		SenderID:           *senderID,
-		RoomID:             roomID,
-		RoomVersion:        roomVersion,
+		FrameID:             frameID,
+		FrameVersion:        frameVersion,
 		RequestOrigin:      request.Origin(),
 		LocalServerName:    cfg.Matrix.ServerName,
-		LocalServerInRoom:  res.RoomExists && res.IsInRoom,
+		LocalServerInFrame:  res.FrameExists && res.IsInFrame,
 		BuildEventTemplate: createLeaveTemplate,
-		UserIDQuerier: func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return rsAPI.QueryUserIDForSender(httpReq.Context(), roomID, senderID)
+		UserIDQuerier: func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return rsAPI.QueryUserIDForSender(httpReq.Context(), frameID, senderID)
 		},
 	}
 
@@ -125,7 +125,7 @@ func MakeLeave(
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
-	case spec.MatrixError:
+	case spec.CoddyError:
 		xutil.GetLogger(httpReq.Context()).WithError(internalErr).Error("failed to handle make_leave request")
 		code := http.StatusInternalServerError
 		switch e.ErrCode {
@@ -161,7 +161,7 @@ func MakeLeave(
 		Code: http.StatusOK,
 		JSON: map[string]interface{}{
 			"event":        response.LeaveTemplateEvent,
-			"room_version": response.RoomVersion,
+			"frame_version": response.FrameVersion,
 		},
 	}
 }
@@ -172,24 +172,24 @@ func SendLeave(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
 	cfg *config.FederationAPI,
-	rsAPI api.FederationRoomserverAPI,
+	rsAPI api.FederationDataframeAPI,
 	keys xtools.JSONVerifier,
-	roomID, eventID string,
+	frameID, eventID string,
 ) xutil.JSONResponse {
-	roomVersion, err := rsAPI.QueryRoomVersionForRoom(httpReq.Context(), roomID)
+	frameVersion, err := rsAPI.QueryFrameVersionForFrame(httpReq.Context(), frameID)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.UnsupportedRoomVersion(err.Error()),
+			JSON: spec.UnsupportedFrameVersion(err.Error()),
 		}
 	}
 
-	verImpl, err := xtools.GetRoomVersion(roomVersion)
+	verImpl, err := xtools.GetFrameVersion(frameVersion)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
-			JSON: spec.UnsupportedRoomVersion(
-				fmt.Sprintf("QueryRoomVersionForRoom returned unknown version: %s", roomVersion),
+			JSON: spec.UnsupportedFrameVersion(
+				fmt.Sprintf("QueryFrameVersionForFrame returned unknown version: %s", frameVersion),
 			),
 		}
 	}
@@ -210,11 +210,11 @@ func SendLeave(
 		}
 	}
 
-	// Check that the room ID is correct.
-	if event.RoomID() != roomID {
+	// Check that the frame ID is correct.
+	if event.FrameID() != frameID {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON("The room ID in the request path must match the room ID in the leave event JSON"),
+			JSON: spec.BadJSON("The frame ID in the request path must match the frame ID in the leave event JSON"),
 		}
 	}
 
@@ -242,14 +242,14 @@ func SendLeave(
 	// Check that the sender belongs to the server that is sending us
 	// the request. By this point we've already asserted that the sender
 	// and the state key are equal so we don't need to check both.
-	validRoomID, err := spec.NewRoomID(event.RoomID())
+	validFrameID, err := spec.NewFrameID(event.FrameID())
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON("Room ID is invalid."),
+			JSON: spec.BadJSON("Frame ID is invalid."),
 		}
 	}
-	sender, err := rsAPI.QueryUserIDForSender(httpReq.Context(), *validRoomID, event.SenderID())
+	sender, err := rsAPI.QueryUserIDForSender(httpReq.Context(), *validFrameID, event.SenderID())
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
@@ -264,10 +264,10 @@ func SendLeave(
 
 	// Check if the user has already left. If so, no-op!
 	queryReq := &api.QueryLatestEventsAndStateRequest{
-		RoomID: roomID,
+		FrameID: frameID,
 		StateToFetch: []xtools.StateKeyTuple{
 			{
-				EventType: spec.MRoomMember,
+				EventType: spec.MFrameMember,
 				StateKey:  *event.StateKey(),
 			},
 		},
@@ -281,9 +281,9 @@ func SendLeave(
 			JSON: spec.InternalServerError{},
 		}
 	}
-	// The room doesn't exist or we weren't ever joined to it. Might as well
+	// The frame doesn't exist or we weren't ever joined to it. Might as well
 	// no-op here.
-	if !queryRes.RoomExists || len(queryRes.StateEvents) == 0 {
+	if !queryRes.FrameExists || len(queryRes.StateEvents) == 0 {
 		return xutil.JSONResponse{
 			Code: http.StatusOK,
 			JSON: struct{}{},
@@ -353,12 +353,12 @@ func SendLeave(
 		}
 	}
 
-	// Send the events to the room server.
+	// Send the events to the frame server.
 	// We are responsible for notifying other servers that the user has left
-	// the room, so set SendAsServer to cfg.Matrix.ServerName
-	var response api.InputRoomEventsResponse
-	rsAPI.InputRoomEvents(httpReq.Context(), &api.InputRoomEventsRequest{
-		InputRoomEvents: []api.InputRoomEvent{
+	// the frame, so set SendAsServer to cfg.Matrix.ServerName
+	var response api.InputFrameEventsResponse
+	rsAPI.InputFrameEvents(httpReq.Context(), &api.InputFrameEventsRequest{
+		InputFrameEvents: []api.InputFrameEvent{
 			{
 				Kind:          api.KindNew,
 				Event:         &types.HeaderedEvent{PDU: event},

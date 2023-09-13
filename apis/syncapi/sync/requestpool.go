@@ -37,7 +37,7 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/types"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/sqlutil"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 )
 
@@ -46,7 +46,7 @@ type RequestPool struct {
 	db       storage.Database
 	cfg      *config.SyncAPI
 	userAPI  userapi.SyncUserAPI
-	rsAPI    roomserverAPI.SyncRoomserverAPI
+	rsAPI    dataframeAPI.SyncDataframeAPI
 	lastseen *sync.Map
 	presence *sync.Map
 	streams  *streams.Streams
@@ -67,7 +67,7 @@ type PresenceConsumer interface {
 func NewRequestPool(
 	db storage.Database, cfg *config.SyncAPI,
 	userAPI userapi.SyncUserAPI,
-	rsAPI roomserverAPI.SyncRoomserverAPI,
+	rsAPI dataframeAPI.SyncDataframeAPI,
 	streams *streams.Streams, notifier *notifier.Notifier,
 	producer PresencePublisher, consumer PresenceConsumer, enableMetrics bool,
 ) *RequestPool {

@@ -16,36 +16,36 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
 )
 
-// GetEventAuth returns event auth for the roomID and eventID
+// GetEventAuth returns event auth for the frameID and eventID
 func GetEventAuth(
 	ctx context.Context,
 	request *fclient.FederationRequest,
-	rsAPI api.FederationRoomserverAPI,
-	roomID string,
+	rsAPI api.FederationDataframeAPI,
+	frameID string,
 	eventID string,
 ) xutil.JSONResponse {
-	// If we don't think we belong to this room then don't waste the effort
+	// If we don't think we belong to this frame then don't waste the effort
 	// responding to expensive requests for it.
-	if err := ErrorIfLocalServerNotInRoom(ctx, rsAPI, roomID); err != nil {
+	if err := ErrorIfLocalServerNotInFrame(ctx, rsAPI, frameID); err != nil {
 		return *err
 	}
 
-	event, resErr := fetchEvent(ctx, rsAPI, roomID, eventID)
+	event, resErr := fetchEvent(ctx, rsAPI, frameID, eventID)
 	if resErr != nil {
 		return *resErr
 	}
 
-	if event.RoomID() != roomID {
-		return xutil.JSONResponse{Code: http.StatusNotFound, JSON: spec.NotFound("event does not belong to this room")}
+	if event.FrameID() != frameID {
+		return xutil.JSONResponse{Code: http.StatusNotFound, JSON: spec.NotFound("event does not belong to this frame")}
 	}
-	resErr = allowedToSeeEvent(ctx, request.Origin(), rsAPI, eventID, event.RoomID())
+	resErr = allowedToSeeEvent(ctx, request.Origin(), rsAPI, eventID, event.FrameID())
 	if resErr != nil {
 		return *resErr
 	}
@@ -54,7 +54,7 @@ func GetEventAuth(
 	err := rsAPI.QueryStateAndAuthChain(
 		ctx,
 		&api.QueryStateAndAuthChainRequest{
-			RoomID:             roomID,
+			FrameID:             frameID,
 			PrevEventIDs:       []string{eventID},
 			AuthEventIDs:       event.AuthEventIDs(),
 			OnlyFetchAuthChain: true,
@@ -65,7 +65,7 @@ func GetEventAuth(
 		return xutil.ErrorResponse(err)
 	}
 
-	if !response.RoomExists {
+	if !response.FrameExists {
 		return xutil.JSONResponse{Code: http.StatusNotFound, JSON: nil}
 	}
 

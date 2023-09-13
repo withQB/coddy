@@ -12,7 +12,7 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/streams"
 	"github.com/withqb/coddy/apis/syncapi/types"
 	"github.com/withqb/coddy/apis/userapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
 	"github.com/withqb/coddy/setup/process"
@@ -27,7 +27,7 @@ type OutputKeyChangeEventConsumer struct {
 	db        storage.Database
 	notifier  *notifier.Notifier
 	stream    streams.StreamProvider
-	rsAPI     roomserverAPI.SyncRoomserverAPI
+	rsAPI     dataframeAPI.SyncDataframeAPI
 }
 
 // NewOutputKeyChangeEventConsumer creates a new OutputKeyChangeEventConsumer.
@@ -37,7 +37,7 @@ func NewOutputKeyChangeEventConsumer(
 	cfg *config.SyncAPI,
 	topic string,
 	js nats.JetStreamContext,
-	rsAPI roomserverAPI.SyncRoomserverAPI,
+	rsAPI dataframeAPI.SyncDataframeAPI,
 	store storage.Database,
 	notifier *notifier.Notifier,
 	stream streams.StreamProvider,
@@ -92,8 +92,8 @@ func (s *OutputKeyChangeEventConsumer) onDeviceKeyMessage(m api.DeviceMessage, d
 	}
 	output := m.DeviceKeys
 	// work out who we need to notify about the new key
-	var queryRes roomserverAPI.QuerySharedUsersResponse
-	err := s.rsAPI.QuerySharedUsers(s.ctx, &roomserverAPI.QuerySharedUsersRequest{
+	var queryRes dataframeAPI.QuerySharedUsersResponse
+	err := s.rsAPI.QuerySharedUsers(s.ctx, &dataframeAPI.QuerySharedUsersRequest{
 		UserID:    output.UserID,
 		LocalOnly: true,
 	}, &queryRes)
@@ -117,8 +117,8 @@ func (s *OutputKeyChangeEventConsumer) onDeviceKeyMessage(m api.DeviceMessage, d
 func (s *OutputKeyChangeEventConsumer) onCrossSigningMessage(m api.DeviceMessage, deviceChangeID int64) bool {
 	output := m.CrossSigningKeyUpdate
 	// work out who we need to notify about the new key
-	var queryRes roomserverAPI.QuerySharedUsersResponse
-	err := s.rsAPI.QuerySharedUsers(s.ctx, &roomserverAPI.QuerySharedUsersRequest{
+	var queryRes dataframeAPI.QuerySharedUsersResponse
+	err := s.rsAPI.QuerySharedUsers(s.ctx, &dataframeAPI.QuerySharedUsersRequest{
 		UserID:    output.UserID,
 		LocalOnly: true,
 	}, &queryRes)

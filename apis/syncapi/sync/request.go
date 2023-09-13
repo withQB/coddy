@@ -65,7 +65,7 @@ func newSyncRequest(req *http.Request, device userapi.Device, syncDB storage.Dat
 		// by default, otherwise clients do weird things while waiting
 		// for the rest of the data to trickle down.
 		filter.AccountData.Limit = math.MaxInt32
-		filter.Room.AccountData.Limit = math.MaxInt32
+		filter.Frame.AccountData.Limit = math.MaxInt32
 	}
 
 	logger := xutil.GetLogger(req.Context()).WithFields(logrus.Fields{
@@ -73,7 +73,7 @@ func newSyncRequest(req *http.Request, device userapi.Device, syncDB storage.Dat
 		"device_id": device.ID,
 		"since":     since,
 		"timeout":   timeout,
-		"limit":     filter.Room.Timeline.Limit,
+		"limit":     filter.Frame.Timeline.Limit,
 	})
 
 	return &types.SyncRequest{
@@ -84,7 +84,7 @@ func newSyncRequest(req *http.Request, device userapi.Device, syncDB storage.Dat
 		Filter:            filter,                    //
 		Since:             since,                     //
 		Timeout:           timeout,                   //
-		Rooms:             make(map[string]string),   // Populated by the PDU stream
+		Frames:             make(map[string]string),   // Populated by the PDU stream
 		WantFullState:     wantFullState,             //
 		MembershipChanges: make(map[string]struct{}), // Populated by the PDU stream
 	}, nil

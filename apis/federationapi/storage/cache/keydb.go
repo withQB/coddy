@@ -10,7 +10,7 @@ import (
 )
 
 // A Database implements xtools.KeyDatabase and is used to store
-// the public keys for other matrix servers.
+// the public keys for other coddy servers.
 type KeyDatabase struct {
 	inner xtools.KeyDatabase
 	cache caching.ServerKeyCache

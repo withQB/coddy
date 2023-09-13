@@ -50,7 +50,7 @@ func (p *SyncAPI) SendAccountData(userID string, data eventutil.AccountData) err
 
 	log.WithFields(log.Fields{
 		"user_id":   userID,
-		"room_id":   data.RoomID,
+		"frame_id":   data.FrameID,
 		"data_type": data.Type,
 	}).Tracef("Producing to topic '%s'", p.clientDataTopic)
 
@@ -60,19 +60,19 @@ func (p *SyncAPI) SendAccountData(userID string, data eventutil.AccountData) err
 
 // GetAndSendNotificationData reads the database and sends data about unread
 // notifications to the Sync API server.
-func (p *SyncAPI) GetAndSendNotificationData(ctx context.Context, userID, roomID string) error {
+func (p *SyncAPI) GetAndSendNotificationData(ctx context.Context, userID, frameID string) error {
 	localpart, domain, err := xtools.SplitID('@', userID)
 	if err != nil {
 		return err
 	}
 
-	ntotal, nhighlight, err := p.db.GetRoomNotificationCounts(ctx, localpart, domain, roomID)
+	ntotal, nhighlight, err := p.db.GetFrameNotificationCounts(ctx, localpart, domain, frameID)
 	if err != nil {
 		return err
 	}
 
 	return p.sendNotificationData(userID, &eventutil.NotificationData{
-		RoomID:                  roomID,
+		FrameID:                  frameID,
 		UnreadHighlightCount:    int(nhighlight),
 		UnreadNotificationCount: int(ntotal),
 	})
@@ -94,7 +94,7 @@ func (p *SyncAPI) sendNotificationData(userID string, data *eventutil.Notificati
 
 	log.WithFields(log.Fields{
 		"user_id": userID,
-		"room_id": data.RoomID,
+		"frame_id": data.FrameID,
 	}).Tracef("Producing to topic '%s'", p.clientDataTopic)
 
 	_, err = p.producer.PublishMsg(m)

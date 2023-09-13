@@ -22,12 +22,12 @@ type EvaluationContext interface {
 	// UserDisplayName returns the current user's display name.
 	UserDisplayName() string
 
-	// RoomMemberCount returns the number of members in the room of
+	// FrameMemberCount returns the number of members in the frame of
 	// the current event.
-	RoomMemberCount() (int, error)
+	FrameMemberCount() (int, error)
 
 	// HasPowerLevel returns whether the user has at least the given
-	// power in the room of the current event.
+	// power in the frame of the current event.
 	HasPowerLevel(senderID spec.SenderID, levelKey string) (bool, error)
 }
 
@@ -45,7 +45,7 @@ func NewRuleSetEvaluator(ec EvaluationContext, ruleSet *RuleSet) *RuleSetEvaluat
 		ruleSet: []kindAndRules{
 			{OverrideKind, ruleSet.Override},
 			{ContentKind, ruleSet.Content},
-			{RoomKind, ruleSet.Room},
+			{FrameKind, ruleSet.Frame},
 			{SenderKind, ruleSet.Sender},
 			{UnderrideKind, ruleSet.Underride},
 		},
@@ -110,16 +110,16 @@ func ruleMatches(rule *Rule, kind Kind, event xtools.PDU, ec EvaluationContext, 
 		}
 		return patternMatches("content.body", *rule.Pattern, event)
 
-	case RoomKind:
-		return rule.RuleID == event.RoomID(), nil
+	case FrameKind:
+		return rule.RuleID == event.FrameID(), nil
 
 	case SenderKind:
 		userID := ""
-		validRoomID, err := spec.NewRoomID(event.RoomID())
+		validFrameID, err := spec.NewFrameID(event.FrameID())
 		if err != nil {
 			return false, err
 		}
-		sender, err := userIDForSender(*validRoomID, event.SenderID())
+		sender, err := userIDForSender(*validFrameID, event.SenderID())
 		if err == nil {
 			userID = sender.String()
 		}
@@ -141,14 +141,14 @@ func conditionMatches(cond *Condition, event xtools.PDU, ec EvaluationContext) (
 	case ContainsDisplayNameCondition:
 		return patternMatches("content.body", ec.UserDisplayName(), event)
 
-	case RoomMemberCountCondition:
-		cmp, err := parseRoomMemberCountCondition(cond.Is)
+	case FrameMemberCountCondition:
+		cmp, err := parseFrameMemberCountCondition(cond.Is)
 		if err != nil {
-			return false, fmt.Errorf("parsing room_member_count condition: %w", err)
+			return false, fmt.Errorf("parsing frame_member_count condition: %w", err)
 		}
-		n, err := ec.RoomMemberCount()
+		n, err := ec.FrameMemberCount()
 		if err != nil {
-			return false, fmt.Errorf("RoomMemberCount failed: %w", err)
+			return false, fmt.Errorf("FrameMemberCount failed: %w", err)
 		}
 		return cmp(n), nil
 

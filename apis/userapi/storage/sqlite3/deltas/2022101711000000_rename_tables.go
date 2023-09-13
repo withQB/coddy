@@ -11,8 +11,8 @@ var renameTableMappings = map[string]string{
 	"account_accounts":               "userapi_accounts",
 	"account_data":                   "userapi_account_datas",
 	"device_devices":                 "userapi_devices",
-	"account_e2e_room_keys":          "userapi_key_backups",
-	"account_e2e_room_keys_versions": "userapi_key_backup_versions",
+	"account_e2e_frame_keys":          "userapi_key_backups",
+	"account_e2e_frame_keys_versions": "userapi_key_backup_versions",
 	"login_tokens":                   "userapi_login_tokens",
 	"open_id_tokens":                 "userapi_openid_tokens",
 	"account_profiles":               "userapi_profiles",
@@ -21,9 +21,9 @@ var renameTableMappings = map[string]string{
 
 var renameIndicesMappings = map[string]string{
 	"device_localpart_id_idx":            "userapi_device_localpart_id_idx",
-	"e2e_room_keys_idx":                  "userapi_key_backups_idx",
-	"e2e_room_keys_versions_idx":         "userapi_key_backups_versions_idx",
-	"account_e2e_room_keys_versions_idx": "userapi_key_backup_versions_idx",
+	"e2e_frame_keys_idx":                  "userapi_key_backups_idx",
+	"e2e_frame_keys_versions_idx":         "userapi_key_backups_versions_idx",
+	"account_e2e_frame_keys_versions_idx": "userapi_key_backup_versions_idx",
 	"login_tokens_expiration_idx":        "userapi_login_tokens_expiration_idx",
 	"account_threepid_localpart":         "userapi_threepid_idx",
 }

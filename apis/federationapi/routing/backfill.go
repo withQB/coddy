@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
@@ -31,12 +31,11 @@ import (
 )
 
 // Backfill implements the /backfill federation endpoint.
-// https://matrix.org/docs/spec/server_server/unstable.html#get-matrix-federation-v1-backfill-roomid
 func Backfill(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
-	rsAPI api.FederationRoomserverAPI,
-	roomID string,
+	rsAPI api.FederationDataframeAPI,
+	frameID string,
 	cfg *config.FederationAPI,
 ) xutil.JSONResponse {
 	var res api.PerformBackfillResponse
@@ -45,17 +44,17 @@ func Backfill(
 	var exists bool
 	var err error
 
-	// Check the room ID's format.
-	if _, _, err = xtools.SplitID('!', roomID); err != nil {
+	// Check the frame ID's format.
+	if _, _, err = xtools.SplitID('!', frameID); err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.MissingParam("Bad room ID: " + err.Error()),
+			JSON: spec.MissingParam("Bad frame ID: " + err.Error()),
 		}
 	}
 
-	// If we don't think we belong to this room then don't waste the effort
+	// If we don't think we belong to this frame then don't waste the effort
 	// responding to expensive requests for it.
-	if err := ErrorIfLocalServerNotInRoom(httpReq.Context(), rsAPI, roomID); err != nil {
+	if err := ErrorIfLocalServerNotInFrame(httpReq.Context(), rsAPI, frameID); err != nil {
 		return *err
 	}
 
@@ -77,7 +76,7 @@ func Backfill(
 
 	// Populate the request.
 	req := api.PerformBackfillRequest{
-		RoomID: roomID,
+		FrameID: frameID,
 		// we don't know who the successors are for these events, which won't
 		// be a problem because we don't use that information when servicing /backfill requests,
 		// only when making them. TODO: Think of a better API shape
@@ -95,7 +94,7 @@ func Backfill(
 		}
 	}
 
-	// Query the Roomserver.
+	// Query the Dataframe.
 	if err = rsAPI.PerformBackfill(httpReq.Context(), &req, &res); err != nil {
 		xutil.GetLogger(httpReq.Context()).WithError(err).Error("query.PerformBackfill failed")
 		return xutil.JSONResponse{
@@ -104,12 +103,12 @@ func Backfill(
 		}
 	}
 
-	// Filter any event that's not from the requested room out.
+	// Filter any event that's not from the requested frame out.
 	evs := make([]xtools.PDU, 0)
 
 	var ev *types.HeaderedEvent
 	for _, ev = range res.Events {
-		if ev.RoomID() == roomID {
+		if ev.FrameID() == frameID {
 			evs = append(evs, ev.PDU)
 		}
 	}

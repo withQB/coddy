@@ -62,7 +62,7 @@ func (s *OutputReceiptEventConsumer) onMessage(ctx context.Context, msgs []*nats
 	msg := msgs[0] // Guaranteed to exist if onMessage is called
 	output := types.OutputReceiptEvent{
 		UserID:  msg.Header.Get(jetstream.UserID),
-		RoomID:  msg.Header.Get(jetstream.RoomID),
+		FrameID:  msg.Header.Get(jetstream.FrameID),
 		EventID: msg.Header.Get(jetstream.EventID),
 		Type:    msg.Header.Get("type"),
 	}
@@ -79,7 +79,7 @@ func (s *OutputReceiptEventConsumer) onMessage(ctx context.Context, msgs []*nats
 
 	streamPos, err := s.db.StoreReceipt(
 		s.ctx,
-		output.RoomID,
+		output.FrameID,
 		output.Type,
 		output.UserID,
 		output.EventID,
@@ -91,7 +91,7 @@ func (s *OutputReceiptEventConsumer) onMessage(ctx context.Context, msgs []*nats
 	}
 
 	s.stream.Advance(streamPos)
-	s.notifier.OnNewReceipt(output.RoomID, types.StreamingToken{ReceiptPosition: streamPos})
+	s.notifier.OnNewReceipt(output.FrameID, types.StreamingToken{ReceiptPosition: streamPos})
 
 	return true
 }

@@ -17,8 +17,8 @@ import (
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/caching"
 	"github.com/withqb/coddy/internal/sqlutil"
-	roomserver "github.com/withqb/coddy/servers/roomserver/api"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	dataframe "github.com/withqb/coddy/servers/dataframe/api"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
@@ -35,9 +35,9 @@ type ContextRespsonse struct {
 
 func Context(
 	req *http.Request, device *userapi.Device,
-	rsAPI roomserver.SyncRoomserverAPI,
+	rsAPI dataframe.SyncDataframeAPI,
 	syncDB storage.Database,
-	roomID, eventID string,
+	frameID, eventID string,
 	lazyLoadCache caching.LazyLoadCache,
 ) xutil.JSONResponse {
 	snapshot, err := syncDB.NewDatabaseSnapshot(req.Context())
@@ -50,7 +50,7 @@ func Context(
 	var succeeded bool
 	defer sqlutil.EndTransactionWithCheck(snapshot, &succeeded, &err)
 
-	filter, err := parseRoomEventFilter(req)
+	filter, err := parseFrameEventFilter(req)
 	if err != nil {
 		errMsg := ""
 		switch err.(type) {
@@ -67,8 +67,8 @@ func Context(
 			Headers: nil,
 		}
 	}
-	if filter.Rooms != nil {
-		*filter.Rooms = append(*filter.Rooms, roomID)
+	if filter.Frames != nil {
+		*filter.Frames = append(*filter.Frames, frameID)
 	}
 
 	userID, err := spec.NewUserID(device.UserID, true)
@@ -79,8 +79,8 @@ func Context(
 		}
 	}
 	ctx := req.Context()
-	membershipRes := roomserver.QueryMembershipForUserResponse{}
-	membershipReq := roomserver.QueryMembershipForUserRequest{UserID: *userID, RoomID: roomID}
+	membershipRes := dataframe.QueryMembershipForUserResponse{}
+	membershipReq := dataframe.QueryMembershipForUserRequest{UserID: *userID, FrameID: frameID}
 	if err = rsAPI.QueryMembershipForUser(ctx, &membershipReq, &membershipRes); err != nil {
 		logrus.WithError(err).Error("unable to query membership")
 		return xutil.JSONResponse{
@@ -88,10 +88,10 @@ func Context(
 			JSON: spec.InternalServerError{},
 		}
 	}
-	if !membershipRes.RoomExists {
+	if !membershipRes.FrameExists {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden("room does not exist"),
+			JSON: spec.Forbidden("frame does not exist"),
 		}
 	}
 
@@ -102,12 +102,12 @@ func Context(
 		Types:                   filter.Types,
 		LazyLoadMembers:         filter.LazyLoadMembers,
 		IncludeRedundantMembers: filter.IncludeRedundantMembers,
-		NotRooms:                filter.NotRooms,
-		Rooms:                   filter.Rooms,
+		NotFrames:                filter.NotFrames,
+		Frames:                   filter.Frames,
 		ContainsURL:             filter.ContainsURL,
 	}
 
-	id, requestedEvent, err := snapshot.SelectContextEvent(ctx, roomID, eventID)
+	id, requestedEvent, err := snapshot.SelectContextEvent(ctx, frameID, eventID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return xutil.JSONResponse{
@@ -122,7 +122,7 @@ func Context(
 		}
 	}
 
-	// verify the user is allowed to see the context for this room/event
+	// verify the user is allowed to see the context for this frame/event
 	startTime := time.Now()
 	filteredEvents, err := internal.ApplyHistoryVisibilityFilter(ctx, snapshot, rsAPI, []*rstypes.HeaderedEvent{&requestedEvent}, nil, *userID, "context")
 	if err != nil {
@@ -134,7 +134,7 @@ func Context(
 	}
 	logrus.WithFields(logrus.Fields{
 		"duration": time.Since(startTime),
-		"room_id":  roomID,
+		"frame_id":  frameID,
 	}).Debug("applied history visibility (context)")
 	if len(filteredEvents) == 0 {
 		return xutil.JSONResponse{
@@ -143,7 +143,7 @@ func Context(
 		}
 	}
 
-	eventsBefore, err := snapshot.SelectContextBeforeEvent(ctx, id, roomID, filter)
+	eventsBefore, err := snapshot.SelectContextBeforeEvent(ctx, id, frameID, filter)
 	if err != nil && err != sql.ErrNoRows {
 		logrus.WithError(err).Error("unable to fetch before events")
 		return xutil.JSONResponse{
@@ -152,7 +152,7 @@ func Context(
 		}
 	}
 
-	_, eventsAfter, err := snapshot.SelectContextAfterEvent(ctx, id, roomID, filter)
+	_, eventsAfter, err := snapshot.SelectContextAfterEvent(ctx, id, frameID, filter)
 	if err != nil && err != sql.ErrNoRows {
 		logrus.WithError(err).Error("unable to fetch after events")
 		return xutil.JSONResponse{
@@ -173,34 +173,34 @@ func Context(
 
 	logrus.WithFields(logrus.Fields{
 		"duration": time.Since(startTime),
-		"room_id":  roomID,
+		"frame_id":  frameID,
 	}).Debug("applied history visibility (context eventsBefore/eventsAfter)")
 
 	// TODO: Get the actual state at the last event returned by SelectContextAfterEvent
-	state, err := snapshot.CurrentState(ctx, roomID, &stateFilter, nil)
+	state, err := snapshot.CurrentState(ctx, frameID, &stateFilter, nil)
 	if err != nil {
-		logrus.WithError(err).Error("unable to fetch current room state")
+		logrus.WithError(err).Error("unable to fetch current frame state")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
 	}
 
-	eventsBeforeClient := synctypes.ToClientEvents(xtools.ToPDUs(eventsBeforeFiltered), synctypes.FormatAll, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-		return rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+	eventsBeforeClient := synctypes.ToClientEvents(xtools.ToPDUs(eventsBeforeFiltered), synctypes.FormatAll, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+		return rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 	})
-	eventsAfterClient := synctypes.ToClientEvents(xtools.ToPDUs(eventsAfterFiltered), synctypes.FormatAll, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-		return rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+	eventsAfterClient := synctypes.ToClientEvents(xtools.ToPDUs(eventsAfterFiltered), synctypes.FormatAll, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+		return rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 	})
 
 	newState := state
 	if filter.LazyLoadMembers {
 		allEvents := append(eventsBeforeFiltered, eventsAfterFiltered...)
 		allEvents = append(allEvents, &requestedEvent)
-		evs := synctypes.ToClientEvents(xtools.ToPDUs(allEvents), synctypes.FormatAll, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+		evs := synctypes.ToClientEvents(xtools.ToPDUs(allEvents), synctypes.FormatAll, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 		})
-		newState, err = applyLazyLoadMembers(ctx, device, snapshot, roomID, evs, lazyLoadCache)
+		newState, err = applyLazyLoadMembers(ctx, device, snapshot, frameID, evs, lazyLoadCache)
 		if err != nil {
 			logrus.WithError(err).Error("unable to load membership events")
 			return xutil.JSONResponse{
@@ -210,15 +210,15 @@ func Context(
 		}
 	}
 
-	ev := synctypes.ToClientEventDefault(func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-		return rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+	ev := synctypes.ToClientEventDefault(func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+		return rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 	}, requestedEvent)
 	response := ContextRespsonse{
 		Event:        &ev,
 		EventsAfter:  eventsAfterClient,
 		EventsBefore: eventsBeforeClient,
-		State: synctypes.ToClientEvents(xtools.ToPDUs(newState), synctypes.FormatAll, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+		State: synctypes.ToClientEvents(xtools.ToPDUs(newState), synctypes.FormatAll, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 		}),
 	}
 
@@ -237,11 +237,11 @@ func Context(
 	}
 }
 
-// applyHistoryVisibilityOnContextEvents is a helper function to avoid roundtrips to the roomserver
+// applyHistoryVisibilityOnContextEvents is a helper function to avoid roundtrips to the dataframe
 // by combining the events before and after the context event. Returns the filtered events,
 // and an error, if any.
 func applyHistoryVisibilityOnContextEvents(
-	ctx context.Context, snapshot storage.DatabaseTransaction, rsAPI roomserver.SyncRoomserverAPI,
+	ctx context.Context, snapshot storage.DatabaseTransaction, rsAPI dataframe.SyncDataframeAPI,
 	eventsBefore, eventsAfter []*rstypes.HeaderedEvent,
 	userID spec.UserID,
 ) (filteredBefore, filteredAfter []*rstypes.HeaderedEvent, err error) {
@@ -292,7 +292,7 @@ func applyLazyLoadMembers(
 	ctx context.Context,
 	device *userapi.Device,
 	snapshot storage.DatabaseTransaction,
-	roomID string,
+	frameID string,
 	events []synctypes.ClientEvent,
 	lazyLoadCache caching.LazyLoadCache,
 ) ([]*rstypes.HeaderedEvent, error) {
@@ -300,7 +300,7 @@ func applyLazyLoadMembers(
 	// get members who actually send an event
 	for _, e := range events {
 		// Don't add membership events the client should already know about
-		if _, cached := lazyLoadCache.IsLazyLoadedUserCached(device, e.RoomID, e.Sender); cached {
+		if _, cached := lazyLoadCache.IsLazyLoadedUserCached(device, e.FrameID, e.Sender); cached {
 			continue
 		}
 		eventSenders[e.Sender] = struct{}{}
@@ -314,23 +314,23 @@ func applyLazyLoadMembers(
 	// Query missing membership events
 	filter := synctypes.DefaultStateFilter()
 	filter.Senders = &wantUsers
-	filter.Types = &[]string{spec.MRoomMember}
-	memberships, err := snapshot.GetStateEventsForRoom(ctx, roomID, &filter)
+	filter.Types = &[]string{spec.MFrameMember}
+	memberships, err := snapshot.GetStateEventsForFrame(ctx, frameID, &filter)
 	if err != nil {
 		return nil, err
 	}
 
 	// cache the membership events
 	for _, membership := range memberships {
-		lazyLoadCache.StoreLazyLoadedUser(device, roomID, *membership.StateKey(), membership.EventID())
+		lazyLoadCache.StoreLazyLoadedUser(device, frameID, *membership.StateKey(), membership.EventID())
 	}
 
 	return memberships, nil
 }
 
-func parseRoomEventFilter(req *http.Request) (*synctypes.RoomEventFilter, error) {
-	// Default room filter
-	filter := &synctypes.RoomEventFilter{Limit: 10}
+func parseFrameEventFilter(req *http.Request) (*synctypes.FrameEventFilter, error) {
+	// Default frame filter
+	filter := &synctypes.FrameEventFilter{Limit: 10}
 
 	l := req.URL.Query().Get("limit")
 	f := req.URL.Query().Get("filter")

@@ -10,8 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/withqb/coddy/apis/clientapi/httputil"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
@@ -21,7 +21,7 @@ import (
 
 type invite struct {
 	MXID   string                              `json:"mxid"`
-	RoomID string                              `json:"room_id"`
+	FrameID string                              `json:"frame_id"`
 	Sender string                              `json:"sender"`
 	Token  string                              `json:"token"`
 	Signed xtools.MemberThirdPartyInviteSigned `json:"signed"`
@@ -36,12 +36,12 @@ type invites struct {
 
 var (
 	errNotLocalUser = errors.New("the user is not from this server")
-	errNotInRoom    = errors.New("the server isn't currently in the room")
+	errNotInFrame    = errors.New("the server isn't currently in the frame")
 )
 
-// CreateInvitesFrom3PIDInvites implements POST /_matrix/federation/v1/3pid/onbind
+// CreateInvitesFrom3PIDInvites implements POST /_coddy/federation/v1/3pid/onbind
 func CreateInvitesFrom3PIDInvites(
-	req *http.Request, rsAPI api.FederationRoomserverAPI,
+	req *http.Request, rsAPI api.FederationDataframeAPI,
 	cfg *config.FederationAPI,
 	federation fclient.FederationClient,
 	userAPI userapi.FederationUserAPI,
@@ -53,11 +53,11 @@ func CreateInvitesFrom3PIDInvites(
 
 	evs := []*types.HeaderedEvent{}
 	for _, inv := range body.Invites {
-		_, err := rsAPI.QueryRoomVersionForRoom(req.Context(), inv.RoomID)
+		_, err := rsAPI.QueryFrameVersionForFrame(req.Context(), inv.FrameID)
 		if err != nil {
 			return xutil.JSONResponse{
 				Code: http.StatusBadRequest,
-				JSON: spec.UnsupportedRoomVersion(err.Error()),
+				JSON: spec.UnsupportedFrameVersion(err.Error()),
 			}
 		}
 
@@ -101,12 +101,12 @@ func CreateInvitesFrom3PIDInvites(
 	}
 }
 
-// ExchangeThirdPartyInvite implements PUT /_matrix/federation/v1/exchange_third_party_invite/{roomID}
+// ExchangeThirdPartyInvite implements PUT /_coddy/federation/v1/exchange_third_party_invite/{frameID}
 func ExchangeThirdPartyInvite(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
-	roomID string,
-	rsAPI api.FederationRoomserverAPI,
+	frameID string,
+	rsAPI api.FederationDataframeAPI,
 	cfg *config.FederationAPI,
 	federation fclient.FederationClient,
 ) xutil.JSONResponse {
@@ -118,22 +118,22 @@ func ExchangeThirdPartyInvite(
 		}
 	}
 
-	// Check that the room ID is correct.
-	if proto.RoomID != roomID {
+	// Check that the frame ID is correct.
+	if proto.FrameID != frameID {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON("The room ID in the request path must match the room ID in the invite event JSON"),
+			JSON: spec.BadJSON("The frame ID in the request path must match the frame ID in the invite event JSON"),
 		}
 	}
 
-	validRoomID, err := spec.NewRoomID(roomID)
+	validFrameID, err := spec.NewFrameID(frameID)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON("Invalid room ID"),
+			JSON: spec.BadJSON("Invalid frame ID"),
 		}
 	}
-	userID, err := rsAPI.QueryUserIDForSender(httpReq.Context(), *validRoomID, spec.SenderID(proto.SenderID))
+	userID, err := rsAPI.QueryUserIDForSender(httpReq.Context(), *validFrameID, spec.SenderID(proto.SenderID))
 	if err != nil || userID == nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
@@ -143,7 +143,7 @@ func ExchangeThirdPartyInvite(
 	senderDomain := userID.Domain()
 
 	// Check that the state key is correct.
-	targetUserID, err := rsAPI.QueryUserIDForSender(httpReq.Context(), *validRoomID, spec.SenderID(*proto.StateKey))
+	targetUserID, err := rsAPI.QueryUserIDForSender(httpReq.Context(), *validFrameID, spec.SenderID(*proto.StateKey))
 	if err != nil || targetUserID == nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
@@ -160,20 +160,20 @@ func ExchangeThirdPartyInvite(
 		}
 	}
 
-	roomVersion, err := rsAPI.QueryRoomVersionForRoom(httpReq.Context(), roomID)
+	frameVersion, err := rsAPI.QueryFrameVersionForFrame(httpReq.Context(), frameID)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.UnsupportedRoomVersion(err.Error()),
+			JSON: spec.UnsupportedFrameVersion(err.Error()),
 		}
 	}
 
 	// Auth and build the event from what the remote server sent us
 	event, err := buildMembershipEvent(httpReq.Context(), &proto, rsAPI, cfg)
-	if err == errNotInRoom {
+	if err == errNotInFrame {
 		return xutil.JSONResponse{
 			Code: http.StatusNotFound,
-			JSON: spec.NotFound("Unknown room " + roomID),
+			JSON: spec.NotFound("Unknown frame " + frameID),
 		}
 	} else if err != nil {
 		xutil.GetLogger(httpReq.Context()).WithError(err).Error("buildMembershipEvent failed")
@@ -201,9 +201,9 @@ func ExchangeThirdPartyInvite(
 			JSON: spec.InternalServerError{},
 		}
 	}
-	verImpl, err := xtools.GetRoomVersion(roomVersion)
+	verImpl, err := xtools.GetFrameVersion(frameVersion)
 	if err != nil {
-		xutil.GetLogger(httpReq.Context()).WithError(err).Errorf("unknown room version: %s", roomVersion)
+		xutil.GetLogger(httpReq.Context()).WithError(err).Errorf("unknown frame version: %s", frameVersion)
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -218,7 +218,7 @@ func ExchangeThirdPartyInvite(
 		}
 	}
 
-	// Send the event to the Roomserver
+	// Send the event to the Dataframe
 	if err = api.SendEvents(
 		httpReq.Context(), rsAPI,
 		api.KindNew,
@@ -245,11 +245,11 @@ func ExchangeThirdPartyInvite(
 }
 
 // createInviteFrom3PIDInvite processes an invite provided by the identity server
-// and creates a m.room.member event (with "invite" membership) from it.
+// and creates a m.frame.member event (with "invite" membership) from it.
 // Returns an error if there was a problem building the event or fetching the
 // necessary data to do so.
 func createInviteFrom3PIDInvite(
-	ctx context.Context, rsAPI api.FederationRoomserverAPI,
+	ctx context.Context, rsAPI api.FederationDataframeAPI,
 	cfg *config.FederationAPI,
 	inv invite, federation fclient.FederationClient,
 	userAPI userapi.FederationUserAPI,
@@ -265,9 +265,9 @@ func createInviteFrom3PIDInvite(
 
 	// Build the event
 	proto := &xtools.ProtoEvent{
-		Type:     "m.room.member",
+		Type:     "m.frame.member",
 		SenderID: inv.Sender,
-		RoomID:   inv.RoomID,
+		FrameID:   inv.FrameID,
 		StateKey: &inv.MXID,
 	}
 
@@ -290,7 +290,7 @@ func createInviteFrom3PIDInvite(
 	}
 
 	event, err := buildMembershipEvent(ctx, proto, rsAPI, cfg)
-	if err == errNotInRoom {
+	if err == errNotInFrame {
 		return nil, sendToRemoteServer(ctx, inv, federation, cfg, *proto)
 	}
 	if err != nil {
@@ -300,14 +300,14 @@ func createInviteFrom3PIDInvite(
 	return event, nil
 }
 
-// buildMembershipEvent uses a builder for a m.room.member invite event derived
+// buildMembershipEvent uses a builder for a m.frame.member invite event derived
 // from a third-party invite to auth and build the said event. Returns the said
 // event.
-// Returns errNotInRoom if the server is not in the room the invite is for.
+// Returns errNotInFrame if the server is not in the frame the invite is for.
 // Returns an error if something failed during the process.
 func buildMembershipEvent(
 	ctx context.Context,
-	protoEvent *xtools.ProtoEvent, rsAPI api.FederationRoomserverAPI,
+	protoEvent *xtools.ProtoEvent, rsAPI api.FederationDataframeAPI,
 	cfg *config.FederationAPI,
 ) (xtools.PDU, error) {
 	eventsNeeded, err := xtools.StateNeededForProtoEvent(protoEvent)
@@ -319,9 +319,9 @@ func buildMembershipEvent(
 		return nil, errors.New("expecting state tuples for event builder, got none")
 	}
 
-	// Ask the Roomserver for information about this room
+	// Ask the Dataframe for information about this frame
 	queryReq := api.QueryLatestEventsAndStateRequest{
-		RoomID:       protoEvent.RoomID,
+		FrameID:       protoEvent.FrameID,
 		StateToFetch: eventsNeeded.Tuples(),
 	}
 	var queryRes api.QueryLatestEventsAndStateResponse
@@ -329,9 +329,9 @@ func buildMembershipEvent(
 		return nil, err
 	}
 
-	if !queryRes.RoomExists {
+	if !queryRes.FrameExists {
 		// Use federation to auth the event
-		return nil, errNotInRoom
+		return nil, errNotInFrame
 	}
 
 	// Auth the event locally
@@ -357,7 +357,7 @@ func buildMembershipEvent(
 	}
 	protoEvent.AuthEvents = refs
 
-	verImpl, err := xtools.GetRoomVersion(queryRes.RoomVersion)
+	verImpl, err := xtools.GetFrameVersion(queryRes.FrameVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +372,7 @@ func buildMembershipEvent(
 }
 
 // sendToRemoteServer uses federation to send an invite provided by an identity
-// server to a remote server in case the current server isn't in the room the
+// server to a remote server in case the current server isn't in the frame the
 // invite is for.
 // Returns an error if it couldn't get the server names to reach or if all of
 // them responded with an error.
@@ -386,9 +386,9 @@ func sendToRemoteServer(
 	if err != nil {
 		return
 	}
-	// Fallback to the room's server if the sender's domain is the same as
+	// Fallback to the frame's server if the sender's domain is the same as
 	// the current server's
-	_, remoteServers[1], err = xtools.SplitID('!', inv.RoomID)
+	_, remoteServers[1], err = xtools.SplitID('!', inv.FrameID)
 	if err != nil {
 		return
 	}
@@ -404,14 +404,14 @@ func sendToRemoteServer(
 	return errors.New("failed to send 3PID invite via any server")
 }
 
-// fillDisplayName looks in a list of auth events for a m.room.third_party_invite
-// event with the state key matching a given m.room.member event's content's token.
+// fillDisplayName looks in a list of auth events for a m.frame.third_party_invite
+// event with the state key matching a given m.frame.member event's content's token.
 // If such an event is found, fills the "display_name" attribute of the
-// "third_party_invite" structure in the m.room.member event with the display_name
-// from the m.room.third_party_invite event.
-// Returns an error if there was a problem parsing the m.room.third_party_invite
-// event's content or updating the m.room.member event's content.
-// Returns nil if no m.room.third_party_invite with a matching token could be
+// "third_party_invite" structure in the m.frame.member event with the display_name
+// from the m.frame.third_party_invite event.
+// Returns an error if there was a problem parsing the m.frame.third_party_invite
+// event's content or updating the m.frame.member event's content.
+// Returns nil if no m.frame.third_party_invite with a matching token could be
 // found. Returning an error isn't necessary in this case as the event will be
 // rejected by xtools.
 func fillDisplayName(
@@ -422,7 +422,7 @@ func fillDisplayName(
 		return err
 	}
 
-	// Look for the m.room.third_party_invite event
+	// Look for the m.frame.third_party_invite event
 	thirdPartyInviteEvent, _ := authEvents.ThirdPartyInvite(content.ThirdPartyInvite.Signed.Token)
 
 	if thirdPartyInviteEvent == nil {
@@ -435,8 +435,8 @@ func fillDisplayName(
 		return err
 	}
 
-	// Use the m.room.third_party_invite event to fill the "displayname" and
-	// update the m.room.member event's content with it
+	// Use the m.frame.third_party_invite event to fill the "displayname" and
+	// update the m.frame.member event's content with it
 	content.ThirdPartyInvite.DisplayName = thirdPartyInviteContent.DisplayName
 	return builder.SetContent(content)
 }

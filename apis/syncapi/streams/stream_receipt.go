@@ -44,16 +44,16 @@ func (p *ReceiptStreamProvider) IncrementalSync(
 	req *types.SyncRequest,
 	from, to types.StreamPosition,
 ) types.StreamPosition {
-	var joinedRooms []string
-	for roomID, membership := range req.Rooms {
+	var joinedFrames []string
+	for frameID, membership := range req.Frames {
 		if membership == spec.Join {
-			joinedRooms = append(joinedRooms, roomID)
+			joinedFrames = append(joinedFrames, frameID)
 		}
 	}
 
-	lastPos, receipts, err := snapshot.RoomReceiptsAfter(ctx, joinedRooms, from)
+	lastPos, receipts, err := snapshot.FrameReceiptsAfter(ctx, joinedFrames, from)
 	if err != nil {
-		req.Log.WithError(err).Error("p.DB.RoomReceiptsAfter failed")
+		req.Log.WithError(err).Error("p.DB.FrameReceiptsAfter failed")
 		return from
 	}
 
@@ -61,8 +61,8 @@ func (p *ReceiptStreamProvider) IncrementalSync(
 		return to
 	}
 
-	// Group receipts by room, so we can create one ClientEvent for every room
-	receiptsByRoom := make(map[string][]types.OutputReceiptEvent)
+	// Group receipts by frame, so we can create one ClientEvent for every frame
+	receiptsByFrame := make(map[string][]types.OutputReceiptEvent)
 	for _, receipt := range receipts {
 		// skip ignored user events
 		if _, ok := req.IgnoredUsers.List[receipt.UserID]; ok {
@@ -72,17 +72,17 @@ func (p *ReceiptStreamProvider) IncrementalSync(
 		if receipt.Type == "m.read.private" && req.Device.UserID != receipt.UserID {
 			continue
 		}
-		receiptsByRoom[receipt.RoomID] = append(receiptsByRoom[receipt.RoomID], receipt)
+		receiptsByFrame[receipt.FrameID] = append(receiptsByFrame[receipt.FrameID], receipt)
 	}
 
-	for roomID, receipts := range receiptsByRoom {
-		// For a complete sync, make sure we're only including this room if
-		// that room was present in the joined rooms.
-		if from == 0 && !req.IsRoomPresent(roomID) {
+	for frameID, receipts := range receiptsByFrame {
+		// For a complete sync, make sure we're only including this frame if
+		// that frame was present in the joined frames.
+		if from == 0 && !req.IsFramePresent(frameID) {
 			continue
 		}
 
-		jr, ok := req.Response.Rooms.Join[roomID]
+		jr, ok := req.Response.Frames.Join[frameID]
 		if !ok {
 			jr = types.NewJoinResponse()
 		}
@@ -108,7 +108,7 @@ func (p *ReceiptStreamProvider) IncrementalSync(
 		}
 
 		jr.Ephemeral.Events = append(jr.Ephemeral.Events, ev)
-		req.Response.Rooms.Join[roomID] = jr
+		req.Response.Frames.Join[frameID] = jr
 	}
 
 	return lastPos

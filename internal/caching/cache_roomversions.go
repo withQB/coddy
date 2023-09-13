@@ -2,17 +2,17 @@ package caching
 
 import "github.com/withqb/xtools"
 
-// RoomVersionsCache contains the subset of functions needed for
-// a room version cache.
-type RoomVersionCache interface {
-	GetRoomVersion(roomID string) (roomVersion xtools.RoomVersion, ok bool)
-	StoreRoomVersion(roomID string, roomVersion xtools.RoomVersion)
+// FrameVersionsCache contains the subset of functions needed for
+// a frame version cache.
+type FrameVersionCache interface {
+	GetFrameVersion(frameID string) (frameVersion xtools.FrameVersion, ok bool)
+	StoreFrameVersion(frameID string, frameVersion xtools.FrameVersion)
 }
 
-func (c Caches) GetRoomVersion(roomID string) (xtools.RoomVersion, bool) {
-	return c.RoomVersions.Get(roomID)
+func (c Caches) GetFrameVersion(frameID string) (xtools.FrameVersion, bool) {
+	return c.FrameVersions.Get(frameID)
 }
 
-func (c Caches) StoreRoomVersion(roomID string, roomVersion xtools.RoomVersion) {
-	c.RoomVersions.Set(roomID, roomVersion)
+func (c Caches) StoreFrameVersion(frameID string, frameVersion xtools.FrameVersion) {
+	c.FrameVersions.Set(frameID, frameVersion)
 }

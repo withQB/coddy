@@ -1,13 +1,13 @@
 package authtypes
 
-// LoginType are specified by http://matrix.org/docs/spec/client_server/r0.2.0.html#login-types
+// LoginType are specified by login-types
 type LoginType string
 
 // The relevant login types implemented in Dendrite
 const (
 	LoginTypePassword           = "m.login.password"
 	LoginTypeDummy              = "m.login.dummy"
-	LoginTypeSharedSecret       = "org.matrix.login.shared_secret"
+	LoginTypeSharedSecret       = "org.coddy.login.shared_secret"
 	LoginTypeRecaptcha          = "m.login.recaptcha"
 	LoginTypeApplicationService = "m.login.application_service"
 	LoginTypeToken              = "m.login.token"

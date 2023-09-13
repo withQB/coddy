@@ -26,13 +26,13 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// GetTags implements GET /_matrix/client/r0/user/{userID}/rooms/{roomID}/tags
+// GetTags implements GET /_coddy/client/r0/user/{userID}/frames/{frameID}/tags
 func GetTags(
 	req *http.Request,
 	userAPI api.ClientUserAPI,
 	device *api.Device,
 	userID string,
-	roomID string,
+	frameID string,
 	syncProducer *producers.SyncAPIProducer,
 ) xutil.JSONResponse {
 
@@ -43,7 +43,7 @@ func GetTags(
 		}
 	}
 
-	tagContent, err := obtainSavedTags(req, userID, roomID, userAPI)
+	tagContent, err := obtainSavedTags(req, userID, frameID, userAPI)
 	if err != nil {
 		xutil.GetLogger(req.Context()).WithError(err).Error("obtainSavedTags failed")
 		return xutil.JSONResponse{
@@ -58,7 +58,7 @@ func GetTags(
 	}
 }
 
-// PutTag implements PUT /_matrix/client/r0/user/{userID}/rooms/{roomID}/tags/{tag}
+// PutTag implements PUT /_coddy/client/r0/user/{userID}/frames/{frameID}/tags/{tag}
 // Put functionality works by getting existing data from the DB (if any), adding
 // the tag to the "map" and saving the new "map" to the DB
 func PutTag(
@@ -66,7 +66,7 @@ func PutTag(
 	userAPI api.ClientUserAPI,
 	device *api.Device,
 	userID string,
-	roomID string,
+	frameID string,
 	tag string,
 	syncProducer *producers.SyncAPIProducer,
 ) xutil.JSONResponse {
@@ -83,7 +83,7 @@ func PutTag(
 		return *reqErr
 	}
 
-	tagContent, err := obtainSavedTags(req, userID, roomID, userAPI)
+	tagContent, err := obtainSavedTags(req, userID, frameID, userAPI)
 	if err != nil {
 		xutil.GetLogger(req.Context()).WithError(err).Error("obtainSavedTags failed")
 		return xutil.JSONResponse{
@@ -97,7 +97,7 @@ func PutTag(
 	}
 	tagContent.Tags[tag] = properties
 
-	if err = saveTagData(req, userID, roomID, userAPI, tagContent); err != nil {
+	if err = saveTagData(req, userID, frameID, userAPI, tagContent); err != nil {
 		xutil.GetLogger(req.Context()).WithError(err).Error("saveTagData failed")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
@@ -111,7 +111,7 @@ func PutTag(
 	}
 }
 
-// DeleteTag implements DELETE /_matrix/client/r0/user/{userID}/rooms/{roomID}/tags/{tag}
+// DeleteTag implements DELETE /_coddy/client/r0/user/{userID}/frames/{frameID}/tags/{tag}
 // Delete functionality works by obtaining the saved tags, removing the intended tag from
 // the "map" and then saving the new "map" in the DB
 func DeleteTag(
@@ -119,7 +119,7 @@ func DeleteTag(
 	userAPI api.ClientUserAPI,
 	device *api.Device,
 	userID string,
-	roomID string,
+	frameID string,
 	tag string,
 	syncProducer *producers.SyncAPIProducer,
 ) xutil.JSONResponse {
@@ -131,7 +131,7 @@ func DeleteTag(
 		}
 	}
 
-	tagContent, err := obtainSavedTags(req, userID, roomID, userAPI)
+	tagContent, err := obtainSavedTags(req, userID, frameID, userAPI)
 	if err != nil {
 		xutil.GetLogger(req.Context()).WithError(err).Error("obtainSavedTags failed")
 		return xutil.JSONResponse{
@@ -151,7 +151,7 @@ func DeleteTag(
 		}
 	}
 
-	if err = saveTagData(req, userID, roomID, userAPI, tagContent); err != nil {
+	if err = saveTagData(req, userID, frameID, userAPI, tagContent); err != nil {
 		xutil.GetLogger(req.Context()).WithError(err).Error("saveTagData failed")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
@@ -165,17 +165,17 @@ func DeleteTag(
 	}
 }
 
-// obtainSavedTags gets all tags scoped to a userID and roomID
+// obtainSavedTags gets all tags scoped to a userID and frameID
 // from the database
 func obtainSavedTags(
 	req *http.Request,
 	userID string,
-	roomID string,
+	frameID string,
 	userAPI api.ClientUserAPI,
 ) (tags xcore.TagContent, err error) {
 	dataReq := api.QueryAccountDataRequest{
 		UserID:   userID,
-		RoomID:   roomID,
+		FrameID:   frameID,
 		DataType: "m.tag",
 	}
 	dataRes := api.QueryAccountDataResponse{}
@@ -183,7 +183,7 @@ func obtainSavedTags(
 	if err != nil {
 		return
 	}
-	data, ok := dataRes.RoomAccountData[roomID]["m.tag"]
+	data, ok := dataRes.FrameAccountData[frameID]["m.tag"]
 	if !ok {
 		return
 	}
@@ -197,7 +197,7 @@ func obtainSavedTags(
 func saveTagData(
 	req *http.Request,
 	userID string,
-	roomID string,
+	frameID string,
 	userAPI api.ClientUserAPI,
 	Tag xcore.TagContent,
 ) error {
@@ -207,7 +207,7 @@ func saveTagData(
 	}
 	dataReq := api.InputAccountDataRequest{
 		UserID:      userID,
-		RoomID:      roomID,
+		FrameID:      frameID,
 		DataType:    "m.tag",
 		AccountData: json.RawMessage(newTagData),
 	}

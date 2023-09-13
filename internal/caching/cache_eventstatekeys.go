@@ -1,9 +1,9 @@
 package caching
 
-import "github.com/withqb/coddy/servers/roomserver/types"
+import "github.com/withqb/coddy/servers/dataframe/types"
 
 // EventStateKeyCache contains the subset of functions needed for
-// a room event state key cache.
+// a frame event state key cache.
 type EventStateKeyCache interface {
 	GetEventStateKey(eventStateKeyNID types.EventStateKeyNID) (string, bool)
 	StoreEventStateKey(eventStateKeyNID types.EventStateKeyNID, eventStateKey string)
@@ -11,16 +11,16 @@ type EventStateKeyCache interface {
 }
 
 func (c Caches) GetEventStateKey(eventStateKeyNID types.EventStateKeyNID) (string, bool) {
-	return c.RoomServerStateKeys.Get(eventStateKeyNID)
+	return c.DataFrameStateKeys.Get(eventStateKeyNID)
 }
 
 func (c Caches) StoreEventStateKey(eventStateKeyNID types.EventStateKeyNID, eventStateKey string) {
-	c.RoomServerStateKeys.Set(eventStateKeyNID, eventStateKey)
-	c.RoomServerStateKeyNIDs.Set(eventStateKey, eventStateKeyNID)
+	c.DataFrameStateKeys.Set(eventStateKeyNID, eventStateKey)
+	c.DataFrameStateKeyNIDs.Set(eventStateKey, eventStateKeyNID)
 }
 
 func (c Caches) GetEventStateKeyNID(eventStateKey string) (types.EventStateKeyNID, bool) {
-	return c.RoomServerStateKeyNIDs.Get(eventStateKey)
+	return c.DataFrameStateKeyNIDs.Get(eventStateKey)
 }
 
 type EventTypeCache interface {
@@ -29,10 +29,10 @@ type EventTypeCache interface {
 }
 
 func (c Caches) StoreEventTypeKey(eventTypeNID types.EventTypeNID, eventType string) {
-	c.RoomServerEventTypeNIDs.Set(eventType, eventTypeNID)
-	c.RoomServerEventTypes.Set(eventTypeNID, eventType)
+	c.DataFrameEventTypeNIDs.Set(eventType, eventTypeNID)
+	c.DataFrameEventTypes.Set(eventTypeNID, eventType)
 }
 
 func (c Caches) GetEventTypeKey(eventType string) (types.EventTypeNID, bool) {
-	return c.RoomServerEventTypeNIDs.Get(eventType)
+	return c.DataFrameEventTypeNIDs.Get(eventType)
 }

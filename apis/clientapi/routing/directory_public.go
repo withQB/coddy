@@ -15,16 +15,16 @@ import (
 
 	"github.com/withqb/coddy/apis/clientapi/api"
 	"github.com/withqb/coddy/apis/clientapi/httputil"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 )
 
 var (
 	cacheMu          sync.Mutex
-	publicRoomsCache []fclient.PublicRoom
+	publicFramesCache []fclient.PublicFrame
 )
 
-type PublicRoomReq struct {
+type PublicFrameReq struct {
 	Since              string `json:"since,omitempty"`
 	Limit              int64  `json:"limit,omitempty"`
 	Filter             filter `json:"filter,omitempty"`
@@ -35,18 +35,18 @@ type PublicRoomReq struct {
 
 type filter struct {
 	SearchTerms string   `json:"generic_search_term,omitempty"`
-	RoomTypes   []string `json:"room_types,omitempty"` // TODO: Implement filter on this
+	FrameTypes   []string `json:"frame_types,omitempty"` // TODO: Implement filter on this
 }
 
-// GetPostPublicRooms implements GET and POST /publicRooms
-func GetPostPublicRooms(
-	req *http.Request, rsAPI roomserverAPI.ClientRoomserverAPI,
-	extRoomsProvider api.ExtraPublicRoomsProvider,
+// GetPostPublicFrames implements GET and POST /publicFrames
+func GetPostPublicFrames(
+	req *http.Request, rsAPI dataframeAPI.ClientDataframeAPI,
+	extFramesProvider api.ExtraPublicFramesProvider,
 	federation fclient.FederationClient,
 	cfg *config.ClientAPI,
 ) xutil.JSONResponse {
-	var request PublicRoomReq
-	if fillErr := fillPublicRoomsReq(req, &request); fillErr != nil {
+	var request PublicFrameReq
+	if fillErr := fillPublicFramesReq(req, &request); fillErr != nil {
 		return *fillErr
 	}
 
@@ -59,14 +59,14 @@ func GetPostPublicRooms(
 
 	serverName := spec.ServerName(request.Server)
 	if serverName != "" && !cfg.Matrix.IsLocalServerName(serverName) {
-		res, err := federation.GetPublicRoomsFiltered(
+		res, err := federation.GetPublicFramesFiltered(
 			req.Context(), cfg.Matrix.ServerName, serverName,
 			int(request.Limit), request.Since,
 			request.Filter.SearchTerms, false,
 			"",
 		)
 		if err != nil {
-			xutil.GetLogger(req.Context()).WithError(err).Error("failed to get public rooms")
+			xutil.GetLogger(req.Context()).WithError(err).Error("failed to get public frames")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.InternalServerError{},
@@ -78,9 +78,9 @@ func GetPostPublicRooms(
 		}
 	}
 
-	response, err := publicRooms(req.Context(), request, rsAPI, extRoomsProvider)
+	response, err := publicFrames(req.Context(), request, rsAPI, extFramesProvider)
 	if err != nil {
-		xutil.GetLogger(req.Context()).WithError(err).Errorf("failed to work out public rooms")
+		xutil.GetLogger(req.Context()).WithError(err).Errorf("failed to work out public frames")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
@@ -92,12 +92,12 @@ func GetPostPublicRooms(
 	}
 }
 
-func publicRooms(
-	ctx context.Context, request PublicRoomReq, rsAPI roomserverAPI.ClientRoomserverAPI, extRoomsProvider api.ExtraPublicRoomsProvider,
-) (*fclient.RespPublicRooms, error) {
+func publicFrames(
+	ctx context.Context, request PublicFrameReq, rsAPI dataframeAPI.ClientDataframeAPI, extFramesProvider api.ExtraPublicFramesProvider,
+) (*fclient.RespPublicFrames, error) {
 
-	response := fclient.RespPublicRooms{
-		Chunk: []fclient.PublicRoom{},
+	response := fclient.RespPublicFrames{
+		Chunk: []fclient.PublicFrame{},
 	}
 	var limit int64
 	var offset int64
@@ -114,18 +114,18 @@ func publicRooms(
 	}
 	err = nil
 
-	var rooms []fclient.PublicRoom
+	var frames []fclient.PublicFrame
 	if request.Since == "" {
-		rooms = refreshPublicRoomCache(ctx, rsAPI, extRoomsProvider, request)
+		frames = refreshPublicFrameCache(ctx, rsAPI, extFramesProvider, request)
 	} else {
-		rooms = getPublicRoomsFromCache()
+		frames = getPublicFramesFromCache()
 	}
 
-	response.TotalRoomCountEstimate = len(rooms)
+	response.TotalFrameCountEstimate = len(frames)
 
-	rooms = filterRooms(rooms, request.Filter.SearchTerms)
+	frames = filterFrames(frames, request.Filter.SearchTerms)
 
-	chunk, prev, next := sliceInto(rooms, offset, limit)
+	chunk, prev, next := sliceInto(frames, offset, limit)
 	if prev >= 0 {
 		response.PrevBatch = "T" + strconv.Itoa(prev)
 	}
@@ -138,29 +138,29 @@ func publicRooms(
 	return &response, err
 }
 
-func filterRooms(rooms []fclient.PublicRoom, searchTerm string) []fclient.PublicRoom {
+func filterFrames(frames []fclient.PublicFrame, searchTerm string) []fclient.PublicFrame {
 	if searchTerm == "" {
-		return rooms
+		return frames
 	}
 
 	normalizedTerm := strings.ToLower(searchTerm)
 
-	result := make([]fclient.PublicRoom, 0)
-	for _, room := range rooms {
-		if strings.Contains(strings.ToLower(room.Name), normalizedTerm) ||
-			strings.Contains(strings.ToLower(room.Topic), normalizedTerm) ||
-			strings.Contains(strings.ToLower(room.CanonicalAlias), normalizedTerm) {
-			result = append(result, room)
+	result := make([]fclient.PublicFrame, 0)
+	for _, frame := range frames {
+		if strings.Contains(strings.ToLower(frame.Name), normalizedTerm) ||
+			strings.Contains(strings.ToLower(frame.Topic), normalizedTerm) ||
+			strings.Contains(strings.ToLower(frame.CanonicalAlias), normalizedTerm) {
+			result = append(result, frame)
 		}
 	}
 
 	return result
 }
 
-// fillPublicRoomsReq fills the Limit, Since and Filter attributes of a GET or POST request
-// on /publicRooms by parsing the incoming HTTP request
+// fillPublicFramesReq fills the Limit, Since and Filter attributes of a GET or POST request
+// on /publicFrames by parsing the incoming HTTP request
 // Filter is only filled for POST requests
-func fillPublicRoomsReq(httpReq *http.Request, request *PublicRoomReq) *xutil.JSONResponse {
+func fillPublicFramesReq(httpReq *http.Request, request *PublicFrameReq) *xutil.JSONResponse {
 	if httpReq.Method != "GET" && httpReq.Method != "POST" {
 		return &xutil.JSONResponse{
 			Code: http.StatusMethodNotAllowed,
@@ -206,7 +206,7 @@ func fillPublicRoomsReq(httpReq *http.Request, request *PublicRoomReq) *xutil.JS
 //	 limit=3&since=6  => G     (prev='3', next='')
 //
 //	A value of '-1' for prev/next indicates no position.
-func sliceInto(slice []fclient.PublicRoom, since int64, limit int64) (subset []fclient.PublicRoom, prev, next int) {
+func sliceInto(slice []fclient.PublicFrame, since int64, limit int64) (subset []fclient.PublicFrame, prev, next int) {
 	prev = -1
 	next = -1
 
@@ -214,7 +214,7 @@ func sliceInto(slice []fclient.PublicRoom, since int64, limit int64) (subset []f
 		prev = int(since) - int(limit)
 	}
 	nextIndex := int(since) + int(limit)
-	if len(slice) > nextIndex { // there are more rooms ahead of us
+	if len(slice) > nextIndex { // there are more frames ahead of us
 		next = nextIndex
 	}
 
@@ -230,15 +230,15 @@ func sliceInto(slice []fclient.PublicRoom, since int64, limit int64) (subset []f
 	return
 }
 
-func refreshPublicRoomCache(
-	ctx context.Context, rsAPI roomserverAPI.ClientRoomserverAPI, extRoomsProvider api.ExtraPublicRoomsProvider,
-	request PublicRoomReq,
-) []fclient.PublicRoom {
+func refreshPublicFrameCache(
+	ctx context.Context, rsAPI dataframeAPI.ClientDataframeAPI, extFramesProvider api.ExtraPublicFramesProvider,
+	request PublicFrameReq,
+) []fclient.PublicFrame {
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
-	var extraRooms []fclient.PublicRoom
-	if extRoomsProvider != nil {
-		extraRooms = extRoomsProvider.Rooms()
+	var extraFrames []fclient.PublicFrame
+	if extFramesProvider != nil {
+		extraFrames = extFramesProvider.Frames()
 	}
 
 	// TODO: this is only here to make Sytest happy, for now.
@@ -247,52 +247,52 @@ func refreshPublicRoomCache(
 		request.NetworkID = ns[1]
 	}
 
-	var queryRes roomserverAPI.QueryPublishedRoomsResponse
-	err := rsAPI.QueryPublishedRooms(ctx, &roomserverAPI.QueryPublishedRoomsRequest{
+	var queryRes dataframeAPI.QueryPublishedFramesResponse
+	err := rsAPI.QueryPublishedFrames(ctx, &dataframeAPI.QueryPublishedFramesRequest{
 		NetworkID:          request.NetworkID,
 		IncludeAllNetworks: request.IncludeAllNetworks,
 	}, &queryRes)
 	if err != nil {
-		xutil.GetLogger(ctx).WithError(err).Error("QueryPublishedRooms failed")
-		return publicRoomsCache
+		xutil.GetLogger(ctx).WithError(err).Error("QueryPublishedFrames failed")
+		return publicFramesCache
 	}
-	pubRooms, err := roomserverAPI.PopulatePublicRooms(ctx, queryRes.RoomIDs, rsAPI)
+	pubFrames, err := dataframeAPI.PopulatePublicFrames(ctx, queryRes.FrameIDs, rsAPI)
 	if err != nil {
-		xutil.GetLogger(ctx).WithError(err).Error("PopulatePublicRooms failed")
-		return publicRoomsCache
+		xutil.GetLogger(ctx).WithError(err).Error("PopulatePublicFrames failed")
+		return publicFramesCache
 	}
-	publicRoomsCache = []fclient.PublicRoom{}
-	publicRoomsCache = append(publicRoomsCache, pubRooms...)
-	publicRoomsCache = append(publicRoomsCache, extraRooms...)
-	publicRoomsCache = dedupeAndShuffle(publicRoomsCache)
+	publicFramesCache = []fclient.PublicFrame{}
+	publicFramesCache = append(publicFramesCache, pubFrames...)
+	publicFramesCache = append(publicFramesCache, extraFrames...)
+	publicFramesCache = dedupeAndShuffle(publicFramesCache)
 
 	// sort by total joined member count (big to small)
-	sort.SliceStable(publicRoomsCache, func(i, j int) bool {
-		return publicRoomsCache[i].JoinedMembersCount > publicRoomsCache[j].JoinedMembersCount
+	sort.SliceStable(publicFramesCache, func(i, j int) bool {
+		return publicFramesCache[i].JoinedMembersCount > publicFramesCache[j].JoinedMembersCount
 	})
-	return publicRoomsCache
+	return publicFramesCache
 }
 
-func getPublicRoomsFromCache() []fclient.PublicRoom {
+func getPublicFramesFromCache() []fclient.PublicFrame {
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
-	return publicRoomsCache
+	return publicFramesCache
 }
 
-func dedupeAndShuffle(in []fclient.PublicRoom) []fclient.PublicRoom {
-	// de-duplicate rooms with the same room ID. We can join the room via any of these aliases as we know these servers
+func dedupeAndShuffle(in []fclient.PublicFrame) []fclient.PublicFrame {
+	// de-duplicate frames with the same frame ID. We can join the frame via any of these aliases as we know these servers
 	// are alive and well, so we arbitrarily pick one (purposefully shuffling them to spread the load a bit)
-	var publicRooms []fclient.PublicRoom
-	haveRoomIDs := make(map[string]bool)
+	var publicFrames []fclient.PublicFrame
+	haveFrameIDs := make(map[string]bool)
 	rand.Shuffle(len(in), func(i, j int) {
 		in[i], in[j] = in[j], in[i]
 	})
 	for _, r := range in {
-		if haveRoomIDs[r.RoomID] {
+		if haveFrameIDs[r.FrameID] {
 			continue
 		}
-		haveRoomIDs[r.RoomID] = true
-		publicRooms = append(publicRooms, r)
+		haveFrameIDs[r.FrameID] = true
+		publicFrames = append(publicFrames, r)
 	}
-	return publicRooms
+	return publicFrames
 }

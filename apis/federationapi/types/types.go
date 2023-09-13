@@ -4,11 +4,11 @@ import "github.com/withqb/xtools/spec"
 
 const MSigningKeyUpdate = "m.signing_key_update" // TODO: move to xtools
 
-// A JoinedHost is a server that is joined to a matrix room.
+// A JoinedHost is a server that is joined to a coddy frame.
 type JoinedHost struct {
-	// The MemberEventID of a m.room.member join event.
+	// The MemberEventID of a m.frame.member join event.
 	MemberEventID string
-	// The domain part of the state key of the m.room.member join event
+	// The domain part of the state key of the m.frame.member join event
 	ServerName spec.ServerName
 }
 
@@ -21,7 +21,7 @@ func (s ServerNames) Less(i, j int) bool { return s[i] < s[j] }
 // tracks peeks we're performing on another server over federation
 type OutboundPeek struct {
 	PeekID            string
-	RoomID            string
+	FrameID            string
 	ServerName        spec.ServerName
 	CreationTimestamp int64
 	RenewedTimestamp  int64
@@ -31,7 +31,7 @@ type OutboundPeek struct {
 // tracks peeks other servers are performing on us over federation
 type InboundPeek struct {
 	PeekID            string
-	RoomID            string
+	FrameID            string
 	ServerName        spec.ServerName
 	CreationTimestamp int64
 	RenewedTimestamp  int64

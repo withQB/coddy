@@ -7,8 +7,8 @@ import (
 	"github.com/withqb/coddy/apis/clientapi/httputil"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/eventutil"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/version"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/version"
 	appserviceAPI "github.com/withqb/coddy/services/appservice/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools"
@@ -16,32 +16,32 @@ import (
 	"github.com/withqb/xutil"
 )
 
-type upgradeRoomRequest struct {
+type upgradeFrameRequest struct {
 	NewVersion string `json:"new_version"`
 }
 
-type upgradeRoomResponse struct {
-	ReplacementRoom string `json:"replacement_room"`
+type upgradeFrameResponse struct {
+	ReplacementFrame string `json:"replacement_frame"`
 }
 
-// UpgradeRoom implements /upgrade
-func UpgradeRoom(
+// UpgradeFrame implements /upgrade
+func UpgradeFrame(
 	req *http.Request, device *userapi.Device,
 	cfg *config.ClientAPI,
-	roomID string, profileAPI userapi.ClientUserAPI,
-	rsAPI roomserverAPI.ClientRoomserverAPI,
+	frameID string, profileAPI userapi.ClientUserAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI,
 	asAPI appserviceAPI.AppServiceInternalAPI,
 ) xutil.JSONResponse {
-	var r upgradeRoomRequest
+	var r upgradeFrameRequest
 	if rErr := httputil.UnmarshalJSONRequest(req, &r); rErr != nil {
 		return *rErr
 	}
 
-	// Validate that the room version is supported
-	if _, err := version.SupportedRoomVersion(xtools.RoomVersion(r.NewVersion)); err != nil {
+	// Validate that the frame version is supported
+	if _, err := version.SupportedFrameVersion(xtools.FrameVersion(r.NewVersion)); err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.UnsupportedRoomVersion("This server does not support that room version"),
+			JSON: spec.UnsupportedFrameVersion("This server does not support that frame version"),
 		}
 	}
 
@@ -53,19 +53,19 @@ func UpgradeRoom(
 			JSON: spec.InternalServerError{},
 		}
 	}
-	newRoomID, err := rsAPI.PerformRoomUpgrade(req.Context(), roomID, *userID, xtools.RoomVersion(r.NewVersion))
+	newFrameID, err := rsAPI.PerformFrameUpgrade(req.Context(), frameID, *userID, xtools.FrameVersion(r.NewVersion))
 	switch e := err.(type) {
 	case nil:
-	case roomserverAPI.ErrNotAllowed:
+	case dataframeAPI.ErrNotAllowed:
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
 			JSON: spec.Forbidden(e.Error()),
 		}
 	default:
-		if errors.Is(err, eventutil.ErrRoomNoExists{}) {
+		if errors.Is(err, eventutil.ErrFrameNoExists{}) {
 			return xutil.JSONResponse{
 				Code: http.StatusNotFound,
-				JSON: spec.NotFound("Room does not exist"),
+				JSON: spec.NotFound("Frame does not exist"),
 			}
 		}
 		return xutil.JSONResponse{
@@ -76,8 +76,8 @@ func UpgradeRoom(
 
 	return xutil.JSONResponse{
 		Code: http.StatusOK,
-		JSON: upgradeRoomResponse{
-			ReplacementRoom: newRoomID,
+		JSON: upgradeFrameResponse{
+			ReplacementFrame: newFrameID,
 		},
 	}
 }

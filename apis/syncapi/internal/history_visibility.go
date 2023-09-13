@@ -13,8 +13,8 @@ import (
 	"github.com/withqb/xtools/spec"
 
 	"github.com/withqb/coddy/apis/syncapi/storage"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 )
 
 func init() {
@@ -53,7 +53,6 @@ type eventVisibility struct {
 }
 
 // allowed checks the eventVisibility if the user is allowed to see the event.
-// Rules as defined by https://spec.matrix.org/v1.3/client-server-api/#server-behaviour-5
 func (ev eventVisibility) allowed() (allowed bool) {
 	switch ev.visibility {
 	case xtools.HistoryVisibilityWorldReadable:
@@ -67,7 +66,7 @@ func (ev eventVisibility) allowed() (allowed bool) {
 		return false
 	case xtools.HistoryVisibilityShared:
 		// If the user’s membership was join, allow.
-		// If history_visibility was set to shared, and the user joined the room at any point after the event was sent, allow.
+		// If history_visibility was set to shared, and the user joined the frame at any point after the event was sent, allow.
 		if ev.membershipAtEvent == spec.Join || ev.membershipCurrent == spec.Join {
 			return true
 		}
@@ -86,14 +85,14 @@ func (ev eventVisibility) allowed() (allowed bool) {
 	}
 }
 
-// ApplyHistoryVisibilityFilter applies the room history visibility filter on types.HeaderedEvents.
+// ApplyHistoryVisibilityFilter applies the frame history visibility filter on types.HeaderedEvents.
 // Returns the filtered events and an error, if any.
 //
-// This function assumes that all provided events are from the same room.
+// This function assumes that all provided events are from the same frame.
 func ApplyHistoryVisibilityFilter(
 	ctx context.Context,
 	syncDB storage.DatabaseTransaction,
-	rsAPI api.SyncRoomserverAPI,
+	rsAPI api.SyncDataframeAPI,
 	events []*types.HeaderedEvent,
 	alwaysIncludeEventIDs map[string]struct{},
 	userID spec.UserID, endpoint string,
@@ -104,27 +103,27 @@ func ApplyHistoryVisibilityFilter(
 	start := time.Now()
 
 	// try to get the current membership of the user
-	membershipCurrent, _, err := syncDB.SelectMembershipForUser(ctx, events[0].RoomID(), userID.String(), math.MaxInt64)
+	membershipCurrent, _, err := syncDB.SelectMembershipForUser(ctx, events[0].FrameID(), userID.String(), math.MaxInt64)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get the mapping from eventID -> eventVisibility
 	eventsFiltered := make([]*types.HeaderedEvent, 0, len(events))
-	firstEvRoomID, err := spec.NewRoomID(events[0].RoomID())
+	firstEvFrameID, err := spec.NewFrameID(events[0].FrameID())
 	if err != nil {
 		return nil, err
 	}
-	senderID, err := rsAPI.QuerySenderIDForUser(ctx, *firstEvRoomID, userID)
+	senderID, err := rsAPI.QuerySenderIDForUser(ctx, *firstEvFrameID, userID)
 	if err != nil {
 		return nil, err
 	}
-	visibilities := visibilityForEvents(ctx, rsAPI, events, senderID, *firstEvRoomID)
+	visibilities := visibilityForEvents(ctx, rsAPI, events, senderID, *firstEvFrameID)
 
 	for _, ev := range events {
-		// Validate same room assumption
-		if ev.RoomID() != firstEvRoomID.String() {
-			return nil, fmt.Errorf("events from different rooms supplied to ApplyHistoryVisibilityFilter")
+		// Validate same frame assumption
+		if ev.FrameID() != firstEvFrameID.String() {
+			return nil, fmt.Errorf("events from different frames supplied to ApplyHistoryVisibilityFilter")
 		}
 
 		evVis := visibilities[ev.EventID()]
@@ -139,7 +138,7 @@ func ApplyHistoryVisibilityFilter(
 
 		// NOTSPEC: Always allow user to see their own membership events (spec contains more "rules")
 		if senderID != nil {
-			if ev.Type() == spec.MRoomMember && ev.StateKeyEquals(string(*senderID)) {
+			if ev.Type() == spec.MFrameMember && ev.StateKeyEquals(string(*senderID)) {
 				eventsFiltered = append(eventsFiltered, ev)
 				continue
 			}
@@ -148,8 +147,7 @@ func ApplyHistoryVisibilityFilter(
 		// Always allow history evVis events on boundaries. This is done
 		// by setting the effective evVis to the least restrictive
 		// of the old vs new.
-		// https://spec.matrix.org/v1.3/client-server-api/#server-behaviour-5
-		if ev.Type() == spec.MRoomHistoryVisibility {
+		if ev.Type() == spec.MFrameHistoryVisibility {
 			hisVis, err := ev.HistoryVisibility()
 
 			if err == nil && hisVis != "" {
@@ -180,12 +178,12 @@ func ApplyHistoryVisibilityFilter(
 
 // visibilityForEvents returns a map from eventID to eventVisibility containing the visibility and the membership
 // of `senderID` at the given event. If provided sender ID is nil, assume that membership is Leave
-// Returns an error if the roomserver can't calculate the memberships.
+// Returns an error if the dataframe can't calculate the memberships.
 func visibilityForEvents(
 	ctx context.Context,
-	rsAPI api.SyncRoomserverAPI,
+	rsAPI api.SyncDataframeAPI,
 	events []*types.HeaderedEvent,
-	senderID *spec.SenderID, roomID spec.RoomID,
+	senderID *spec.SenderID, frameID spec.FrameID,
 ) map[string]eventVisibility {
 	eventIDs := make([]string, len(events))
 	for i := range events {
@@ -198,7 +196,7 @@ func visibilityForEvents(
 	var err error
 	membershipEvents := make(map[string]*types.HeaderedEvent)
 	if senderID != nil {
-		membershipEvents, err = rsAPI.QueryMembershipAtEvent(ctx, roomID, eventIDs, *senderID)
+		membershipEvents, err = rsAPI.QueryMembershipAtEvent(ctx, frameID, eventIDs, *senderID)
 		if err != nil {
 			logrus.WithError(err).Error("visibilityForEvents: failed to fetch membership at event, defaulting to 'leave'")
 		}

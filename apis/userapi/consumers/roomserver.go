@@ -28,17 +28,17 @@ import (
 	"github.com/withqb/coddy/internal/eventutil"
 	"github.com/withqb/coddy/internal/pushgateway"
 	"github.com/withqb/coddy/internal/pushrules"
-	rsapi "github.com/withqb/coddy/servers/roomserver/api"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	rsapi "github.com/withqb/coddy/servers/dataframe/api"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
 	"github.com/withqb/coddy/setup/process"
 )
 
-type OutputRoomEventConsumer struct {
+type OutputFrameEventConsumer struct {
 	ctx          context.Context
 	cfg          *config.UserAPI
-	rsAPI        rsapi.UserRoomserverAPI
+	rsAPI        rsapi.UserDataframeAPI
 	jetstream    nats.JetStreamContext
 	durable      string
 	db           storage.UserDatabase
@@ -46,40 +46,40 @@ type OutputRoomEventConsumer struct {
 	pgClient     pushgateway.Client
 	syncProducer *producers.SyncAPI
 	msgCounts    map[spec.ServerName]userAPITypes.MessageStats
-	roomCounts   map[spec.ServerName]map[string]bool // map from serverName to map from rommID to "isEncrypted"
+	frameCounts   map[spec.ServerName]map[string]bool // map from serverName to map from rommID to "isEncrypted"
 	lastUpdate   time.Time
 	countsLock   sync.Mutex
 	serverName   spec.ServerName
 }
 
-func NewOutputRoomEventConsumer(
+func NewOutputFrameEventConsumer(
 	process *process.ProcessContext,
 	cfg *config.UserAPI,
 	js nats.JetStreamContext,
 	store storage.UserDatabase,
 	pgClient pushgateway.Client,
-	rsAPI rsapi.UserRoomserverAPI,
+	rsAPI rsapi.UserDataframeAPI,
 	syncProducer *producers.SyncAPI,
-) *OutputRoomEventConsumer {
-	return &OutputRoomEventConsumer{
+) *OutputFrameEventConsumer {
+	return &OutputFrameEventConsumer{
 		ctx:          process.Context(),
 		cfg:          cfg,
 		jetstream:    js,
 		db:           store,
-		durable:      cfg.Matrix.JetStream.Durable("UserAPIRoomServerConsumer"),
-		topic:        cfg.Matrix.JetStream.Prefixed(jetstream.OutputRoomEvent),
+		durable:      cfg.Matrix.JetStream.Durable("UserAPIDataFrameConsumer"),
+		topic:        cfg.Matrix.JetStream.Prefixed(jetstream.OutputFrameEvent),
 		pgClient:     pgClient,
 		rsAPI:        rsAPI,
 		syncProducer: syncProducer,
 		msgCounts:    map[spec.ServerName]userAPITypes.MessageStats{},
-		roomCounts:   map[spec.ServerName]map[string]bool{},
+		frameCounts:   map[spec.ServerName]map[string]bool{},
 		lastUpdate:   time.Now(),
 		countsLock:   sync.Mutex{},
 		serverName:   cfg.Matrix.ServerName,
 	}
 }
 
-func (s *OutputRoomEventConsumer) Start() error {
+func (s *OutputFrameEventConsumer) Start() error {
 	if err := jetstream.JetStreamConsumer(
 		s.ctx, s.jetstream, s.topic, s.durable, 1,
 		s.onMessage, nats.DeliverAll(), nats.ManualAck(),
@@ -89,32 +89,32 @@ func (s *OutputRoomEventConsumer) Start() error {
 	return nil
 }
 
-func (s *OutputRoomEventConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) bool {
+func (s *OutputFrameEventConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) bool {
 	msg := msgs[0] // Guaranteed to exist if onMessage is called
 	// Only handle events we care about
-	if rsapi.OutputType(msg.Header.Get(jetstream.RoomEventType)) != rsapi.OutputTypeNewRoomEvent {
+	if rsapi.OutputType(msg.Header.Get(jetstream.FrameEventType)) != rsapi.OutputTypeNewFrameEvent {
 		return true
 	}
 	var output rsapi.OutputEvent
 	if err := json.Unmarshal(msg.Data, &output); err != nil {
 		// If the message was invalid, log it and move on to the next message in the stream
-		log.WithError(err).Errorf("roomserver output log: message parse failure")
+		log.WithError(err).Errorf("dataframe output log: message parse failure")
 		return true
 	}
-	event := output.NewRoomEvent.Event
+	event := output.NewFrameEvent.Event
 	if event == nil {
 		log.Errorf("userapi consumer: expected event")
 		return true
 	}
 
 	if s.cfg.Matrix.ReportStats.Enabled {
-		go s.storeMessageStats(ctx, event.Type(), string(event.SenderID()), event.RoomID())
+		go s.storeMessageStats(ctx, event.Type(), string(event.SenderID()), event.FrameID())
 	}
 
 	log.WithFields(log.Fields{
 		"event_id":   event.EventID(),
 		"event_type": event.Type(),
-	}).Tracef("Received message from roomserver: %#v", output)
+	}).Tracef("Received message from dataframe: %#v", output)
 
 	metadata, err := msg.Metadata()
 	if err != nil {
@@ -124,19 +124,19 @@ func (s *OutputRoomEventConsumer) onMessage(ctx context.Context, msgs []*nats.Ms
 	if err := s.processMessage(ctx, event, uint64(spec.AsTimestamp(metadata.Timestamp))); err != nil {
 		log.WithFields(log.Fields{
 			"event_id": event.EventID(),
-		}).WithError(err).Errorf("userapi consumer: process room event failure")
+		}).WithError(err).Errorf("userapi consumer: process frame event failure")
 	}
 
 	return true
 }
 
-func (s *OutputRoomEventConsumer) storeMessageStats(ctx context.Context, eventType, eventSender, roomID string) {
+func (s *OutputFrameEventConsumer) storeMessageStats(ctx context.Context, eventType, eventSender, frameID string) {
 	s.countsLock.Lock()
 	defer s.countsLock.Unlock()
 
-	// reset the roomCounts on a day change
+	// reset the frameCounts on a day change
 	if s.lastUpdate.Day() != time.Now().Day() {
-		s.roomCounts[s.serverName] = make(map[string]bool)
+		s.frameCounts[s.serverName] = make(map[string]bool)
 		s.lastUpdate = time.Now()
 	}
 
@@ -145,19 +145,19 @@ func (s *OutputRoomEventConsumer) storeMessageStats(ctx context.Context, eventTy
 		return
 	}
 	msgCount := s.msgCounts[s.serverName]
-	roomCount := s.roomCounts[s.serverName]
-	if roomCount == nil {
-		roomCount = make(map[string]bool)
+	frameCount := s.frameCounts[s.serverName]
+	if frameCount == nil {
+		frameCount = make(map[string]bool)
 	}
 	switch eventType {
-	case "m.room.message":
-		roomCount[roomID] = false
+	case "m.frame.message":
+		frameCount[frameID] = false
 		msgCount.Messages++
 		if sender == s.serverName {
 			msgCount.SentMessages++
 		}
-	case "m.room.encrypted":
-		roomCount[roomID] = true
+	case "m.frame.encrypted":
+		frameCount[frameID] = true
 		msgCount.MessagesE2EE++
 		if sender == s.serverName {
 			msgCount.SentMessagesE2EE++
@@ -166,18 +166,18 @@ func (s *OutputRoomEventConsumer) storeMessageStats(ctx context.Context, eventTy
 		return
 	}
 	s.msgCounts[s.serverName] = msgCount
-	s.roomCounts[s.serverName] = roomCount
+	s.frameCounts[s.serverName] = frameCount
 
 	for serverName, stats := range s.msgCounts {
-		var normalRooms, encryptedRooms int64 = 0, 0
-		for _, isEncrypted := range s.roomCounts[s.serverName] {
+		var normalFrames, encryptedFrames int64 = 0, 0
+		for _, isEncrypted := range s.frameCounts[s.serverName] {
 			if isEncrypted {
-				encryptedRooms++
+				encryptedFrames++
 			} else {
-				normalRooms++
+				normalFrames++
 			}
 		}
-		err := s.db.UpsertDailyRoomsMessages(ctx, serverName, stats, normalRooms, encryptedRooms)
+		err := s.db.UpsertDailyFramesMessages(ctx, serverName, stats, normalFrames, encryptedFrames)
 		if err != nil {
 			log.WithError(err).Errorf("failed to upsert daily messages")
 		}
@@ -192,27 +192,27 @@ func (s *OutputRoomEventConsumer) storeMessageStats(ctx context.Context, eventTy
 	}
 }
 
-func (s *OutputRoomEventConsumer) handleRoomUpgrade(ctx context.Context, oldRoomID, newRoomID string, localMembers []*localMembership, roomSize int) error {
+func (s *OutputFrameEventConsumer) handleFrameUpgrade(ctx context.Context, oldFrameID, newFrameID string, localMembers []*localMembership, frameSize int) error {
 	for _, membership := range localMembers {
-		// Copy any existing push rules from old -> new room
-		if err := s.copyPushrules(ctx, oldRoomID, newRoomID, membership.Localpart, membership.Domain); err != nil {
+		// Copy any existing push rules from old -> new frame
+		if err := s.copyPushrules(ctx, oldFrameID, newFrameID, membership.Localpart, membership.Domain); err != nil {
 			return err
 		}
 
-		// preserve m.direct room state
-		if err := s.updateMDirect(ctx, oldRoomID, newRoomID, membership.Localpart, membership.Domain, roomSize); err != nil {
+		// preserve m.direct frame state
+		if err := s.updateMDirect(ctx, oldFrameID, newFrameID, membership.Localpart, membership.Domain, frameSize); err != nil {
 			return err
 		}
 
 		// copy existing m.tag entries, if any
-		if err := s.copyTags(ctx, oldRoomID, newRoomID, membership.Localpart, membership.Domain); err != nil {
+		if err := s.copyTags(ctx, oldFrameID, newFrameID, membership.Localpart, membership.Domain); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *OutputRoomEventConsumer) copyPushrules(ctx context.Context, oldRoomID, newRoomID string, localpart string, serverName spec.ServerName) error {
+func (s *OutputFrameEventConsumer) copyPushrules(ctx context.Context, oldFrameID, newFrameID string, localpart string, serverName spec.ServerName) error {
 	pushRules, err := s.db.QueryPushRules(ctx, localpart, serverName)
 	if err != nil {
 		return fmt.Errorf("failed to query pushrules for user: %w", err)
@@ -221,13 +221,13 @@ func (s *OutputRoomEventConsumer) copyPushrules(ctx context.Context, oldRoomID, 
 		return nil
 	}
 
-	for _, roomRule := range pushRules.Global.Room {
-		if roomRule.RuleID != oldRoomID {
+	for _, frameRule := range pushRules.Global.Frame {
+		if frameRule.RuleID != oldFrameID {
 			continue
 		}
-		cpRool := *roomRule
-		cpRool.RuleID = newRoomID
-		pushRules.Global.Room = append(pushRules.Global.Room, &cpRool)
+		cpRool := *frameRule
+		cpRool.RuleID = newFrameID
+		pushRules.Global.Frame = append(pushRules.Global.Frame, &cpRool)
 		rules, err := json.Marshal(pushRules)
 		if err != nil {
 			return err
@@ -239,10 +239,10 @@ func (s *OutputRoomEventConsumer) copyPushrules(ctx context.Context, oldRoomID, 
 	return nil
 }
 
-// updateMDirect copies the "is_direct" flag from oldRoomID to newROomID
-func (s *OutputRoomEventConsumer) updateMDirect(ctx context.Context, oldRoomID, newRoomID, localpart string, serverName spec.ServerName, roomSize int) error {
+// updateMDirect copies the "is_direct" flag from oldFrameID to newROomID
+func (s *OutputFrameEventConsumer) updateMDirect(ctx context.Context, oldFrameID, newFrameID, localpart string, serverName spec.ServerName, frameSize int) error {
 	// this is most likely not a DM, so skip updating m.direct state
-	if roomSize > 2 {
+	if frameSize > 2 {
 		return nil
 	}
 	// Get direct message state
@@ -252,18 +252,18 @@ func (s *OutputRoomEventConsumer) updateMDirect(ctx context.Context, oldRoomID, 
 	}
 	directChats := gjson.ParseBytes(directChatsRaw)
 	newDirectChats := make(map[string][]string)
-	// iterate over all userID -> roomIDs
-	directChats.ForEach(func(userID, roomIDs gjson.Result) bool {
+	// iterate over all userID -> frameIDs
+	directChats.ForEach(func(userID, frameIDs gjson.Result) bool {
 		var found bool
-		for _, roomID := range roomIDs.Array() {
-			newDirectChats[userID.Str] = append(newDirectChats[userID.Str], roomID.Str)
-			// add the new roomID to m.direct
-			if roomID.Str == oldRoomID {
+		for _, frameID := range frameIDs.Array() {
+			newDirectChats[userID.Str] = append(newDirectChats[userID.Str], frameID.Str)
+			// add the new frameID to m.direct
+			if frameID.Str == oldFrameID {
 				found = true
-				newDirectChats[userID.Str] = append(newDirectChats[userID.Str], newRoomID)
+				newDirectChats[userID.Str] = append(newDirectChats[userID.Str], newFrameID)
 			}
 		}
-		// Only hit the database if we found the old room as a DM for this user
+		// Only hit the database if we found the old frame as a DM for this user
 		if found {
 			var data []byte
 			data, err = json.Marshal(newDirectChats)
@@ -282,38 +282,38 @@ func (s *OutputRoomEventConsumer) updateMDirect(ctx context.Context, oldRoomID, 
 	return nil
 }
 
-func (s *OutputRoomEventConsumer) copyTags(ctx context.Context, oldRoomID, newRoomID, localpart string, serverName spec.ServerName) error {
-	tag, err := s.db.GetAccountDataByType(ctx, localpart, serverName, oldRoomID, "m.tag")
+func (s *OutputFrameEventConsumer) copyTags(ctx context.Context, oldFrameID, newFrameID, localpart string, serverName spec.ServerName) error {
+	tag, err := s.db.GetAccountDataByType(ctx, localpart, serverName, oldFrameID, "m.tag")
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
 	if tag == nil {
 		return nil
 	}
-	return s.db.SaveAccountData(ctx, localpart, serverName, newRoomID, "m.tag", tag)
+	return s.db.SaveAccountData(ctx, localpart, serverName, newFrameID, "m.tag", tag)
 }
 
-func (s *OutputRoomEventConsumer) processMessage(ctx context.Context, event *rstypes.HeaderedEvent, streamPos uint64) error {
-	members, roomSize, err := s.localRoomMembers(ctx, event.RoomID())
+func (s *OutputFrameEventConsumer) processMessage(ctx context.Context, event *rstypes.HeaderedEvent, streamPos uint64) error {
+	members, frameSize, err := s.localFrameMembers(ctx, event.FrameID())
 	if err != nil {
-		return fmt.Errorf("s.localRoomMembers: %w", err)
+		return fmt.Errorf("s.localFrameMembers: %w", err)
 	}
 
 	switch {
-	case event.Type() == spec.MRoomMember:
+	case event.Type() == spec.MFrameMember:
 		sender := spec.UserID{}
-		validRoomID, roomErr := spec.NewRoomID(event.RoomID())
-		if roomErr != nil {
-			return roomErr
+		validFrameID, frameErr := spec.NewFrameID(event.FrameID())
+		if frameErr != nil {
+			return frameErr
 		}
-		userID, queryErr := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, event.SenderID())
+		userID, queryErr := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, event.SenderID())
 		if queryErr == nil && userID != nil {
 			sender = *userID
 		}
 
 		sk := event.StateKey()
 		if sk != nil && *sk != "" {
-			skUserID, queryErr := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, spec.SenderID(*sk))
+			skUserID, queryErr := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, spec.SenderID(*sk))
 			if queryErr == nil && skUserID != nil {
 				skString := skUserID.String()
 				sk = &skString
@@ -328,32 +328,32 @@ func (s *OutputRoomEventConsumer) processMessage(ctx context.Context, event *rst
 			return fmt.Errorf("newLocalMembership: %w", err)
 		}
 		if member.Membership == spec.Invite && member.Domain == s.cfg.Matrix.ServerName {
-			// localRoomMembers only adds joined members. An invite
+			// localFrameMembers only adds joined members. An invite
 			// should also be pushed to the target user.
 			members = append(members, member)
 		}
-	case event.Type() == "m.room.tombstone" && event.StateKeyEquals(""):
-		// Handle room upgrades
-		oldRoomID := event.RoomID()
-		newRoomID := gjson.GetBytes(event.Content(), "replacement_room").Str
-		if err = s.handleRoomUpgrade(ctx, oldRoomID, newRoomID, members, roomSize); err != nil {
+	case event.Type() == "m.frame.tombstone" && event.StateKeyEquals(""):
+		// Handle frame upgrades
+		oldFrameID := event.FrameID()
+		newFrameID := gjson.GetBytes(event.Content(), "replacement_frame").Str
+		if err = s.handleFrameUpgrade(ctx, oldFrameID, newFrameID, members, frameSize); err != nil {
 			// while inconvenient, this shouldn't stop us from sending push notifications
-			log.WithError(err).Errorf("UserAPI: failed to handle room upgrade for users")
+			log.WithError(err).Errorf("UserAPI: failed to handle frame upgrade for users")
 		}
 
 	}
 
-	// TODO: run in parallel with localRoomMembers.
-	roomName, err := s.roomName(ctx, event)
+	// TODO: run in parallel with localFrameMembers.
+	frameName, err := s.frameName(ctx, event)
 	if err != nil {
-		return fmt.Errorf("s.roomName: %w", err)
+		return fmt.Errorf("s.frameName: %w", err)
 	}
 
 	log.WithFields(log.Fields{
 		"event_id":    event.EventID(),
-		"room_id":     event.RoomID(),
+		"frame_id":     event.FrameID(),
 		"num_members": len(members),
-		"room_size":   roomSize,
+		"frame_size":   frameSize,
 	}).Tracef("Notifying members")
 
 	// Notification.UserIsTarget is a per-member field, so we
@@ -363,7 +363,7 @@ func (s *OutputRoomEventConsumer) processMessage(ctx context.Context, event *rst
 	// removing it means we can send all notifications to
 	// e.g. Element's Push gateway in one go.
 	for _, mem := range members {
-		if err := s.notifyLocal(ctx, event, mem, roomSize, roomName, streamPos); err != nil {
+		if err := s.notifyLocal(ctx, event, mem, frameSize, frameName, streamPos); err != nil {
 			log.WithFields(log.Fields{
 				"localpart": mem.Localpart,
 			}).WithError(err).Error("Unable to push to local user")
@@ -402,24 +402,24 @@ func newLocalMembership(event *synctypes.ClientEvent) (*localMembership, error) 
 	return &member, nil
 }
 
-// localRoomMembers fetches the current local members of a room, and
+// localFrameMembers fetches the current local members of a frame, and
 // the total number of members.
-func (s *OutputRoomEventConsumer) localRoomMembers(ctx context.Context, roomID string) ([]*localMembership, int, error) {
+func (s *OutputFrameEventConsumer) localFrameMembers(ctx context.Context, frameID string) ([]*localMembership, int, error) {
 	// Get only locally joined users to avoid unmarshalling and caching
-	// membership events we only use to calculate the room size.
-	req := &rsapi.QueryMembershipsForRoomRequest{
-		RoomID:     roomID,
+	// membership events we only use to calculate the frame size.
+	req := &rsapi.QueryMembershipsForFrameRequest{
+		FrameID:     frameID,
 		JoinedOnly: true,
 		LocalOnly:  true,
 	}
-	var res rsapi.QueryMembershipsForRoomResponse
-	if err := s.rsAPI.QueryMembershipsForRoom(ctx, req, &res); err != nil {
+	var res rsapi.QueryMembershipsForFrameResponse
+	if err := s.rsAPI.QueryMembershipsForFrame(ctx, req, &res); err != nil {
 		return nil, 0, err
 	}
 
 	// Since we only queried locally joined users above,
-	// we also need to ask the roomserver about the joined user count.
-	totalCount, err := s.rsAPI.JoinedUserCount(ctx, roomID)
+	// we also need to ask the dataframe about the joined user count.
+	totalCount, err := s.rsAPI.JoinedUserCount(ctx, frameID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -447,13 +447,13 @@ func (s *OutputRoomEventConsumer) localRoomMembers(ctx context.Context, roomID s
 	return members, totalCount, nil
 }
 
-// roomName returns the name in the event (if type==m.room.name), or
-// looks it up in roomserver. If there is no name,
-// m.room.canonical_alias is consulted. Returns an empty string if the
-// room has no name.
-func (s *OutputRoomEventConsumer) roomName(ctx context.Context, event *rstypes.HeaderedEvent) (string, error) {
-	if event.Type() == spec.MRoomName {
-		name, err := unmarshalRoomName(event)
+// frameName returns the name in the event (if type==m.frame.name), or
+// looks it up in dataframe. If there is no name,
+// m.frame.canonical_alias is consulted. Returns an empty string if the
+// frame has no name.
+func (s *OutputFrameEventConsumer) frameName(ctx context.Context, event *rstypes.HeaderedEvent) (string, error) {
+	if event.Type() == spec.MFrameName {
+		name, err := unmarshalFrameName(event)
 		if err != nil {
 			return "", err
 		}
@@ -464,8 +464,8 @@ func (s *OutputRoomEventConsumer) roomName(ctx context.Context, event *rstypes.H
 	}
 
 	req := &rsapi.QueryCurrentStateRequest{
-		RoomID:      event.RoomID(),
-		StateTuples: []xtools.StateKeyTuple{roomNameTuple, canonicalAliasTuple},
+		FrameID:      event.FrameID(),
+		StateTuples: []xtools.StateKeyTuple{frameNameTuple, canonicalAliasTuple},
 	}
 	var res rsapi.QueryCurrentStateResponse
 
@@ -473,11 +473,11 @@ func (s *OutputRoomEventConsumer) roomName(ctx context.Context, event *rstypes.H
 		return "", nil
 	}
 
-	if eventS := res.StateEvents[roomNameTuple]; eventS != nil {
-		return unmarshalRoomName(eventS)
+	if eventS := res.StateEvents[frameNameTuple]; eventS != nil {
+		return unmarshalFrameName(eventS)
 	}
 
-	if event.Type() == spec.MRoomCanonicalAlias {
+	if event.Type() == spec.MFrameCanonicalAlias {
 		alias, err := unmarshalCanonicalAlias(event)
 		if err != nil {
 			return "", err
@@ -496,11 +496,11 @@ func (s *OutputRoomEventConsumer) roomName(ctx context.Context, event *rstypes.H
 }
 
 var (
-	canonicalAliasTuple = xtools.StateKeyTuple{EventType: spec.MRoomCanonicalAlias}
-	roomNameTuple       = xtools.StateKeyTuple{EventType: spec.MRoomName}
+	canonicalAliasTuple = xtools.StateKeyTuple{EventType: spec.MFrameCanonicalAlias}
+	frameNameTuple       = xtools.StateKeyTuple{EventType: spec.MFrameName}
 )
 
-func unmarshalRoomName(event *rstypes.HeaderedEvent) (string, error) {
+func unmarshalFrameName(event *rstypes.HeaderedEvent) (string, error) {
 	var nc eventutil.NameContent
 	if err := json.Unmarshal(event.Content(), &nc); err != nil {
 		return "", fmt.Errorf("unmarshaling NameContent: %w", err)
@@ -519,8 +519,8 @@ func unmarshalCanonicalAlias(event *rstypes.HeaderedEvent) (string, error) {
 }
 
 // notifyLocal finds the right push actions for a local user, given an event.
-func (s *OutputRoomEventConsumer) notifyLocal(ctx context.Context, event *rstypes.HeaderedEvent, mem *localMembership, roomSize int, roomName string, streamPos uint64) error {
-	actions, err := s.evaluatePushRules(ctx, event, mem, roomSize)
+func (s *OutputFrameEventConsumer) notifyLocal(ctx context.Context, event *rstypes.HeaderedEvent, mem *localMembership, frameSize int, frameName string, streamPos uint64) error {
+	actions, err := s.evaluatePushRules(ctx, event, mem, frameSize)
 	if err != nil {
 		return fmt.Errorf("s.evaluatePushRules: %w", err)
 	}
@@ -532,7 +532,7 @@ func (s *OutputRoomEventConsumer) notifyLocal(ctx context.Context, event *rstype
 	if a != pushrules.NotifyAction && a != pushrules.CoalesceAction {
 		log.WithFields(log.Fields{
 			"event_id":  event.EventID(),
-			"room_id":   event.RoomID(),
+			"frame_id":   event.FrameID(),
 			"localpart": mem.Localpart,
 		}).Tracef("Push rule evaluation rejected the event")
 		return nil
@@ -544,18 +544,18 @@ func (s *OutputRoomEventConsumer) notifyLocal(ctx context.Context, event *rstype
 	}
 
 	sender := spec.UserID{}
-	validRoomID, err := spec.NewRoomID(event.RoomID())
+	validFrameID, err := spec.NewFrameID(event.FrameID())
 	if err != nil {
 		return err
 	}
-	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, event.SenderID())
+	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, event.SenderID())
 	if err == nil && userID != nil {
 		sender = *userID
 	}
 
 	sk := event.StateKey()
 	if sk != nil && *sk != "" {
-		skUserID, queryErr := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, spec.SenderID(*event.StateKey()))
+		skUserID, queryErr := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, spec.SenderID(*event.StateKey()))
 		if queryErr == nil && skUserID != nil {
 			skString := skUserID.String()
 			sk = &skString
@@ -564,7 +564,7 @@ func (s *OutputRoomEventConsumer) notifyLocal(ctx context.Context, event *rstype
 	n := &api.Notification{
 		Actions: actions,
 		// UNSPEC: the spec doesn't say this is a ClientEvent, but the
-		// fields seem to match. room_id should be missing, which
+		// fields seem to match. frame_id should be missing, which
 		// matches the behaviour of FormatSync.
 		Event: synctypes.ToClientEvent(event, synctypes.FormatSync, sender.String(), sk, event.Unsigned()),
 		// TODO: this is per-device, but it's not part of the primary
@@ -572,14 +572,14 @@ func (s *OutputRoomEventConsumer) notifyLocal(ctx context.Context, event *rstype
 		// make sense. What is this supposed to be? Sytests require it
 		// to "work", but they only use a single device.
 		ProfileTag: profileTag,
-		RoomID:     event.RoomID(),
+		FrameID:     event.FrameID(),
 		TS:         spec.AsTimestamp(time.Now()),
 	}
 	if err = s.db.InsertNotification(ctx, mem.Localpart, mem.Domain, event.EventID(), streamPos, tweaks, n); err != nil {
 		return fmt.Errorf("s.db.InsertNotification: %w", err)
 	}
 
-	if err = s.syncProducer.GetAndSendNotificationData(ctx, mem.UserID, event.RoomID()); err != nil {
+	if err = s.syncProducer.GetAndSendNotificationData(ctx, mem.UserID, event.FrameID()); err != nil {
 		return fmt.Errorf("s.syncProducer.GetAndSendNotificationData: %w", err)
 	}
 
@@ -591,7 +591,7 @@ func (s *OutputRoomEventConsumer) notifyLocal(ctx context.Context, event *rstype
 
 	log.WithFields(log.Fields{
 		"event_id":   event.EventID(),
-		"room_id":    event.RoomID(),
+		"frame_id":    event.FrameID(),
 		"localpart":  mem.Localpart,
 		"num_urls":   len(devicesByURLAndFormat),
 		"num_unread": userNumUnreadNotifs,
@@ -623,7 +623,7 @@ func (s *OutputRoomEventConsumer) notifyLocal(ctx context.Context, event *rstype
 				// device, rather than per URL. For now, we must
 				// notify each one separately.
 				for _, dev := range devices {
-					rej, err := s.notifyHTTP(ctx, event, url, format, []*pushgateway.Device{dev}, mem.Localpart, roomName, int(userNumUnreadNotifs))
+					rej, err := s.notifyHTTP(ctx, event, url, format, []*pushgateway.Device{dev}, mem.Localpart, frameName, int(userNumUnreadNotifs))
 					if err != nil {
 						log.WithFields(log.Fields{
 							"event_id":  event.EventID(),
@@ -646,13 +646,13 @@ func (s *OutputRoomEventConsumer) notifyLocal(ctx context.Context, event *rstype
 
 // evaluatePushRules fetches and evaluates the push rules of a local
 // user. Returns actions (including dont_notify).
-func (s *OutputRoomEventConsumer) evaluatePushRules(ctx context.Context, event *rstypes.HeaderedEvent, mem *localMembership, roomSize int) ([]*pushrules.Action, error) {
+func (s *OutputFrameEventConsumer) evaluatePushRules(ctx context.Context, event *rstypes.HeaderedEvent, mem *localMembership, frameSize int) ([]*pushrules.Action, error) {
 	user := ""
-	validRoomID, err := spec.NewRoomID(event.RoomID())
+	validFrameID, err := spec.NewFrameID(event.FrameID())
 	if err != nil {
 		return nil, err
 	}
-	sender, err := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, event.SenderID())
+	sender, err := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, event.SenderID())
 	if err == nil {
 		user = sender.String()
 	}
@@ -686,12 +686,12 @@ func (s *OutputRoomEventConsumer) evaluatePushRules(ctx context.Context, event *
 		ctx:      ctx,
 		rsAPI:    s.rsAPI,
 		mem:      mem,
-		roomID:   event.RoomID(),
-		roomSize: roomSize,
+		frameID:   event.FrameID(),
+		frameSize: frameSize,
 	}
 	eval := pushrules.NewRuleSetEvaluator(ec, &ruleSets.Global)
-	rule, err := eval.MatchEvent(event.PDU, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-		return s.rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+	rule, err := eval.MatchEvent(event.PDU, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+		return s.rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 	})
 	if err != nil {
 		return nil, err
@@ -704,7 +704,7 @@ func (s *OutputRoomEventConsumer) evaluatePushRules(ctx context.Context, event *
 
 	log.WithFields(log.Fields{
 		"event_id":  event.EventID(),
-		"room_id":   event.RoomID(),
+		"frame_id":   event.FrameID(),
 		"localpart": mem.Localpart,
 		"rule_id":   rule.RuleID,
 	}).Trace("Matched a push rule")
@@ -714,21 +714,21 @@ func (s *OutputRoomEventConsumer) evaluatePushRules(ctx context.Context, event *
 
 type ruleSetEvalContext struct {
 	ctx      context.Context
-	rsAPI    rsapi.UserRoomserverAPI
+	rsAPI    rsapi.UserDataframeAPI
 	mem      *localMembership
-	roomID   string
-	roomSize int
+	frameID   string
+	frameSize int
 }
 
 func (rse *ruleSetEvalContext) UserDisplayName() string { return rse.mem.DisplayName }
 
-func (rse *ruleSetEvalContext) RoomMemberCount() (int, error) { return rse.roomSize, nil }
+func (rse *ruleSetEvalContext) FrameMemberCount() (int, error) { return rse.frameSize, nil }
 
 func (rse *ruleSetEvalContext) HasPowerLevel(senderID spec.SenderID, levelKey string) (bool, error) {
 	req := &rsapi.QueryLatestEventsAndStateRequest{
-		RoomID: rse.roomID,
+		FrameID: rse.frameID,
 		StateToFetch: []xtools.StateKeyTuple{
-			{EventType: spec.MRoomPowerLevels},
+			{EventType: spec.MFramePowerLevels},
 		},
 	}
 	var res rsapi.QueryLatestEventsAndStateResponse
@@ -736,7 +736,7 @@ func (rse *ruleSetEvalContext) HasPowerLevel(senderID spec.SenderID, levelKey st
 		return false, err
 	}
 	for _, ev := range res.StateEvents {
-		if ev.Type() != spec.MRoomPowerLevels {
+		if ev.Type() != spec.MFramePowerLevels {
 			continue
 		}
 
@@ -751,7 +751,7 @@ func (rse *ruleSetEvalContext) HasPowerLevel(senderID spec.SenderID, levelKey st
 
 // localPushDevices pushes to the configured devices of a local
 // user. The map keys are [url][format].
-func (s *OutputRoomEventConsumer) localPushDevices(ctx context.Context, localpart string, serverName spec.ServerName, tweaks map[string]interface{}) (map[string]map[string][]*pushgateway.Device, string, error) {
+func (s *OutputFrameEventConsumer) localPushDevices(ctx context.Context, localpart string, serverName spec.ServerName, tweaks map[string]interface{}) (map[string]map[string][]*pushgateway.Device, string, error) {
 	pusherDevices, err := util.GetPushDevices(ctx, localpart, serverName, tweaks, s.db)
 	if err != nil {
 		return nil, "", fmt.Errorf("util.GetPushDevices: %w", err)
@@ -775,7 +775,7 @@ func (s *OutputRoomEventConsumer) localPushDevices(ctx context.Context, localpar
 }
 
 // notifyHTTP performs a notificatation to a Push Gateway.
-func (s *OutputRoomEventConsumer) notifyHTTP(ctx context.Context, event *rstypes.HeaderedEvent, url, format string, devices []*pushgateway.Device, localpart, roomName string, userNumUnreadNotifs int) ([]*pushgateway.Device, error) {
+func (s *OutputFrameEventConsumer) notifyHTTP(ctx context.Context, event *rstypes.HeaderedEvent, url, format string, devices []*pushgateway.Device, localpart, frameName string, userNumUnreadNotifs int) ([]*pushgateway.Device, error) {
 	logger := log.WithFields(log.Fields{
 		"event_id":    event.EventID(),
 		"url":         url,
@@ -793,16 +793,16 @@ func (s *OutputRoomEventConsumer) notifyHTTP(ctx context.Context, event *rstypes
 				},
 				Devices: devices,
 				EventID: event.EventID(),
-				RoomID:  event.RoomID(),
+				FrameID:  event.FrameID(),
 			},
 		}
 
 	default:
-		validRoomID, err := spec.NewRoomID(event.RoomID())
+		validFrameID, err := spec.NewFrameID(event.FrameID())
 		if err != nil {
 			return nil, err
 		}
-		sender, err := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, event.SenderID())
+		sender, err := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, event.SenderID())
 		if err != nil {
 			logger.WithError(err).Errorf("Failed to get userID for sender %s", event.SenderID())
 			return nil, err
@@ -816,8 +816,8 @@ func (s *OutputRoomEventConsumer) notifyHTTP(ctx context.Context, event *rstypes
 				Devices:  devices,
 				EventID:  event.EventID(),
 				ID:       event.EventID(),
-				RoomID:   event.RoomID(),
-				RoomName: roomName,
+				FrameID:   event.FrameID(),
+				FrameName: frameName,
 				Sender:   sender.String(),
 				Type:     event.Type(),
 			},
@@ -830,19 +830,19 @@ func (s *OutputRoomEventConsumer) notifyHTTP(ctx context.Context, event *rstypes
 			logger.WithError(err).Errorf("Failed to convert local user to userID %s", localpart)
 			return nil, err
 		}
-		roomID, err := spec.NewRoomID(event.RoomID())
+		frameID, err := spec.NewFrameID(event.FrameID())
 		if err != nil {
-			logger.WithError(err).Errorf("event roomID is invalid %s", event.RoomID())
+			logger.WithError(err).Errorf("event frameID is invalid %s", event.FrameID())
 			return nil, err
 		}
 
-		localSender, err := s.rsAPI.QuerySenderIDForUser(ctx, *roomID, *userID)
+		localSender, err := s.rsAPI.QuerySenderIDForUser(ctx, *frameID, *userID)
 		if err != nil {
-			logger.WithError(err).Errorf("Failed to get local user senderID for room %s: %s", userID.String(), event.RoomID())
+			logger.WithError(err).Errorf("Failed to get local user senderID for frame %s: %s", userID.String(), event.FrameID())
 			return nil, err
 		} else if localSender == nil {
-			logger.WithError(err).Errorf("Failed to get local user senderID for room %s: %s", userID.String(), event.RoomID())
-			return nil, fmt.Errorf("no sender ID for user %s in %s", userID.String(), roomID.String())
+			logger.WithError(err).Errorf("Failed to get local user senderID for frame %s: %s", userID.String(), event.FrameID())
+			return nil, fmt.Errorf("no sender ID for user %s in %s", userID.String(), frameID.String())
 		}
 		if event.StateKey() != nil && *event.StateKey() == string(*localSender) {
 			req.Notification.UserIsTarget = true
@@ -877,7 +877,7 @@ func (s *OutputRoomEventConsumer) notifyHTTP(ctx context.Context, event *rstypes
 }
 
 // deleteRejectedPushers deletes the pushers associated with the given devices.
-func (s *OutputRoomEventConsumer) deleteRejectedPushers(ctx context.Context, devices []*pushgateway.Device, localpart string, serverName spec.ServerName) {
+func (s *OutputFrameEventConsumer) deleteRejectedPushers(ctx context.Context, devices []*pushgateway.Device, localpart string, serverName spec.ServerName) {
 	log.WithFields(log.Fields{
 		"localpart":   localpart,
 		"app_id0":     devices[0].AppID,

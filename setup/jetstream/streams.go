@@ -10,16 +10,16 @@ import (
 
 const (
 	UserID        = "user_id"
-	RoomID        = "room_id"
+	FrameID        = "frame_id"
 	EventID       = "event_id"
-	RoomEventType = "output_room_event_type"
+	FrameEventType = "output_frame_event_type"
 )
 
 var (
-	InputRoomEvent          = "InputRoomEvent"
+	InputFrameEvent          = "InputFrameEvent"
 	InputDeviceListUpdate   = "InputDeviceListUpdate"
 	InputSigningKeyUpdate   = "InputSigningKeyUpdate"
-	OutputRoomEvent         = "OutputRoomEvent"
+	OutputFrameEvent         = "OutputFrameEvent"
 	OutputSendToDeviceEvent = "OutputSendToDeviceEvent"
 	OutputKeyChangeEvent    = "OutputKeyChangeEvent"
 	OutputTypingEvent       = "OutputTypingEvent"
@@ -39,13 +39,13 @@ func Tokenise(str string) string {
 	return safeCharacters.ReplaceAllString(str, "_")
 }
 
-func InputRoomEventSubj(roomID string) string {
-	return fmt.Sprintf("%s.%s", InputRoomEvent, Tokenise(roomID))
+func InputFrameEventSubj(frameID string) string {
+	return fmt.Sprintf("%s.%s", InputFrameEvent, Tokenise(frameID))
 }
 
 var streams = []*nats.StreamConfig{
 	{
-		Name:      InputRoomEvent,
+		Name:      InputFrameEvent,
 		Retention: nats.InterestPolicy,
 		Storage:   nats.FileStorage,
 		MaxAge:    time.Hour * 24,
@@ -61,7 +61,7 @@ var streams = []*nats.StreamConfig{
 		Storage:   nats.FileStorage,
 	},
 	{
-		Name:      OutputRoomEvent,
+		Name:      OutputFrameEvent,
 		Retention: nats.InterestPolicy,
 		Storage:   nats.FileStorage,
 	},

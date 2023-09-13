@@ -63,7 +63,7 @@ func (t *OutputReceiptConsumer) onMessage(ctx context.Context, msgs []*nats.Msg)
 	msg := msgs[0] // Guaranteed to exist if onMessage is called
 	receipt := syncTypes.OutputReceiptEvent{
 		UserID:  msg.Header.Get(jetstream.UserID),
-		RoomID:  msg.Header.Get(jetstream.RoomID),
+		FrameID:  msg.Header.Get(jetstream.FrameID),
 		EventID: msg.Header.Get(jetstream.EventID),
 		Type:    msg.Header.Get("type"),
 	}
@@ -96,9 +96,9 @@ func (t *OutputReceiptConsumer) onMessage(ctx context.Context, msgs []*nats.Msg)
 
 	receipt.Timestamp = spec.Timestamp(timestamp)
 
-	joined, err := t.db.GetJoinedHosts(ctx, receipt.RoomID)
+	joined, err := t.db.GetJoinedHosts(ctx, receipt.FrameID)
 	if err != nil {
-		log.WithError(err).WithField("room_id", receipt.RoomID).Error("failed to get joined hosts for room")
+		log.WithError(err).WithField("frame_id", receipt.FrameID).Error("failed to get joined hosts for frame")
 		return false
 	}
 
@@ -108,7 +108,7 @@ func (t *OutputReceiptConsumer) onMessage(ctx context.Context, msgs []*nats.Msg)
 	}
 
 	content := map[string]fedTypes.FederationReceiptMRead{}
-	content[receipt.RoomID] = fedTypes.FederationReceiptMRead{
+	content[receipt.FrameID] = fedTypes.FederationReceiptMRead{
 		User: map[string]fedTypes.FederationReceiptData{
 			receipt.UserID: {
 				Data: fedTypes.ReceiptTS{

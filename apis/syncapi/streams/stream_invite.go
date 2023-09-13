@@ -13,12 +13,12 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/storage"
 	"github.com/withqb/coddy/apis/syncapi/synctypes"
 	"github.com/withqb/coddy/apis/syncapi/types"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 )
 
 type InviteStreamProvider struct {
 	DefaultStreamProvider
-	rsAPI api.SyncRoomserverAPI
+	rsAPI api.SyncDataframeAPI
 }
 
 func (p *InviteStreamProvider) Setup(
@@ -68,20 +68,20 @@ func (p *InviteStreamProvider) IncrementalSync(
 		eventFormat = synctypes.FormatSyncFederation
 	}
 
-	for roomID, inviteEvent := range invites {
+	for frameID, inviteEvent := range invites {
 		user := spec.UserID{}
-		validRoomID, err := spec.NewRoomID(inviteEvent.RoomID())
+		validFrameID, err := spec.NewFrameID(inviteEvent.FrameID())
 		if err != nil {
 			continue
 		}
-		sender, err := p.rsAPI.QueryUserIDForSender(ctx, *validRoomID, inviteEvent.SenderID())
+		sender, err := p.rsAPI.QueryUserIDForSender(ctx, *validFrameID, inviteEvent.SenderID())
 		if err == nil && sender != nil {
 			user = *sender
 		}
 
 		sk := inviteEvent.StateKey()
 		if sk != nil && *sk != "" {
-			skUserID, err := p.rsAPI.QueryUserIDForSender(ctx, *validRoomID, spec.SenderID(*inviteEvent.StateKey()))
+			skUserID, err := p.rsAPI.QueryUserIDForSender(ctx, *validFrameID, spec.SenderID(*inviteEvent.StateKey()))
 			if err == nil && skUserID != nil {
 				skString := skUserID.String()
 				sk = &skString
@@ -93,36 +93,36 @@ func (p *InviteStreamProvider) IncrementalSync(
 			continue
 		}
 		ir := types.NewInviteResponse(inviteEvent, user, sk, eventFormat)
-		req.Response.Rooms.Invite[roomID] = ir
+		req.Response.Frames.Invite[frameID] = ir
 	}
 
 	// When doing an initial sync, we don't want to add retired invites, as this
-	// can add rooms we were invited to, but already left.
+	// can add frames we were invited to, but already left.
 	if from == 0 {
 		return to
 	}
-	for roomID := range retiredInvites {
-		membership, _, err := snapshot.SelectMembershipForUser(ctx, roomID, req.Device.UserID, math.MaxInt64)
-		// Skip if the user is an existing member of the room.
-		// Otherwise, the NewLeaveResponse will eject the user from the room unintentionally
+	for frameID := range retiredInvites {
+		membership, _, err := snapshot.SelectMembershipForUser(ctx, frameID, req.Device.UserID, math.MaxInt64)
+		// Skip if the user is an existing member of the frame.
+		// Otherwise, the NewLeaveResponse will eject the user from the frame unintentionally
 		if membership == spec.Join ||
 			err != nil {
 			continue
 		}
 
 		lr := types.NewLeaveResponse()
-		h := sha256.Sum256(append([]byte(roomID), []byte(strconv.FormatInt(int64(to), 10))...))
+		h := sha256.Sum256(append([]byte(frameID), []byte(strconv.FormatInt(int64(to), 10))...))
 		lr.Timeline.Events = append(lr.Timeline.Events, synctypes.ClientEvent{
 			// fake event ID which muxes in the to position
 			EventID:        "$" + base64.RawURLEncoding.EncodeToString(h[:]),
 			OriginServerTS: spec.AsTimestamp(time.Now()),
-			RoomID:         roomID,
+			FrameID:         frameID,
 			Sender:         req.Device.UserID,
 			StateKey:       &req.Device.UserID,
-			Type:           "m.room.member",
+			Type:           "m.frame.member",
 			Content:        spec.RawJSON(`{"membership":"leave"}`),
 		})
-		req.Response.Rooms.Leave[roomID] = lr
+		req.Response.Frames.Leave[frameID] = lr
 	}
 
 	return maxID

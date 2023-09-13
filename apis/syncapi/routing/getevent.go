@@ -10,30 +10,28 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/storage"
 	"github.com/withqb/coddy/apis/syncapi/synctypes"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools/spec"
 )
 
 // GetEvent implements
 //
-//	GET /_matrix/client/r0/rooms/{roomId}/event/{eventId}
-//
-// https://spec.matrix.org/v1.4/client-server-api/#get_matrixclientv3roomsroomideventeventid
+//	GET /_coddy/client/r0/frames/{frameId}/event/{eventId}
 func GetEvent(
 	req *http.Request,
 	device *userapi.Device,
-	rawRoomID string,
+	rawFrameID string,
 	eventID string,
 	cfg *config.SyncAPI,
 	syncDB storage.Database,
-	rsAPI api.SyncRoomserverAPI,
+	rsAPI api.SyncDataframeAPI,
 ) xutil.JSONResponse {
 	ctx := req.Context()
 	db, err := syncDB.NewDatabaseTransaction(ctx)
 	logger := xutil.GetLogger(ctx).WithFields(logrus.Fields{
 		"event_id": eventID,
-		"room_id":  rawRoomID,
+		"frame_id":  rawFrameID,
 	})
 	if err != nil {
 		logger.WithError(err).Error("GetEvent: syncDB.NewDatabaseTransaction failed")
@@ -43,11 +41,11 @@ func GetEvent(
 		}
 	}
 
-	roomID, err := spec.NewRoomID(rawRoomID)
+	frameID, err := spec.NewFrameID(rawFrameID)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.InvalidParam("invalid room ID"),
+			JSON: spec.InvalidParam("invalid frame ID"),
 		}
 	}
 
@@ -104,9 +102,9 @@ func GetEvent(
 		}
 	}
 
-	senderUserID, err := rsAPI.QueryUserIDForSender(req.Context(), *roomID, events[0].SenderID())
+	senderUserID, err := rsAPI.QueryUserIDForSender(req.Context(), *frameID, events[0].SenderID())
 	if err != nil || senderUserID == nil {
-		xutil.GetLogger(req.Context()).WithError(err).WithField("senderID", events[0].SenderID()).WithField("roomID", *roomID).Error("QueryUserIDForSender errored or returned nil-user ID when user should be part of a room")
+		xutil.GetLogger(req.Context()).WithError(err).WithField("senderID", events[0].SenderID()).WithField("frameID", *frameID).Error("QueryUserIDForSender errored or returned nil-user ID when user should be part of a frame")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.Unknown("internal server error"),
@@ -115,14 +113,14 @@ func GetEvent(
 
 	sk := events[0].StateKey()
 	if sk != nil && *sk != "" {
-		evRoomID, err := spec.NewRoomID(events[0].RoomID())
+		evFrameID, err := spec.NewFrameID(events[0].FrameID())
 		if err != nil {
 			return xutil.JSONResponse{
 				Code: http.StatusBadRequest,
-				JSON: spec.BadJSON("roomID is invalid"),
+				JSON: spec.BadJSON("frameID is invalid"),
 			}
 		}
-		skUserID, err := rsAPI.QueryUserIDForSender(ctx, *evRoomID, spec.SenderID(*events[0].StateKey()))
+		skUserID, err := rsAPI.QueryUserIDForSender(ctx, *evFrameID, spec.SenderID(*events[0].StateKey()))
 		if err == nil && skUserID != nil {
 			skString := skUserID.String()
 			sk = &skString

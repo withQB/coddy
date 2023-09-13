@@ -13,8 +13,8 @@ import (
 
 // Protocols implements
 //
-//	GET /_matrix/client/v3/thirdparty/protocols/{protocol}
-//	GET /_matrix/client/v3/thirdparty/protocols
+//	GET /_coddy/client/v3/thirdparty/protocols/{protocol}
+//	GET /_coddy/client/v3/thirdparty/protocols
 func Protocols(req *http.Request, asAPI appserviceAPI.AppServiceInternalAPI, device *api.Device, protocol string) xutil.JSONResponse {
 	resp := &appserviceAPI.ProtocolResponse{}
 
@@ -50,8 +50,8 @@ func Protocols(req *http.Request, asAPI appserviceAPI.AppServiceInternalAPI, dev
 
 // User implements
 //
-//	GET /_matrix/client/v3/thirdparty/user
-//	GET /_matrix/client/v3/thirdparty/user/{protocol}
+//	GET /_coddy/client/v3/thirdparty/user
+//	GET /_coddy/client/v3/thirdparty/user/{protocol}
 func User(req *http.Request, asAPI appserviceAPI.AppServiceInternalAPI, device *api.Device, protocol string, params url.Values) xutil.JSONResponse {
 	resp := &appserviceAPI.UserResponse{}
 
@@ -79,8 +79,8 @@ func User(req *http.Request, asAPI appserviceAPI.AppServiceInternalAPI, device *
 
 // Location implements
 //
-//	GET /_matrix/client/v3/thirdparty/location
-//	GET /_matrix/client/v3/thirdparty/location/{protocol}
+//	GET /_coddy/client/v3/thirdparty/location
+//	GET /_coddy/client/v3/thirdparty/location/{protocol}
 func Location(req *http.Request, asAPI appserviceAPI.AppServiceInternalAPI, device *api.Device, protocol string, params url.Values) xutil.JSONResponse {
 	resp := &appserviceAPI.LocationResponse{}
 
@@ -97,7 +97,7 @@ func Location(req *http.Request, asAPI appserviceAPI.AppServiceInternalAPI, devi
 	if !resp.Exists {
 		return xutil.JSONResponse{
 			Code: http.StatusNotFound,
-			JSON: spec.NotFound("No portal rooms were found."),
+			JSON: spec.NotFound("No portal frames were found."),
 		}
 	}
 	return xutil.JSONResponse{

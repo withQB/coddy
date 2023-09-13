@@ -27,7 +27,7 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// GetProfile implements GET /_matrix/federation/v1/query/profile
+// GetProfile implements GET /_coddy/federation/v1/query/profile
 func GetProfile(
 	httpReq *http.Request,
 	userAPI userapi.FederationUserAPI,

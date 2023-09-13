@@ -97,8 +97,8 @@ func (s *OutputSendToDeviceEventConsumer) onMessage(ctx context.Context, msgs []
 	})
 	logger.Debugf("sync API received send-to-device event from the clientapi/federationsender")
 
-	// Check we actually got the requesting device in our store, if we receive a room key request
-	if output.Type == "m.room_key_request" {
+	// Check we actually got the requesting device in our store, if we receive a frame key request
+	if output.Type == "m.frame_key_request" {
 		requestingDeviceID := gjson.GetBytes(output.SendToDeviceEvent.Content, "requesting_device_id").Str
 		_, senderDomain, _ := xtools.SplitID('@', output.Sender)
 		if requestingDeviceID != "" && !s.isLocalServerName(senderDomain) {

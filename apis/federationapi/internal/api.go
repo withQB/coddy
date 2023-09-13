@@ -14,7 +14,7 @@ import (
 	"github.com/withqb/coddy/apis/federationapi/storage"
 	"github.com/withqb/coddy/apis/federationapi/storage/cache"
 	"github.com/withqb/coddy/internal/caching"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xcore"
 	"github.com/withqb/xtools"
@@ -27,7 +27,7 @@ type FederationInternalAPI struct {
 	db         storage.Database
 	cfg        *config.FederationAPI
 	statistics *statistics.Statistics
-	rsAPI      roomserverAPI.FederationRoomserverAPI
+	rsAPI      dataframeAPI.FederationDataframeAPI
 	federation fclient.FederationClient
 	keyRing    *xtools.KeyRing
 	queues     *queue.OutgoingQueues
@@ -36,7 +36,7 @@ type FederationInternalAPI struct {
 
 func NewFederationInternalAPI(
 	db storage.Database, cfg *config.FederationAPI,
-	rsAPI roomserverAPI.FederationRoomserverAPI,
+	rsAPI dataframeAPI.FederationDataframeAPI,
 	federation fclient.FederationClient,
 	statistics *statistics.Statistics,
 	caches *caching.Caches,

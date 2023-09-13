@@ -64,7 +64,7 @@ func (s *OutputReceiptEventConsumer) onMessage(ctx context.Context, msgs []*nats
 	msg := msgs[0] // Guaranteed to exist if onMessage is called
 
 	userID := msg.Header.Get(jetstream.UserID)
-	roomID := msg.Header.Get(jetstream.RoomID)
+	frameID := msg.Header.Get(jetstream.FrameID)
 	readPos := msg.Header.Get(jetstream.EventID)
 	evType := msg.Header.Get("type")
 
@@ -73,7 +73,7 @@ func (s *OutputReceiptEventConsumer) onMessage(ctx context.Context, msgs []*nats
 	}
 
 	log := log.WithFields(log.Fields{
-		"room_id": roomID,
+		"frame_id": frameID,
 		"user_id": userID,
 	})
 
@@ -91,13 +91,13 @@ func (s *OutputReceiptEventConsumer) onMessage(ctx context.Context, msgs []*nats
 		return false
 	}
 
-	updated, err := s.db.SetNotificationsRead(ctx, localpart, domain, roomID, uint64(spec.AsTimestamp(metadata.Timestamp)), true)
+	updated, err := s.db.SetNotificationsRead(ctx, localpart, domain, frameID, uint64(spec.AsTimestamp(metadata.Timestamp)), true)
 	if err != nil {
 		log.WithError(err).Error("userapi EDU consumer")
 		return false
 	}
 
-	if err = s.syncProducer.GetAndSendNotificationData(ctx, userID, roomID); err != nil {
+	if err = s.syncProducer.GetAndSendNotificationData(ctx, userID, frameID); err != nil {
 		log.WithError(err).Error("userapi EDU consumer: GetAndSendNotificationData failed")
 		return false
 	}

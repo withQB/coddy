@@ -50,13 +50,13 @@ type FederationTransactionJSON interface {
 }
 
 type FederationJoinedHosts interface {
-	InsertJoinedHosts(ctx context.Context, txn *sql.Tx, roomID, eventID string, serverName spec.ServerName) error
+	InsertJoinedHosts(ctx context.Context, txn *sql.Tx, frameID, eventID string, serverName spec.ServerName) error
 	DeleteJoinedHosts(ctx context.Context, txn *sql.Tx, eventIDs []string) error
-	DeleteJoinedHostsForRoom(ctx context.Context, txn *sql.Tx, roomID string) error
-	SelectJoinedHostsWithTx(ctx context.Context, txn *sql.Tx, roomID string) ([]types.JoinedHost, error)
-	SelectJoinedHosts(ctx context.Context, roomID string) ([]types.JoinedHost, error)
+	DeleteJoinedHostsForFrame(ctx context.Context, txn *sql.Tx, frameID string) error
+	SelectJoinedHostsWithTx(ctx context.Context, txn *sql.Tx, frameID string) ([]types.JoinedHost, error)
+	SelectJoinedHosts(ctx context.Context, frameID string) ([]types.JoinedHost, error)
 	SelectAllJoinedHosts(ctx context.Context) ([]spec.ServerName, error)
-	SelectJoinedHostsForRooms(ctx context.Context, roomIDs []string, excludingBlacklisted bool) ([]spec.ServerName, error)
+	SelectJoinedHostsForFrames(ctx context.Context, frameIDs []string, excludingBlacklisted bool) ([]spec.ServerName, error)
 }
 
 type FederationBlacklist interface {
@@ -81,21 +81,21 @@ type FederationRelayServers interface {
 }
 
 type FederationOutboundPeeks interface {
-	InsertOutboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string, renewalInterval int64) (err error)
-	RenewOutboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string, renewalInterval int64) (err error)
-	SelectOutboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string) (outboundPeek *types.OutboundPeek, err error)
-	SelectOutboundPeeks(ctx context.Context, txn *sql.Tx, roomID string) (outboundPeeks []types.OutboundPeek, err error)
-	DeleteOutboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string) (err error)
-	DeleteOutboundPeeks(ctx context.Context, txn *sql.Tx, roomID string) (err error)
+	InsertOutboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string, renewalInterval int64) (err error)
+	RenewOutboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string, renewalInterval int64) (err error)
+	SelectOutboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string) (outboundPeek *types.OutboundPeek, err error)
+	SelectOutboundPeeks(ctx context.Context, txn *sql.Tx, frameID string) (outboundPeeks []types.OutboundPeek, err error)
+	DeleteOutboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string) (err error)
+	DeleteOutboundPeeks(ctx context.Context, txn *sql.Tx, frameID string) (err error)
 }
 
 type FederationInboundPeeks interface {
-	InsertInboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string, renewalInterval int64) (err error)
-	RenewInboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string, renewalInterval int64) (err error)
-	SelectInboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string) (inboundPeek *types.InboundPeek, err error)
-	SelectInboundPeeks(ctx context.Context, txn *sql.Tx, roomID string) (inboundPeeks []types.InboundPeek, err error)
-	DeleteInboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, roomID, peekID string) (err error)
-	DeleteInboundPeeks(ctx context.Context, txn *sql.Tx, roomID string) (err error)
+	InsertInboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string, renewalInterval int64) (err error)
+	RenewInboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string, renewalInterval int64) (err error)
+	SelectInboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string) (inboundPeek *types.InboundPeek, err error)
+	SelectInboundPeeks(ctx context.Context, txn *sql.Tx, frameID string) (inboundPeeks []types.InboundPeek, err error)
+	DeleteInboundPeek(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, frameID, peekID string) (err error)
+	DeleteInboundPeeks(ctx context.Context, txn *sql.Tx, frameID string) (err error)
 }
 
 // FederationNotaryServerKeysJSON contains the byte-for-byte responses from servers which contain their keys and is signed by them.

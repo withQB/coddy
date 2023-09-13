@@ -7,7 +7,7 @@ func defaultOverrideRules(userID string) []*Rule {
 		mRuleInviteForMeDefinition(userID),
 		&mRuleMemberEventDefinition,
 		&mRuleContainsDisplayNameDefinition,
-		&mRuleRoomNotifDefinition,
+		&mRuleFrameNotifDefinition,
 		&mRuleTombstoneDefinition,
 		&mRuleReactionDefinition,
 	}
@@ -20,9 +20,9 @@ const (
 	MRuleMemberEvent         = ".m.rule.member_event"
 	MRuleContainsDisplayName = ".m.rule.contains_display_name"
 	MRuleTombstone           = ".m.rule.tombstone"
-	MRuleRoomNotif           = ".m.rule.roomnotif"
+	MRuleFrameNotif           = ".m.rule.framenotif"
 	MRuleReaction            = ".m.rule.reaction"
-	MRuleRoomACLs            = ".m.rule.room.server_acl"
+	MRuleFrameACLs            = ".m.rule.frame.server_acl"
 )
 
 var (
@@ -53,7 +53,7 @@ var (
 			{
 				Kind:    EventMatchCondition,
 				Key:     "type",
-				Pattern: pointer("m.room.member"),
+				Pattern: pointer("m.frame.member"),
 			},
 		},
 		Actions: []*Action{{Kind: DontNotifyAction}},
@@ -84,7 +84,7 @@ var (
 			{
 				Kind:    EventMatchCondition,
 				Key:     "type",
-				Pattern: pointer("m.room.tombstone"),
+				Pattern: pointer("m.frame.tombstone"),
 			},
 			{
 				Kind:    EventMatchCondition,
@@ -101,14 +101,14 @@ var (
 		},
 	}
 	mRuleACLsDefinition = Rule{
-		RuleID:  MRuleRoomACLs,
+		RuleID:  MRuleFrameACLs,
 		Default: true,
 		Enabled: true,
 		Conditions: []*Condition{
 			{
 				Kind:    EventMatchCondition,
 				Key:     "type",
-				Pattern: pointer("m.room.server_acl"),
+				Pattern: pointer("m.frame.server_acl"),
 			},
 			{
 				Kind:    EventMatchCondition,
@@ -118,19 +118,19 @@ var (
 		},
 		Actions: []*Action{},
 	}
-	mRuleRoomNotifDefinition = Rule{
-		RuleID:  MRuleRoomNotif,
+	mRuleFrameNotifDefinition = Rule{
+		RuleID:  MRuleFrameNotif,
 		Default: true,
 		Enabled: true,
 		Conditions: []*Condition{
 			{
 				Kind:    EventMatchCondition,
 				Key:     "content.body",
-				Pattern: pointer("@room"),
+				Pattern: pointer("@frame"),
 			},
 			{
 				Kind: SenderNotificationPermissionCondition,
-				Key:  "room",
+				Key:  "frame",
 			},
 		},
 		Actions: []*Action{
@@ -167,7 +167,7 @@ func mRuleInviteForMeDefinition(userID string) *Rule {
 			{
 				Kind:    EventMatchCondition,
 				Key:     "type",
-				Pattern: pointer("m.room.member"),
+				Pattern: pointer("m.frame.member"),
 			},
 			{
 				Kind:    EventMatchCondition,

@@ -35,8 +35,8 @@ import (
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/caching"
 	"github.com/withqb/coddy/internal/sqlutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 )
 
@@ -44,16 +44,16 @@ type messagesReq struct {
 	ctx              context.Context
 	db               storage.Database
 	snapshot         storage.DatabaseTransaction
-	rsAPI            api.SyncRoomserverAPI
+	rsAPI            api.SyncDataframeAPI
 	cfg              *config.SyncAPI
-	roomID           string
+	frameID           string
 	from             *types.TopologyToken
 	to               *types.TopologyToken
 	device           *userapi.Device
 	deviceUserID     spec.UserID
 	wasToProvided    bool
 	backwardOrdering bool
-	filter           *synctypes.RoomEventFilter
+	filter           *synctypes.FrameEventFilter
 	didBackfill      bool
 }
 
@@ -67,11 +67,10 @@ type messagesResp struct {
 
 // OnIncomingMessagesRequest implements the /messages endpoint from the
 // client-server API.
-// See: https://matrix.org/docs/spec/client_server/latest.html#get-matrix-client-r0-rooms-roomid-messages
 // nolint:gocyclo
 func OnIncomingMessagesRequest(
-	req *http.Request, db storage.Database, roomID string, device *userapi.Device,
-	rsAPI api.SyncRoomserverAPI,
+	req *http.Request, db storage.Database, frameID string, device *userapi.Device,
+	rsAPI api.SyncDataframeAPI,
 	cfg *config.SyncAPI,
 	srp *sync.RequestPool,
 	lazyLoadCache caching.LazyLoadCache,
@@ -89,7 +88,7 @@ func OnIncomingMessagesRequest(
 
 	// NewDatabaseTransaction is used here instead of NewDatabaseSnapshot as we
 	// expect to be able to write to the database in response to a /messages
-	// request that requires backfilling from the roomserver or federation.
+	// request that requires backfilling from the dataframe or federation.
 	snapshot, err := db.NewDatabaseTransaction(req.Context())
 	if err != nil {
 		return xutil.JSONResponse{
@@ -100,29 +99,29 @@ func OnIncomingMessagesRequest(
 	var succeeded bool
 	defer sqlutil.EndTransactionWithCheck(snapshot, &succeeded, &err)
 
-	// check if the user has already forgotten about this room
-	membershipResp, err := getMembershipForUser(req.Context(), roomID, device.UserID, rsAPI)
+	// check if the user has already forgotten about this frame
+	membershipResp, err := getMembershipForUser(req.Context(), frameID, device.UserID, rsAPI)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
 	}
-	if !membershipResp.RoomExists {
+	if !membershipResp.FrameExists {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden("room does not exist"),
+			JSON: spec.Forbidden("frame does not exist"),
 		}
 	}
 
-	if membershipResp.IsRoomForgotten {
+	if membershipResp.IsFrameForgotten {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden("user already forgot about this room"),
+			JSON: spec.Forbidden("user already forgot about this frame"),
 		}
 	}
 
-	filter, err := parseRoomEventFilter(req)
+	filter, err := parseFrameEventFilter(req)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
@@ -165,7 +164,7 @@ func OnIncomingMessagesRequest(
 			}
 		} else {
 			fromStream = &streamToken
-			from, err = snapshot.StreamToTopologicalPosition(req.Context(), roomID, streamToken.PDUPosition, backwardOrdering)
+			from, err = snapshot.StreamToTopologicalPosition(req.Context(), frameID, streamToken.PDUPosition, backwardOrdering)
 			if err != nil {
 				logrus.WithError(err).Errorf("Failed to get topological position for streaming token %v", streamToken)
 				return xutil.JSONResponse{
@@ -190,7 +189,7 @@ func OnIncomingMessagesRequest(
 					JSON: spec.InvalidParam("Invalid to parameter: " + err.Error()),
 				}
 			} else {
-				to, err = snapshot.StreamToTopologicalPosition(req.Context(), roomID, streamToken.PDUPosition, !backwardOrdering)
+				to, err = snapshot.StreamToTopologicalPosition(req.Context(), frameID, streamToken.PDUPosition, !backwardOrdering)
 				if err != nil {
 					logrus.WithError(err).Errorf("Failed to get topological position for streaming token %v", streamToken)
 					return xutil.JSONResponse{
@@ -215,15 +214,15 @@ func OnIncomingMessagesRequest(
 
 	// TODO: Implement filtering (#587)
 
-	// Check the room ID's format.
-	if _, _, err = xtools.SplitID('!', roomID); err != nil {
+	// Check the frame ID's format.
+	if _, _, err = xtools.SplitID('!', frameID); err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.MissingParam("Bad room ID: " + err.Error()),
+			JSON: spec.MissingParam("Bad frame ID: " + err.Error()),
 		}
 	}
 
-	// If the user already left the room, grep events from before that
+	// If the user already left the frame, grep events from before that
 	if membershipResp.Membership == spec.Leave {
 		var token types.TopologyToken
 		token, err = snapshot.EventPositionInTopology(req.Context(), membershipResp.EventID)
@@ -243,7 +242,7 @@ func OnIncomingMessagesRequest(
 		snapshot:         snapshot,
 		rsAPI:            rsAPI,
 		cfg:              cfg,
-		roomID:           roomID,
+		frameID:           frameID,
 		from:             &from,
 		to:               &to,
 		wasToProvided:    wasToProvided,
@@ -284,7 +283,7 @@ func OnIncomingMessagesRequest(
 		End:   end.String(),
 	}
 	if filter.LazyLoadMembers {
-		membershipEvents, err := applyLazyLoadMembers(req.Context(), device, snapshot, roomID, clientEvents, lazyLoadCache)
+		membershipEvents, err := applyLazyLoadMembers(req.Context(), device, snapshot, frameID, clientEvents, lazyLoadCache)
 		if err != nil {
 			xutil.GetLogger(req.Context()).WithError(err).Error("failed to apply lazy loading")
 			return xutil.JSONResponse{
@@ -292,8 +291,8 @@ func OnIncomingMessagesRequest(
 				JSON: spec.InternalServerError{},
 			}
 		}
-		res.State = append(res.State, synctypes.ToClientEvents(xtools.ToPDUs(membershipEvents), synctypes.FormatAll, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return rsAPI.QueryUserIDForSender(req.Context(), roomID, senderID)
+		res.State = append(res.State, synctypes.ToClientEvents(xtools.ToPDUs(membershipEvents), synctypes.FormatAll, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return rsAPI.QueryUserIDForSender(req.Context(), frameID, senderID)
 		})...)
 	}
 
@@ -309,13 +308,13 @@ func OnIncomingMessagesRequest(
 	}
 }
 
-func getMembershipForUser(ctx context.Context, roomID, userID string, rsAPI api.SyncRoomserverAPI) (resp api.QueryMembershipForUserResponse, err error) {
+func getMembershipForUser(ctx context.Context, frameID, userID string, rsAPI api.SyncDataframeAPI) (resp api.QueryMembershipForUserResponse, err error) {
 	fullUserID, err := spec.NewUserID(userID, true)
 	if err != nil {
 		return resp, err
 	}
 	req := api.QueryMembershipForUserRequest{
-		RoomID: roomID,
+		FrameID: frameID,
 		UserID: *fullUserID,
 	}
 	if err := rsAPI.QueryMembershipForUser(ctx, &req, &resp); err != nil {
@@ -327,16 +326,16 @@ func getMembershipForUser(ctx context.Context, roomID, userID string, rsAPI api.
 
 // retrieveEvents retrieves events from the local database for a request on
 // /messages. If there's not enough events to retrieve, it asks another
-// homeserver in the room for older events.
+// homeserver in the frame for older events.
 // Returns an error if there was an issue talking to the database or with the
 // remote homeserver.
-func (r *messagesReq) retrieveEvents(ctx context.Context, rsAPI api.SyncRoomserverAPI) (
+func (r *messagesReq) retrieveEvents(ctx context.Context, rsAPI api.SyncDataframeAPI) (
 	clientEvents []synctypes.ClientEvent, start,
 	end types.TopologyToken, err error,
 ) {
 	emptyToken := types.TopologyToken{}
 	// Retrieve the events from the local database.
-	streamEvents, _, end, err := r.snapshot.GetEventsInTopologicalRange(r.ctx, r.from, r.to, r.roomID, r.filter, r.backwardOrdering)
+	streamEvents, _, end, err := r.snapshot.GetEventsInTopologicalRange(r.ctx, r.from, r.to, r.frameID, r.filter, r.backwardOrdering)
 	if err != nil {
 		err = fmt.Errorf("GetEventsInRange: %w", err)
 		return []synctypes.ClientEvent{}, *r.from, emptyToken, err
@@ -351,7 +350,7 @@ func (r *messagesReq) retrieveEvents(ctx context.Context, rsAPI api.SyncRoomserv
 	}).Infof("Fetched %d events locally", len(streamEvents))
 
 	// There can be two reasons for streamEvents to be empty: either we've
-	// reached the oldest event in the room (or the most recent one, depending
+	// reached the oldest event in the frame (or the most recent one, depending
 	// on the ordering), or we've reached a backward extremity.
 	if len(streamEvents) == 0 {
 		if events, err = r.handleEmptyEventsSlice(); err != nil {
@@ -368,7 +367,7 @@ func (r *messagesReq) retrieveEvents(ctx context.Context, rsAPI api.SyncRoomserv
 		return []synctypes.ClientEvent{}, *r.from, emptyToken, nil
 	}
 
-	// Apply room history visibility filter
+	// Apply frame history visibility filter
 	startTime := time.Now()
 	filteredEvents, err := internal.ApplyHistoryVisibilityFilter(r.ctx, r.snapshot, r.rsAPI, events, nil, r.deviceUserID, "messages")
 	if err != nil {
@@ -376,7 +375,7 @@ func (r *messagesReq) retrieveEvents(ctx context.Context, rsAPI api.SyncRoomserv
 	}
 	logrus.WithFields(logrus.Fields{
 		"duration":      time.Since(startTime),
-		"room_id":       r.roomID,
+		"frame_id":       r.frameID,
 		"events_before": len(events),
 		"events_after":  len(filteredEvents),
 	}).Debug("applied history visibility (messages)")
@@ -397,8 +396,8 @@ func (r *messagesReq) retrieveEvents(ctx context.Context, rsAPI api.SyncRoomserv
 
 	// Sort the events to ensure we send them in the right order.
 	if r.backwardOrdering {
-		if events[len(events)-1].Type() == spec.MRoomCreate {
-			// NOTSPEC: We've hit the beginning of the room so there's really nowhere
+		if events[len(events)-1].Type() == spec.MFrameCreate {
+			// NOTSPEC: We've hit the beginning of the frame so there's really nowhere
 			// else to go. This seems to fix Element iOS from looping on /messages endlessly.
 			end = types.TopologyToken{}
 		}
@@ -416,16 +415,16 @@ func (r *messagesReq) retrieveEvents(ctx context.Context, rsAPI api.SyncRoomserv
 
 	start = *r.from
 
-	return synctypes.ToClientEvents(xtools.ToPDUs(filteredEvents), synctypes.FormatAll, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-		return rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+	return synctypes.ToClientEvents(xtools.ToPDUs(filteredEvents), synctypes.FormatAll, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+		return rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 	}), start, end, nil
 }
 
 func (r *messagesReq) getStartEnd(events []*rstypes.HeaderedEvent) (start, end types.TopologyToken, err error) {
 	if r.backwardOrdering {
 		start = *r.from
-		if events[len(events)-1].Type() == spec.MRoomCreate {
-			// NOTSPEC: We've hit the beginning of the room so there's really nowhere
+		if events[len(events)-1].Type() == spec.MFrameCreate {
+			// NOTSPEC: We've hit the beginning of the frame so there's really nowhere
 			// else to go. This seems to fix Element iOS from looping on /messages endlessly.
 			end = types.TopologyToken{}
 		} else {
@@ -462,18 +461,18 @@ func (r *messagesReq) getStartEnd(events []*rstypes.HeaderedEvent) (start, end t
 func (r *messagesReq) handleEmptyEventsSlice() (
 	events []*rstypes.HeaderedEvent, err error,
 ) {
-	backwardExtremities, err := r.snapshot.BackwardExtremitiesForRoom(r.ctx, r.roomID)
+	backwardExtremities, err := r.snapshot.BackwardExtremitiesForFrame(r.ctx, r.frameID)
 
-	// Check if we have backward extremities for this room.
+	// Check if we have backward extremities for this frame.
 	if len(backwardExtremities) > 0 {
 		// If so, retrieve as much events as needed through backfilling.
-		events, err = r.backfill(r.roomID, backwardExtremities, r.filter.Limit)
+		events, err = r.backfill(r.frameID, backwardExtremities, r.filter.Limit)
 		if err != nil {
 			return
 		}
 		r.didBackfill = true
 	} else {
-		// If not, it means the slice was empty because we reached the room's
+		// If not, it means the slice was empty because we reached the frame's
 		// creation, so return an empty slice.
 		events = []*rstypes.HeaderedEvent{}
 	}
@@ -507,7 +506,7 @@ func (r *messagesReq) handleNonEmptyEventsSlice(streamEvents []types.StreamEvent
 	}
 
 	// Check if the slice contains a backward extremity.
-	backwardExtremities, err := r.snapshot.BackwardExtremitiesForRoom(r.ctx, r.roomID)
+	backwardExtremities, err := r.snapshot.BackwardExtremitiesForFrame(r.ctx, r.frameID)
 	if err != nil {
 		return
 	}
@@ -517,7 +516,7 @@ func (r *messagesReq) handleNonEmptyEventsSlice(streamEvents []types.StreamEvent
 	if len(backwardExtremities) > 0 && !isSetLargeEnough && r.backwardOrdering {
 		var pdus []*rstypes.HeaderedEvent
 		// Only ask the remote server for enough events to reach the limit.
-		pdus, err = r.backfill(r.roomID, backwardExtremities, r.filter.Limit-len(streamEvents))
+		pdus, err = r.backfill(r.frameID, backwardExtremities, r.filter.Limit-len(streamEvents))
 		if err != nil {
 			return
 		}
@@ -546,18 +545,17 @@ func (e eventsByDepth) Less(i, j int) bool {
 }
 
 // backfill performs a backfill request over the federation on another
-// homeserver in the room.
-// See: https://matrix.org/docs/spec/server_server/latest#get-matrix-federation-v1-backfill-roomid
+// homeserver in the frame.
 // It also stores the PDUs retrieved from the remote homeserver's response to
 // the database.
 // Returns with an empty string if the remote homeserver didn't return with any
 // event, or if there is no remote homeserver to contact.
 // Returns an error if there was an issue with retrieving the list of servers in
-// the room or sending the request.
-func (r *messagesReq) backfill(roomID string, backwardsExtremities map[string][]string, limit int) ([]*rstypes.HeaderedEvent, error) {
+// the frame or sending the request.
+func (r *messagesReq) backfill(frameID string, backwardsExtremities map[string][]string, limit int) ([]*rstypes.HeaderedEvent, error) {
 	var res api.PerformBackfillResponse
 	err := r.rsAPI.PerformBackfill(context.Background(), &api.PerformBackfillRequest{
-		RoomID:               roomID,
+		FrameID:               frameID,
 		BackwardsExtremities: backwardsExtremities,
 		Limit:                limit,
 		ServerName:           r.cfg.Matrix.ServerName,
@@ -568,8 +566,8 @@ func (r *messagesReq) backfill(roomID string, backwardsExtremities map[string][]
 	}
 	xutil.GetLogger(r.ctx).WithField("new_events", len(res.Events)).Info("Storing new events from backfill")
 
-	// TODO: we should only be inserting events into the database from the roomserver's kafka output stream.
-	// Currently, this can race with live events for the room and cause problems. It's also just a bit unclear
+	// TODO: we should only be inserting events into the database from the dataframe's kafka output stream.
+	// Currently, this can race with live events for the frame and cause problems. It's also just a bit unclear
 	// when you have multiple entry points to write events.
 
 	// we have to order these by depth, starting with the lowest because otherwise the topology tokens

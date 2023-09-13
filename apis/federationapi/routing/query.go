@@ -20,8 +20,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	federationAPI "github.com/withqb/coddy/apis/federationapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xcore"
 	"github.com/withqb/xtools"
@@ -30,50 +30,50 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// RoomAliasToID converts the queried alias into a room ID and returns it
-func RoomAliasToID(
+// FrameAliasToID converts the queried alias into a frame ID and returns it
+func FrameAliasToID(
 	httpReq *http.Request,
 	federation fclient.FederationClient,
 	cfg *config.FederationAPI,
-	rsAPI roomserverAPI.FederationRoomserverAPI,
+	rsAPI dataframeAPI.FederationDataframeAPI,
 	senderAPI federationAPI.FederationInternalAPI,
 ) xutil.JSONResponse {
-	roomAlias := httpReq.FormValue("room_alias")
-	if roomAlias == "" {
+	frameAlias := httpReq.FormValue("frame_alias")
+	if frameAlias == "" {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON("Must supply room alias parameter."),
+			JSON: spec.BadJSON("Must supply frame alias parameter."),
 		}
 	}
-	_, domain, err := xtools.SplitID('#', roomAlias)
+	_, domain, err := xtools.SplitID('#', frameAlias)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.BadJSON("Room alias must be in the form '#localpart:domain'"),
+			JSON: spec.BadJSON("Frame alias must be in the form '#localpart:domain'"),
 		}
 	}
 
 	var resp fclient.RespDirectory
 
 	if domain == cfg.Matrix.ServerName {
-		queryReq := &roomserverAPI.GetRoomIDForAliasRequest{
-			Alias:              roomAlias,
+		queryReq := &dataframeAPI.GetFrameIDForAliasRequest{
+			Alias:              frameAlias,
 			IncludeAppservices: true,
 		}
-		queryRes := &roomserverAPI.GetRoomIDForAliasResponse{}
-		if err = rsAPI.GetRoomIDForAlias(httpReq.Context(), queryReq, queryRes); err != nil {
-			xutil.GetLogger(httpReq.Context()).WithError(err).Error("aliasAPI.GetRoomIDForAlias failed")
+		queryRes := &dataframeAPI.GetFrameIDForAliasResponse{}
+		if err = rsAPI.GetFrameIDForAlias(httpReq.Context(), queryReq, queryRes); err != nil {
+			xutil.GetLogger(httpReq.Context()).WithError(err).Error("aliasAPI.GetFrameIDForAlias failed")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.InternalServerError{},
 			}
 		}
 
-		if queryRes.RoomID != "" {
-			serverQueryReq := federationAPI.QueryJoinedHostServerNamesInRoomRequest{RoomID: queryRes.RoomID}
-			var serverQueryRes federationAPI.QueryJoinedHostServerNamesInRoomResponse
-			if err = senderAPI.QueryJoinedHostServerNamesInRoom(httpReq.Context(), &serverQueryReq, &serverQueryRes); err != nil {
-				xutil.GetLogger(httpReq.Context()).WithError(err).Error("senderAPI.QueryJoinedHostServerNamesInRoom failed")
+		if queryRes.FrameID != "" {
+			serverQueryReq := federationAPI.QueryJoinedHostServerNamesInFrameRequest{FrameID: queryRes.FrameID}
+			var serverQueryRes federationAPI.QueryJoinedHostServerNamesInFrameResponse
+			if err = senderAPI.QueryJoinedHostServerNamesInFrame(httpReq.Context(), &serverQueryReq, &serverQueryRes); err != nil {
+				xutil.GetLogger(httpReq.Context()).WithError(err).Error("senderAPI.QueryJoinedHostServerNamesInFrame failed")
 				return xutil.JSONResponse{
 					Code: http.StatusInternalServerError,
 					JSON: spec.InternalServerError{},
@@ -81,31 +81,31 @@ func RoomAliasToID(
 			}
 
 			resp = fclient.RespDirectory{
-				RoomID:  queryRes.RoomID,
+				FrameID:  queryRes.FrameID,
 				Servers: serverQueryRes.ServerNames,
 			}
 		} else {
 			// If no alias was found, return an error
 			return xutil.JSONResponse{
 				Code: http.StatusNotFound,
-				JSON: spec.NotFound(fmt.Sprintf("Room alias %s not found", roomAlias)),
+				JSON: spec.NotFound(fmt.Sprintf("Frame alias %s not found", frameAlias)),
 			}
 		}
 	} else {
-		resp, err = federation.LookupRoomAlias(httpReq.Context(), domain, cfg.Matrix.ServerName, roomAlias)
+		resp, err = federation.LookupFrameAlias(httpReq.Context(), domain, cfg.Matrix.ServerName, frameAlias)
 		if err != nil {
 			switch x := err.(type) {
 			case xcore.HTTPError:
 				if x.Code == http.StatusNotFound {
 					return xutil.JSONResponse{
 						Code: http.StatusNotFound,
-						JSON: spec.NotFound("Room alias not found"),
+						JSON: spec.NotFound("Frame alias not found"),
 					}
 				}
 			}
 			// TODO: Return 502 if the remote server errored.
 			// TODO: Return 504 if the remote server timed out.
-			xutil.GetLogger(httpReq.Context()).WithError(err).Error("federation.LookupRoomAlias failed")
+			xutil.GetLogger(httpReq.Context()).WithError(err).Error("federation.LookupFrameAlias failed")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.InternalServerError{},
@@ -119,18 +119,18 @@ func RoomAliasToID(
 	}
 }
 
-// Query the immediate children of a room/space
+// Query the immediate children of a frame/space
 //
-// Implements /_matrix/federation/v1/hierarchy/{roomID}
-func QueryRoomHierarchy(httpReq *http.Request, request *fclient.FederationRequest, roomIDStr string, rsAPI roomserverAPI.FederationRoomserverAPI) xutil.JSONResponse {
-	parsedRoomID, err := spec.NewRoomID(roomIDStr)
+// Implements /_coddy/federation/v1/hierarchy/{frameID}
+func QueryFrameHierarchy(httpReq *http.Request, request *fclient.FederationRequest, frameIDStr string, rsAPI dataframeAPI.FederationDataframeAPI) xutil.JSONResponse {
+	parsedFrameID, err := spec.NewFrameID(frameIDStr)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusNotFound,
-			JSON: spec.InvalidParam("room is unknown/forbidden"),
+			JSON: spec.InvalidParam("frame is unknown/forbidden"),
 		}
 	}
-	roomID := *parsedRoomID
+	frameID := *parsedFrameID
 
 	suggestedOnly := false // Defaults to false (spec-defined)
 	switch httpReq.URL.Query().Get("suggested_only") {
@@ -145,19 +145,19 @@ func QueryRoomHierarchy(httpReq *http.Request, request *fclient.FederationReques
 		}
 	}
 
-	walker := roomserverAPI.NewRoomHierarchyWalker(types.NewServerNameNotDevice(request.Origin()), roomID, suggestedOnly, 1)
-	discoveredRooms, _, err := rsAPI.QueryNextRoomHierarchyPage(httpReq.Context(), walker, -1)
+	walker := dataframeAPI.NewFrameHierarchyWalker(types.NewServerNameNotDevice(request.Origin()), frameID, suggestedOnly, 1)
+	discoveredFrames, _, err := rsAPI.QueryNextFrameHierarchyPage(httpReq.Context(), walker, -1)
 
 	if err != nil {
 		switch err.(type) {
-		case roomserverAPI.ErrRoomUnknownOrNotAllowed:
-			xutil.GetLogger(httpReq.Context()).WithError(err).Debugln("room unknown/forbidden when handling SS room hierarchy request")
+		case dataframeAPI.ErrFrameUnknownOrNotAllowed:
+			xutil.GetLogger(httpReq.Context()).WithError(err).Debugln("frame unknown/forbidden when handling SS frame hierarchy request")
 			return xutil.JSONResponse{
 				Code: http.StatusNotFound,
-				JSON: spec.NotFound("room is unknown/forbidden"),
+				JSON: spec.NotFound("frame is unknown/forbidden"),
 			}
 		default:
-			log.WithError(err).Errorf("failed to fetch next page of room hierarchy (SS API)")
+			log.WithError(err).Errorf("failed to fetch next page of frame hierarchy (SS API)")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.Unknown("internal server error"),
@@ -165,18 +165,18 @@ func QueryRoomHierarchy(httpReq *http.Request, request *fclient.FederationReques
 		}
 	}
 
-	if len(discoveredRooms) == 0 {
-		xutil.GetLogger(httpReq.Context()).Debugln("no rooms found when handling SS room hierarchy request")
+	if len(discoveredFrames) == 0 {
+		xutil.GetLogger(httpReq.Context()).Debugln("no frames found when handling SS frame hierarchy request")
 		return xutil.JSONResponse{
 			Code: 404,
-			JSON: spec.NotFound("room is unknown/forbidden"),
+			JSON: spec.NotFound("frame is unknown/forbidden"),
 		}
 	}
 	return xutil.JSONResponse{
 		Code: 200,
-		JSON: fclient.RoomHierarchyResponse{
-			Room:     discoveredRooms[0],
-			Children: discoveredRooms[1:],
+		JSON: fclient.FrameHierarchyResponse{
+			Frame:     discoveredFrames[0],
+			Children: discoveredFrames[1:],
 		},
 	}
 }

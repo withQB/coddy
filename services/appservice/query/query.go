@@ -32,7 +32,7 @@ import (
 	"github.com/withqb/coddy/setup/config"
 )
 
-const roomAliasExistsPath = "/rooms/"
+const frameAliasExistsPath = "/frames/"
 const userIDExistsPath = "/users/"
 
 // AppServiceQueryAPI is an implementation of api.AppServiceQueryAPI
@@ -42,21 +42,21 @@ type AppServiceQueryAPI struct {
 	CacheMu       sync.Mutex
 }
 
-// RoomAliasExists performs a request to '/room/{roomAlias}' on all known
-// handling application services until one admits to owning the room
-func (a *AppServiceQueryAPI) RoomAliasExists(
+// FrameAliasExists performs a request to '/frame/{frameAlias}' on all known
+// handling application services until one admits to owning the frame
+func (a *AppServiceQueryAPI) FrameAliasExists(
 	ctx context.Context,
-	request *api.RoomAliasExistsRequest,
-	response *api.RoomAliasExistsResponse,
+	request *api.FrameAliasExistsRequest,
+	response *api.FrameAliasExistsResponse,
 ) error {
-	trace, ctx := internal.StartRegion(ctx, "ApplicationServiceRoomAlias")
+	trace, ctx := internal.StartRegion(ctx, "ApplicationServiceFrameAlias")
 	defer trace.EndRegion()
 
 	// Determine which application service should handle this request
 	for _, appservice := range a.Cfg.Derived.ApplicationServices {
-		if appservice.URL != "" && appservice.IsInterestedInRoomAlias(request.Alias) {
-			// The full path to the rooms API, includes hs token
-			URL, err := url.Parse(appservice.RequestUrl() + roomAliasExistsPath)
+		if appservice.URL != "" && appservice.IsInterestedInFrameAlias(request.Alias) {
+			// The full path to the frames API, includes hs token
+			URL, err := url.Parse(appservice.RequestUrl() + frameAliasExistsPath)
 			if err != nil {
 				return err
 			}
@@ -65,7 +65,7 @@ func (a *AppServiceQueryAPI) RoomAliasExists(
 			apiURL := URL.String() + "?access_token=" + appservice.HSToken
 
 			// Send a request to each application service. If one responds that it has
-			// created the room, immediately return.
+			// created the frame, immediately return.
 			req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 			if err != nil {
 				return err
@@ -85,16 +85,16 @@ func (a *AppServiceQueryAPI) RoomAliasExists(
 				}()
 			}
 			if err != nil {
-				log.WithError(err).Errorf("Issue querying room alias on application service %s", appservice.ID)
+				log.WithError(err).Errorf("Issue querying frame alias on application service %s", appservice.ID)
 				return err
 			}
 			switch resp.StatusCode {
 			case http.StatusOK:
-				// OK received from appservice. Room exists
+				// OK received from appservice. Frame exists
 				response.AliasExists = true
 				return nil
 			case http.StatusNotFound:
-				// Room does not exist
+				// Frame does not exist
 			default:
 				// Application service reported an error. Warn
 				log.WithFields(log.Fields{
@@ -122,7 +122,7 @@ func (a *AppServiceQueryAPI) UserIDExists(
 	// Determine which application service should handle this request
 	for _, appservice := range a.Cfg.Derived.ApplicationServices {
 		if appservice.URL != "" && appservice.IsInterestedInUserID(request.UserID) {
-			// The full path to the rooms API, includes hs token
+			// The full path to the frames API, includes hs token
 			URL, err := url.Parse(appservice.RequestUrl() + userIDExistsPath)
 			if err != nil {
 				return err

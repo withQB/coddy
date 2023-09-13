@@ -24,14 +24,14 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/types"
 	"github.com/withqb/coddy/internal"
 	"github.com/withqb/coddy/internal/sqlutil"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 )
 
 const inviteEventsSchema = `
 CREATE TABLE IF NOT EXISTS syncapi_invite_events (
 	id INTEGER PRIMARY KEY,
 	event_id TEXT NOT NULL,
-	room_id TEXT NOT NULL,
+	frame_id TEXT NOT NULL,
 	target_user_id TEXT NOT NULL,
 	headered_event_json TEXT NOT NULL,
 	deleted BOOL NOT NULL
@@ -43,14 +43,14 @@ CREATE INDEX IF NOT EXISTS syncapi_invites_event_id_idx ON syncapi_invite_events
 
 const insertInviteEventSQL = "" +
 	"INSERT INTO syncapi_invite_events" +
-	" (id, room_id, event_id, target_user_id, headered_event_json, deleted)" +
+	" (id, frame_id, event_id, target_user_id, headered_event_json, deleted)" +
 	" VALUES ($1, $2, $3, $4, $5, false)"
 
 const deleteInviteEventSQL = "" +
 	"UPDATE syncapi_invite_events SET deleted=true, id=$1 WHERE event_id = $2 AND deleted=false"
 
 const selectInviteEventsInRangeSQL = "" +
-	"SELECT id, room_id, headered_event_json, deleted FROM syncapi_invite_events" +
+	"SELECT id, frame_id, headered_event_json, deleted FROM syncapi_invite_events" +
 	" WHERE target_user_id = $1 AND id > $2 AND id <= $3" +
 	" ORDER BY id DESC"
 
@@ -58,7 +58,7 @@ const selectMaxInviteIDSQL = "" +
 	"SELECT MAX(id) FROM syncapi_invite_events"
 
 const purgeInvitesSQL = "" +
-	"DELETE FROM syncapi_invite_events WHERE room_id = $1"
+	"DELETE FROM syncapi_invite_events WHERE frame_id = $1"
 
 type inviteEventsStatements struct {
 	db                            *sql.DB
@@ -106,7 +106,7 @@ func (s *inviteEventsStatements) InsertInviteEvent(
 	_, err = stmt.ExecContext(
 		ctx,
 		streamPos,
-		inviteEvent.RoomID(),
+		inviteEvent.FrameID(),
 		inviteEvent.EventID(),
 		inviteEvent.UserID.String(),
 		headeredJSON,
@@ -126,7 +126,7 @@ func (s *inviteEventsStatements) DeleteInviteEvent(
 	return streamPos, err
 }
 
-// selectInviteEventsInRange returns a map of room ID to invite event for the
+// selectInviteEventsInRange returns a map of frame ID to invite event for the
 // active invites for the target user ID in the supplied range.
 func (s *inviteEventsStatements) SelectInviteEventsInRange(
 	ctx context.Context, txn *sql.Tx, targetUserID string, r types.Range,
@@ -143,21 +143,21 @@ func (s *inviteEventsStatements) SelectInviteEventsInRange(
 	for rows.Next() {
 		var (
 			id        types.StreamPosition
-			roomID    string
+			frameID    string
 			eventJSON []byte
 			deleted   bool
 		)
-		if err = rows.Scan(&id, &roomID, &eventJSON, &deleted); err != nil {
+		if err = rows.Scan(&id, &frameID, &eventJSON, &deleted); err != nil {
 			return nil, nil, lastPos, err
 		}
 		if id > lastPos {
 			lastPos = id
 		}
 
-		// if we have seen this room before, it has a higher stream position and hence takes priority
+		// if we have seen this frame before, it has a higher stream position and hence takes priority
 		// because the query is ORDER BY id DESC so drop them
-		_, isRetired := retired[roomID]
-		_, isInvited := result[roomID]
+		_, isRetired := retired[frameID]
+		_, isInvited := result[frameID]
 		if isRetired || isInvited {
 			continue
 		}
@@ -168,9 +168,9 @@ func (s *inviteEventsStatements) SelectInviteEventsInRange(
 		}
 
 		if deleted {
-			retired[roomID] = event
+			retired[frameID] = event
 		} else {
-			result[roomID] = event
+			result[frameID] = event
 		}
 	}
 	if lastPos == 0 {
@@ -192,8 +192,8 @@ func (s *inviteEventsStatements) SelectMaxInviteID(
 }
 
 func (s *inviteEventsStatements) PurgeInvites(
-	ctx context.Context, txn *sql.Tx, roomID string,
+	ctx context.Context, txn *sql.Tx, frameID string,
 ) error {
-	_, err := sqlutil.TxStmt(txn, s.purgeInvitesStmt).ExecContext(ctx, roomID)
+	_, err := sqlutil.TxStmt(txn, s.purgeInvitesStmt).ExecContext(ctx, frameID)
 	return err
 }

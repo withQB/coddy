@@ -10,16 +10,16 @@ import (
 	"github.com/withqb/coddy/apis/clientapi/producers"
 	"github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/eventutil"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/xtools/spec"
 
 	"github.com/withqb/xutil"
 )
 
-// GetAccountData implements GET /user/{userId}/[rooms/{roomid}/]account_data/{type}
+// GetAccountData implements GET /user/{userId}/[frames/{frameid}/]account_data/{type}
 func GetAccountData(
 	req *http.Request, userAPI api.ClientUserAPI, device *api.Device,
-	userID string, roomID string, dataType string,
+	userID string, frameID string, dataType string,
 ) xutil.JSONResponse {
 	if userID != device.UserID {
 		return xutil.JSONResponse{
@@ -31,7 +31,7 @@ func GetAccountData(
 	dataReq := api.QueryAccountDataRequest{
 		UserID:   userID,
 		DataType: dataType,
-		RoomID:   roomID,
+		FrameID:   frameID,
 	}
 	dataRes := api.QueryAccountDataResponse{}
 	if err := userAPI.QueryAccountData(req.Context(), &dataReq, &dataRes); err != nil {
@@ -41,8 +41,8 @@ func GetAccountData(
 
 	var data json.RawMessage
 	var ok bool
-	if roomID != "" {
-		data, ok = dataRes.RoomAccountData[roomID][dataType]
+	if frameID != "" {
+		data, ok = dataRes.FrameAccountData[frameID][dataType]
 	} else {
 		data, ok = dataRes.GlobalAccountData[dataType]
 	}
@@ -59,10 +59,10 @@ func GetAccountData(
 	}
 }
 
-// SaveAccountData implements PUT /user/{userId}/[rooms/{roomId}/]account_data/{type}
+// SaveAccountData implements PUT /user/{userId}/[frames/{frameId}/]account_data/{type}
 func SaveAccountData(
 	req *http.Request, userAPI api.ClientUserAPI, device *api.Device,
-	userID string, roomID string, dataType string, syncProducer *producers.SyncAPIProducer,
+	userID string, frameID string, dataType string, syncProducer *producers.SyncAPIProducer,
 ) xutil.JSONResponse {
 	if userID != device.UserID {
 		return xutil.JSONResponse{
@@ -106,7 +106,7 @@ func SaveAccountData(
 	dataReq := api.InputAccountDataRequest{
 		UserID:      userID,
 		DataType:    dataType,
-		RoomID:      roomID,
+		FrameID:      frameID,
 		AccountData: json.RawMessage(body),
 	}
 	dataRes := api.InputAccountDataResponse{}
@@ -125,11 +125,11 @@ type fullyReadEvent struct {
 	EventID string `json:"event_id"`
 }
 
-// SaveReadMarker implements POST /rooms/{roomId}/read_markers
+// SaveReadMarker implements POST /frames/{frameId}/read_markers
 func SaveReadMarker(
 	req *http.Request,
-	userAPI api.ClientUserAPI, rsAPI roomserverAPI.ClientRoomserverAPI,
-	syncProducer *producers.SyncAPIProducer, device *api.Device, roomID string,
+	userAPI api.ClientUserAPI, rsAPI dataframeAPI.ClientDataframeAPI,
+	syncProducer *producers.SyncAPIProducer, device *api.Device, frameID string,
 ) xutil.JSONResponse {
 	deviceUserID, err := spec.NewUserID(device.UserID, true)
 	if err != nil {
@@ -139,8 +139,8 @@ func SaveReadMarker(
 		}
 	}
 
-	// Verify that the user is a member of this room
-	resErr := checkMemberInRoom(req.Context(), rsAPI, *deviceUserID, roomID)
+	// Verify that the user is a member of this frame
+	resErr := checkMemberInFrame(req.Context(), rsAPI, *deviceUserID, frameID)
 	if resErr != nil {
 		return *resErr
 	}
@@ -163,7 +163,7 @@ func SaveReadMarker(
 		dataReq := api.InputAccountDataRequest{
 			UserID:      device.UserID,
 			DataType:    "m.fully_read",
-			RoomID:      roomID,
+			FrameID:      frameID,
 			AccountData: data,
 		}
 		dataRes := api.InputAccountDataResponse{}
@@ -175,10 +175,10 @@ func SaveReadMarker(
 
 	// Handle the read receipts that may be included in the read marker.
 	if r.Read != "" {
-		return SetReceipt(req, userAPI, syncProducer, device, roomID, "m.read", r.Read)
+		return SetReceipt(req, userAPI, syncProducer, device, frameID, "m.read", r.Read)
 	}
 	if r.ReadPrivate != "" {
-		return SetReceipt(req, userAPI, syncProducer, device, roomID, "m.read.private", r.ReadPrivate)
+		return SetReceipt(req, userAPI, syncProducer, device, frameID, "m.read.private", r.ReadPrivate)
 	}
 
 	return xutil.JSONResponse{

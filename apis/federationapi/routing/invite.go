@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
@@ -16,14 +16,14 @@ import (
 	"github.com/withqb/xutil"
 )
 
-// InviteV3 implements /_matrix/federation/v2/invite/{roomID}/{userID}
+// InviteV3 implements /_coddy/federation/v2/invite/{frameID}/{userID}
 func InviteV3(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
-	roomID spec.RoomID,
+	frameID spec.FrameID,
 	invitedUser spec.UserID,
 	cfg *config.FederationAPI,
-	rsAPI api.FederationRoomserverAPI,
+	rsAPI api.FederationDataframeAPI,
 	keys xtools.JSONVerifier,
 ) xutil.JSONResponse {
 	inviteReq := fclient.InviteV3Request{}
@@ -43,29 +43,29 @@ func InviteV3(
 
 	input := xtools.HandleInviteV3Input{
 		HandleInviteInput: xtools.HandleInviteInput{
-			RoomVersion:       inviteReq.RoomVersion(),
-			RoomID:            roomID,
+			FrameVersion:       inviteReq.FrameVersion(),
+			FrameID:            frameID,
 			InvitedUser:       invitedUser,
 			KeyID:             cfg.Matrix.KeyID,
 			PrivateKey:        cfg.Matrix.PrivateKey,
 			Verifier:          keys,
-			RoomQuerier:       rsAPI,
-			MembershipQuerier: &api.MembershipQuerier{Roomserver: rsAPI},
+			FrameQuerier:       rsAPI,
+			MembershipQuerier: &api.MembershipQuerier{Dataframe: rsAPI},
 			StateQuerier:      rsAPI.StateQuerier(),
 			InviteEvent:       nil,
-			StrippedState:     inviteReq.InviteRoomState(),
-			UserIDQuerier: func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-				return rsAPI.QueryUserIDForSender(httpReq.Context(), roomID, senderID)
+			StrippedState:     inviteReq.InviteFrameState(),
+			UserIDQuerier: func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+				return rsAPI.QueryUserIDForSender(httpReq.Context(), frameID, senderID)
 			},
 		},
 		InviteProtoEvent: inviteReq.Event(),
-		GetOrCreateSenderID: func(ctx context.Context, userID spec.UserID, roomID spec.RoomID, roomVersion string) (spec.SenderID, ed25519.PrivateKey, error) {
-			// assign a roomNID, otherwise we can't create a private key for the user
-			_, nidErr := rsAPI.AssignRoomNID(ctx, roomID, xtools.RoomVersion(roomVersion))
+		GetOrCreateSenderID: func(ctx context.Context, userID spec.UserID, frameID spec.FrameID, frameVersion string) (spec.SenderID, ed25519.PrivateKey, error) {
+			// assign a frameNID, otherwise we can't create a private key for the user
+			_, nidErr := rsAPI.AssignFrameNID(ctx, frameID, xtools.FrameVersion(frameVersion))
 			if nidErr != nil {
 				return "", nil, nidErr
 			}
-			key, keyErr := rsAPI.GetOrCreateUserRoomPrivateKey(ctx, userID, roomID)
+			key, keyErr := rsAPI.GetOrCreateUserFramePrivateKey(ctx, userID, frameID)
 			if keyErr != nil {
 				return "", nil, keyErr
 			}
@@ -83,24 +83,24 @@ func InviteV3(
 	}
 }
 
-// InviteV2 implements /_matrix/federation/v2/invite/{roomID}/{eventID}
+// InviteV2 implements /_coddy/federation/v2/invite/{frameID}/{eventID}
 func InviteV2(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
-	roomID spec.RoomID,
+	frameID spec.FrameID,
 	eventID string,
 	cfg *config.FederationAPI,
-	rsAPI api.FederationRoomserverAPI,
+	rsAPI api.FederationDataframeAPI,
 	keys xtools.JSONVerifier,
 ) xutil.JSONResponse {
 	inviteReq := fclient.InviteV2Request{}
 	err := json.Unmarshal(request.Content(), &inviteReq)
 	switch e := err.(type) {
-	case xtools.UnsupportedRoomVersionError:
+	case xtools.UnsupportedFrameVersionError:
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.UnsupportedRoomVersion(
-				fmt.Sprintf("Room version %q is not supported by this server.", e.Version),
+			JSON: spec.UnsupportedFrameVersion(
+				fmt.Sprintf("Frame version %q is not supported by this server.", e.Version),
 			),
 		}
 	case xtools.BadJSONError:
@@ -138,19 +138,19 @@ func InviteV2(
 		}
 
 		input := xtools.HandleInviteInput{
-			RoomVersion:       inviteReq.RoomVersion(),
-			RoomID:            roomID,
+			FrameVersion:       inviteReq.FrameVersion(),
+			FrameID:            frameID,
 			InvitedUser:       *invitedUser,
 			KeyID:             cfg.Matrix.KeyID,
 			PrivateKey:        cfg.Matrix.PrivateKey,
 			Verifier:          keys,
-			RoomQuerier:       rsAPI,
-			MembershipQuerier: &api.MembershipQuerier{Roomserver: rsAPI},
+			FrameQuerier:       rsAPI,
+			MembershipQuerier: &api.MembershipQuerier{Dataframe: rsAPI},
 			StateQuerier:      rsAPI.StateQuerier(),
 			InviteEvent:       inviteReq.Event(),
-			StrippedState:     inviteReq.InviteRoomState(),
-			UserIDQuerier: func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-				return rsAPI.QueryUserIDForSender(httpReq.Context(), roomID, senderID)
+			StrippedState:     inviteReq.InviteFrameState(),
+			UserIDQuerier: func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+				return rsAPI.QueryUserIDForSender(httpReq.Context(), frameID, senderID)
 			},
 		}
 		event, jsonErr := handleInvite(httpReq.Context(), input, rsAPI)
@@ -169,20 +169,20 @@ func InviteV2(
 	}
 }
 
-// InviteV1 implements /_matrix/federation/v1/invite/{roomID}/{eventID}
+// InviteV1 implements /_coddy/federation/v1/invite/{frameID}/{eventID}
 func InviteV1(
 	httpReq *http.Request,
 	request *fclient.FederationRequest,
-	roomID spec.RoomID,
+	frameID spec.FrameID,
 	eventID string,
 	cfg *config.FederationAPI,
-	rsAPI api.FederationRoomserverAPI,
+	rsAPI api.FederationDataframeAPI,
 	keys xtools.JSONVerifier,
 ) xutil.JSONResponse {
-	roomVer := xtools.RoomVersionV1
+	frameVer := xtools.FrameVersionV1
 	body := request.Content()
-	// roomVer is hardcoded to v1 so we know we won't panic on Must
-	event, err := xtools.MustGetRoomVersion(roomVer).NewEventFromTrustedJSON(body, false)
+	// frameVer is hardcoded to v1 so we know we won't panic on Must
+	event, err := xtools.MustGetFrameVersion(frameVer).NewEventFromTrustedJSON(body, false)
 	switch err.(type) {
 	case xtools.BadJSONError:
 		return xutil.JSONResponse{
@@ -231,19 +231,19 @@ func InviteV1(
 	}
 
 	input := xtools.HandleInviteInput{
-		RoomVersion:       roomVer,
-		RoomID:            roomID,
+		FrameVersion:       frameVer,
+		FrameID:            frameID,
 		InvitedUser:       *invitedUser,
 		KeyID:             cfg.Matrix.KeyID,
 		PrivateKey:        cfg.Matrix.PrivateKey,
 		Verifier:          keys,
-		RoomQuerier:       rsAPI,
-		MembershipQuerier: &api.MembershipQuerier{Roomserver: rsAPI},
+		FrameQuerier:       rsAPI,
+		MembershipQuerier: &api.MembershipQuerier{Dataframe: rsAPI},
 		StateQuerier:      rsAPI.StateQuerier(),
 		InviteEvent:       event,
 		StrippedState:     strippedState,
-		UserIDQuerier: func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return rsAPI.QueryUserIDForSender(httpReq.Context(), roomID, senderID)
+		UserIDQuerier: func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return rsAPI.QueryUserIDForSender(httpReq.Context(), frameID, senderID)
 		},
 	}
 	event, jsonErr := handleInvite(httpReq.Context(), input, rsAPI)
@@ -256,17 +256,17 @@ func InviteV1(
 	}
 }
 
-func handleInvite(ctx context.Context, input xtools.HandleInviteInput, rsAPI api.FederationRoomserverAPI) (xtools.PDU, *xutil.JSONResponse) {
+func handleInvite(ctx context.Context, input xtools.HandleInviteInput, rsAPI api.FederationDataframeAPI) (xtools.PDU, *xutil.JSONResponse) {
 	inviteEvent, err := xtools.HandleInvite(ctx, input)
 	return handleInviteResult(ctx, inviteEvent, err, rsAPI)
 }
 
-func handleInviteV3(ctx context.Context, input xtools.HandleInviteV3Input, rsAPI api.FederationRoomserverAPI) (xtools.PDU, *xutil.JSONResponse) {
+func handleInviteV3(ctx context.Context, input xtools.HandleInviteV3Input, rsAPI api.FederationDataframeAPI) (xtools.PDU, *xutil.JSONResponse) {
 	inviteEvent, err := xtools.HandleInviteV3(ctx, input)
 	return handleInviteResult(ctx, inviteEvent, err, rsAPI)
 }
 
-func handleInviteResult(ctx context.Context, inviteEvent xtools.PDU, err error, rsAPI api.FederationRoomserverAPI) (xtools.PDU, *xutil.JSONResponse) {
+func handleInviteResult(ctx context.Context, inviteEvent xtools.PDU, err error, rsAPI api.FederationDataframeAPI) (xtools.PDU, *xutil.JSONResponse) {
 	switch e := err.(type) {
 	case nil:
 	case spec.InternalServerError:
@@ -275,13 +275,13 @@ func handleInviteResult(ctx context.Context, inviteEvent xtools.PDU, err error, 
 			Code: http.StatusInternalServerError,
 			JSON: spec.InternalServerError{},
 		}
-	case spec.MatrixError:
+	case spec.CoddyError:
 		xutil.GetLogger(ctx).WithError(err)
 		code := http.StatusInternalServerError
 		switch e.ErrCode {
 		case spec.ErrorForbidden:
 			code = http.StatusForbidden
-		case spec.ErrorUnsupportedRoomVersion:
+		case spec.ErrorUnsupportedFrameVersion:
 			fallthrough // http.StatusBadRequest
 		case spec.ErrorBadJSON:
 			code = http.StatusBadRequest

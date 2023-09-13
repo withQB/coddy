@@ -13,8 +13,8 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/types"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/sqlutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools/spec"
 )
 
@@ -28,14 +28,14 @@ type RelationsResponse struct {
 func Relations(
 	req *http.Request, device *userapi.Device,
 	syncDB storage.Database,
-	rsAPI api.SyncRoomserverAPI,
-	rawRoomID, eventID, relType, eventType string,
+	rsAPI api.SyncDataframeAPI,
+	rawFrameID, eventID, relType, eventType string,
 ) xutil.JSONResponse {
-	roomID, err := spec.NewRoomID(rawRoomID)
+	frameID, err := spec.NewFrameID(rawFrameID)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusBadRequest,
-			JSON: spec.InvalidParam("invalid room ID"),
+			JSON: spec.InvalidParam("invalid frame ID"),
 		}
 	}
 
@@ -95,7 +95,7 @@ func Relations(
 	}
 	var events []types.StreamEvent
 	events, res.PrevBatch, res.NextBatch, err = snapshot.RelationsFor(
-		req.Context(), roomID.String(), eventID, relType, eventType, from, to, dir == "b", limit,
+		req.Context(), frameID.String(), eventID, relType, eventType, from, to, dir == "b", limit,
 	)
 	if err != nil {
 		return xutil.ErrorResponse(err)
@@ -117,14 +117,14 @@ func Relations(
 	res.Chunk = make([]synctypes.ClientEvent, 0, len(filteredEvents))
 	for _, event := range filteredEvents {
 		sender := spec.UserID{}
-		userID, err := rsAPI.QueryUserIDForSender(req.Context(), *roomID, event.SenderID())
+		userID, err := rsAPI.QueryUserIDForSender(req.Context(), *frameID, event.SenderID())
 		if err == nil && userID != nil {
 			sender = *userID
 		}
 
 		sk := event.StateKey()
 		if sk != nil && *sk != "" {
-			skUserID, err := rsAPI.QueryUserIDForSender(req.Context(), *roomID, spec.SenderID(*event.StateKey()))
+			skUserID, err := rsAPI.QueryUserIDForSender(req.Context(), *frameID, spec.SenderID(*event.StateKey()))
 			if err == nil && skUserID != nil {
 				skString := skUserID.String()
 				sk = &skString

@@ -12,7 +12,7 @@ import (
 	"github.com/withqb/coddy/apis/clientapi/routing"
 	federationAPI "github.com/withqb/coddy/apis/federationapi/api"
 	"github.com/withqb/coddy/internal/transactions"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	appserviceAPI "github.com/withqb/coddy/services/appservice/api"
 	"github.com/withqb/coddy/setup/jetstream"
 )
@@ -24,13 +24,13 @@ func AddPublicRoutes(
 	cfg *config.Dendrite,
 	natsInstance *jetstream.NATSInstance,
 	federation fclient.FederationClient,
-	rsAPI roomserverAPI.ClientRoomserverAPI,
+	rsAPI dataframeAPI.ClientDataframeAPI,
 	asAPI appserviceAPI.AppServiceInternalAPI,
 	transactionsCache *transactions.Cache,
 	fsAPI federationAPI.ClientFederationAPI,
 	userAPI userapi.ClientUserAPI,
 	userDirectoryProvider userapi.QuerySearchProfilesAPI,
-	extRoomsProvider api.ExtraPublicRoomsProvider, enableMetrics bool,
+	extFramesProvider api.ExtraPublicFramesProvider, enableMetrics bool,
 ) {
 	js, natsClient := natsInstance.Prepare(processContext, &cfg.Global.JetStream)
 
@@ -49,6 +49,6 @@ func AddPublicRoutes(
 		cfg, rsAPI, asAPI,
 		userAPI, userDirectoryProvider, federation,
 		syncProducer, transactionsCache, fsAPI,
-		extRoomsProvider, natsClient, enableMetrics,
+		extFramesProvider, natsClient, enableMetrics,
 	)
 }

@@ -8,28 +8,28 @@ import (
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
 )
 
-// For storing pagination information for room hierarchies
-type RoomHierarchyPaginationCache struct {
-	cache map[string]roomserverAPI.RoomHierarchyWalker
+// For storing pagination information for frame hierarchies
+type FrameHierarchyPaginationCache struct {
+	cache map[string]dataframeAPI.FrameHierarchyWalker
 	mu    sync.Mutex
 }
 
 // Create a new, empty, pagination cache.
-func NewRoomHierarchyPaginationCache() RoomHierarchyPaginationCache {
-	return RoomHierarchyPaginationCache{
-		cache: map[string]roomserverAPI.RoomHierarchyWalker{},
+func NewFrameHierarchyPaginationCache() FrameHierarchyPaginationCache {
+	return FrameHierarchyPaginationCache{
+		cache: map[string]dataframeAPI.FrameHierarchyWalker{},
 	}
 }
 
 // Get a cached page, or nil if there is no associated page in the cache.
-func (c *RoomHierarchyPaginationCache) Get(token string) *roomserverAPI.RoomHierarchyWalker {
+func (c *FrameHierarchyPaginationCache) Get(token string) *dataframeAPI.FrameHierarchyWalker {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	line, ok := c.cache[token]
@@ -41,7 +41,7 @@ func (c *RoomHierarchyPaginationCache) Get(token string) *roomserverAPI.RoomHier
 }
 
 // Add a cache line to the pagination cache.
-func (c *RoomHierarchyPaginationCache) AddLine(line roomserverAPI.RoomHierarchyWalker) string {
+func (c *FrameHierarchyPaginationCache) AddLine(line dataframeAPI.FrameHierarchyWalker) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	token := uuid.NewString()
@@ -49,18 +49,18 @@ func (c *RoomHierarchyPaginationCache) AddLine(line roomserverAPI.RoomHierarchyW
 	return token
 }
 
-// Query the hierarchy of a room/space
+// Query the hierarchy of a frame/space
 //
-// Implements /_matrix/client/v1/rooms/{roomID}/hierarchy
-func QueryRoomHierarchy(req *http.Request, device *userapi.Device, roomIDStr string, rsAPI roomserverAPI.ClientRoomserverAPI, paginationCache *RoomHierarchyPaginationCache) xutil.JSONResponse {
-	parsedRoomID, err := spec.NewRoomID(roomIDStr)
+// Implements /_coddy/client/v1/frames/{frameID}/hierarchy
+func QueryFrameHierarchy(req *http.Request, device *userapi.Device, frameIDStr string, rsAPI dataframeAPI.ClientDataframeAPI, paginationCache *FrameHierarchyPaginationCache) xutil.JSONResponse {
+	parsedFrameID, err := spec.NewFrameID(frameIDStr)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusNotFound,
-			JSON: spec.InvalidParam("room is unknown/forbidden"),
+			JSON: spec.InvalidParam("frame is unknown/forbidden"),
 		}
 	}
-	roomID := *parsedRoomID
+	frameID := *parsedFrameID
 
 	suggestedOnly := false // Defaults to false (spec-defined)
 	switch req.URL.Query().Get("suggested_only") {
@@ -108,34 +108,34 @@ func QueryRoomHierarchy(req *http.Request, device *userapi.Device, roomIDStr str
 
 	from := req.URL.Query().Get("from")
 
-	var walker roomserverAPI.RoomHierarchyWalker
+	var walker dataframeAPI.FrameHierarchyWalker
 	if from == "" { // No pagination token provided, so start new hierarchy walker
-		walker = roomserverAPI.NewRoomHierarchyWalker(types.NewDeviceNotServerName(*device), roomID, suggestedOnly, maxDepth)
+		walker = dataframeAPI.NewFrameHierarchyWalker(types.NewDeviceNotServerName(*device), frameID, suggestedOnly, maxDepth)
 	} else { // Attempt to resume cached walker
 		cachedWalker := paginationCache.Get(from)
 
 		if cachedWalker == nil || cachedWalker.SuggestedOnly != suggestedOnly || cachedWalker.MaxDepth != maxDepth {
 			return xutil.JSONResponse{
 				Code: http.StatusBadRequest,
-				JSON: spec.InvalidParam("pagination not found for provided token ('from') with given 'max_depth', 'suggested_only' and room ID"),
+				JSON: spec.InvalidParam("pagination not found for provided token ('from') with given 'max_depth', 'suggested_only' and frame ID"),
 			}
 		}
 
 		walker = *cachedWalker
 	}
 
-	discoveredRooms, nextWalker, err := rsAPI.QueryNextRoomHierarchyPage(req.Context(), walker, limit)
+	discoveredFrames, nextWalker, err := rsAPI.QueryNextFrameHierarchyPage(req.Context(), walker, limit)
 
 	if err != nil {
 		switch err.(type) {
-		case roomserverAPI.ErrRoomUnknownOrNotAllowed:
-			xutil.GetLogger(req.Context()).WithError(err).Debugln("room unknown/forbidden when handling CS room hierarchy request")
+		case dataframeAPI.ErrFrameUnknownOrNotAllowed:
+			xutil.GetLogger(req.Context()).WithError(err).Debugln("frame unknown/forbidden when handling CS frame hierarchy request")
 			return xutil.JSONResponse{
 				Code: http.StatusForbidden,
-				JSON: spec.Forbidden("room is unknown/forbidden"),
+				JSON: spec.Forbidden("frame is unknown/forbidden"),
 			}
 		default:
-			log.WithError(err).Errorf("failed to fetch next page of room hierarchy (CS API)")
+			log.WithError(err).Errorf("failed to fetch next page of frame hierarchy (CS API)")
 			return xutil.JSONResponse{
 				Code: http.StatusInternalServerError,
 				JSON: spec.Unknown("internal server error"),
@@ -144,23 +144,23 @@ func QueryRoomHierarchy(req *http.Request, device *userapi.Device, roomIDStr str
 	}
 
 	nextBatch := ""
-	// nextWalker will be nil if there's no more rooms left to walk
+	// nextWalker will be nil if there's no more frames left to walk
 	if nextWalker != nil {
 		nextBatch = paginationCache.AddLine(*nextWalker)
 	}
 
 	return xutil.JSONResponse{
 		Code: http.StatusOK,
-		JSON: RoomHierarchyClientResponse{
-			Rooms:     discoveredRooms,
+		JSON: FrameHierarchyClientResponse{
+			Frames:     discoveredFrames,
 			NextBatch: nextBatch,
 		},
 	}
 
 }
 
-// Success response for /_matrix/client/v1/rooms/{roomID}/hierarchy
-type RoomHierarchyClientResponse struct {
-	Rooms     []fclient.RoomHierarchyRoom `json:"rooms"`
+// Success response for /_coddy/client/v1/frames/{frameID}/hierarchy
+type FrameHierarchyClientResponse struct {
+	Frames     []fclient.FrameHierarchyFrame `json:"frames"`
 	NextBatch string                      `json:"next_batch,omitempty"`
 }

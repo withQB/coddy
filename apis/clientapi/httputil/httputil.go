@@ -13,8 +13,7 @@ import (
 // UnmarshalJSONRequest into the given interface pointer. Returns an error JSON response if
 // there was a problem unmarshalling. Calling this function consumes the request body.
 func UnmarshalJSONRequest(req *http.Request, iface interface{}) *xutil.JSONResponse {
-	// encoding/json allows invalid utf-8, matrix does not
-	// https://matrix.org/docs/spec/client_server/r0.6.1#api-standards
+	// encoding/json allows invalid utf-8, coddy does not
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		xutil.GetLogger(req.Context()).WithError(err).Error("io.ReadAll failed")

@@ -3,17 +3,17 @@ package routing
 import (
 	"net/http"
 
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/version"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/version"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xutil"
 )
 
 // GetCapabilities returns information about the server's supported feature set
 // and other relevant capabilities to an authenticated user.
-func GetCapabilities(rsAPI roomserverAPI.ClientRoomserverAPI) xutil.JSONResponse {
-	versionsMap := map[xtools.RoomVersion]string{}
-	for v, desc := range version.SupportedRoomVersions() {
+func GetCapabilities(rsAPI dataframeAPI.ClientDataframeAPI) xutil.JSONResponse {
+	versionsMap := map[xtools.FrameVersion]string{}
+	for v, desc := range version.SupportedFrameVersions() {
 		if desc.Stable() {
 			versionsMap[v] = "stable"
 		} else {
@@ -26,8 +26,8 @@ func GetCapabilities(rsAPI roomserverAPI.ClientRoomserverAPI) xutil.JSONResponse
 			"m.change_password": map[string]bool{
 				"enabled": true,
 			},
-			"m.room_versions": map[string]interface{}{
-				"default":   rsAPI.DefaultRoomVersion(),
+			"m.frame_versions": map[string]interface{}{
+				"default":   rsAPI.DefaultFrameVersion(),
 				"available": versionsMap,
 			},
 		},

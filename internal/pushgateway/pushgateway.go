@@ -30,9 +30,9 @@ type Notification struct {
 	ID                string          `json:"id,omitempty"`         // Deprecated name for EventID.
 	Membership        string          `json:"membership,omitempty"` // UNSPEC: required for Sytest.
 	Prio              Prio            `json:"prio,omitempty"`
-	RoomAlias         string          `json:"room_alias,omitempty"`
-	RoomID            string          `json:"room_id,omitempty"`
-	RoomName          string          `json:"room_name,omitempty"`
+	FrameAlias         string          `json:"frame_alias,omitempty"`
+	FrameID            string          `json:"frame_id,omitempty"`
+	FrameName          string          `json:"frame_name,omitempty"`
 	Sender            string          `json:"sender,omitempty"`
 	SenderDisplayName string          `json:"sender_display_name,omitempty"`
 	Type              string          `json:"type,omitempty"`

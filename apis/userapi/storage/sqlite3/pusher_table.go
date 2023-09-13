@@ -28,7 +28,6 @@ import (
 	"github.com/withqb/xtools/spec"
 )
 
-// See https://matrix.org/docs/spec/client_server/r0.6.1#get-matrix-client-r0-pushers
 const pushersSchema = `
 CREATE TABLE IF NOT EXISTS userapi_pushers (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,

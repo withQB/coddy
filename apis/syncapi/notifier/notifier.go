@@ -9,8 +9,8 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/storage"
 	"github.com/withqb/coddy/apis/syncapi/types"
 	"github.com/withqb/coddy/internal/sqlutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools/spec"
 )
 
@@ -24,11 +24,11 @@ import (
 // in missed events.
 type Notifier struct {
 	lock  *sync.RWMutex
-	rsAPI api.SyncRoomserverAPI
-	// A map of RoomID => Set<UserID> : Must only be accessed by the OnNewEvent goroutine
-	roomIDToJoinedUsers map[string]*userIDSet
-	// A map of RoomID => Set<UserID> : Must only be accessed by the OnNewEvent goroutine
-	roomIDToPeekingDevices map[string]peekingDeviceSet
+	rsAPI api.SyncDataframeAPI
+	// A map of FrameID => Set<UserID> : Must only be accessed by the OnNewEvent goroutine
+	frameIDToJoinedUsers map[string]*userIDSet
+	// A map of FrameID => Set<UserID> : Must only be accessed by the OnNewEvent goroutine
+	frameIDToPeekingDevices map[string]peekingDeviceSet
 	// The latest sync position
 	currPos types.StreamingToken
 	// A map of user_id => device_id => UserStream which can be used to wake a given user's /sync request.
@@ -41,13 +41,13 @@ type Notifier struct {
 }
 
 // NewNotifier creates a new notifier set to the given sync position.
-// In order for this to be of any use, the Notifier needs to be told all rooms and
+// In order for this to be of any use, the Notifier needs to be told all frames and
 // the joined users within each of them by calling Notifier.Load(*storage.SyncServerDatabase).
-func NewNotifier(rsAPI api.SyncRoomserverAPI) *Notifier {
+func NewNotifier(rsAPI api.SyncDataframeAPI) *Notifier {
 	return &Notifier{
 		rsAPI:                  rsAPI,
-		roomIDToJoinedUsers:    make(map[string]*userIDSet),
-		roomIDToPeekingDevices: make(map[string]peekingDeviceSet),
+		frameIDToJoinedUsers:    make(map[string]*userIDSet),
+		frameIDToPeekingDevices: make(map[string]peekingDeviceSet),
 		userDeviceStreams:      make(map[string]map[string]*UserDeviceStream),
 		lock:                   &sync.RWMutex{},
 		lastCleanUpTime:        time.Now(),
@@ -65,18 +65,18 @@ func (n *Notifier) SetCurrentPosition(currPos types.StreamingToken) {
 	n.currPos = currPos
 }
 
-// OnNewEvent is called when a new event is received from the room server. Must only be
+// OnNewEvent is called when a new event is received from the frame server. Must only be
 // called from a single goroutine, to avoid races between updates which could set the
 // current sync position incorrectly.
 // Chooses which user sync streams to update by a provided xtools.PDU
-// (based on the users in the event's room),
-// a roomID directly, or a list of user IDs, prioritised by parameter ordering.
+// (based on the users in the event's frame),
+// a frameID directly, or a list of user IDs, prioritised by parameter ordering.
 // posUpdate contains the latest position(s) for one or more types of events.
 // If a position in posUpdate is 0, it means no updates are available of that type.
 // Typically a consumer supplies a posUpdate with the latest sync position for the
 // event type it handles, leaving other fields as 0.
 func (n *Notifier) OnNewEvent(
-	ev *rstypes.HeaderedEvent, roomID string, userIDs []string,
+	ev *rstypes.HeaderedEvent, frameID string, userIDs []string,
 	posUpdate types.StreamingToken,
 ) {
 	// update the current position then notify relevant /sync streams.
@@ -87,20 +87,20 @@ func (n *Notifier) OnNewEvent(
 	n._removeEmptyUserStreams()
 
 	if ev != nil {
-		validRoomID, err := spec.NewRoomID(ev.RoomID())
+		validFrameID, err := spec.NewFrameID(ev.FrameID())
 		if err != nil {
 			log.WithError(err).WithField("event_id", ev.EventID()).Errorf(
-				"Notifier.OnNewEvent: RoomID is invalid",
+				"Notifier.OnNewEvent: FrameID is invalid",
 			)
 			return
 		}
-		// Map this event's room_id to a list of joined users, and wake them up.
-		usersToNotify := n._joinedUsers(ev.RoomID())
-		// Map this event's room_id to a list of peeking devices, and wake them up.
-		peekingDevicesToNotify := n._peekingDevices(ev.RoomID())
+		// Map this event's frame_id to a list of joined users, and wake them up.
+		usersToNotify := n._joinedUsers(ev.FrameID())
+		// Map this event's frame_id to a list of peeking devices, and wake them up.
+		peekingDevicesToNotify := n._peekingDevices(ev.FrameID())
 		// If this is an invite, also add in the invitee to this list.
-		if ev.Type() == "m.room.member" && ev.StateKey() != nil {
-			targetUserID, err := n.rsAPI.QueryUserIDForSender(context.Background(), *validRoomID, spec.SenderID(*ev.StateKey()))
+		if ev.Type() == "m.frame.member" && ev.StateKey() != nil {
+			targetUserID, err := n.rsAPI.QueryUserIDForSender(context.Background(), *validFrameID, spec.SenderID(*ev.StateKey()))
 			if err != nil || targetUserID == nil {
 				log.WithError(err).WithField("event_id", ev.EventID()).Errorf(
 					"Notifier.OnNewEvent: Failed to find the userID for this event",
@@ -118,21 +118,21 @@ func (n *Notifier) OnNewEvent(
 						usersToNotify = append(usersToNotify, targetUserID.String())
 					case spec.Join:
 						// Manually append the new user's ID so they get notified
-						// along all members in the room
+						// along all members in the frame
 						usersToNotify = append(usersToNotify, targetUserID.String())
-						n._addJoinedUser(ev.RoomID(), targetUserID.String())
+						n._addJoinedUser(ev.FrameID(), targetUserID.String())
 					case spec.Leave:
 						fallthrough
 					case spec.Ban:
-						n._removeJoinedUser(ev.RoomID(), targetUserID.String())
+						n._removeJoinedUser(ev.FrameID(), targetUserID.String())
 					}
 				}
 			}
 		}
 
 		n._wakeupUsers(usersToNotify, peekingDevicesToNotify, n.currPos)
-	} else if roomID != "" {
-		n._wakeupUsers(n._joinedUsers(roomID), n._peekingDevices(roomID), n.currPos)
+	} else if frameID != "" {
+		n._wakeupUsers(n._joinedUsers(frameID), n._peekingDevices(frameID), n.currPos)
 	} else if len(userIDs) > 0 {
 		n._wakeupUsers(userIDs, nil, n.currPos)
 	} else {
@@ -153,30 +153,30 @@ func (n *Notifier) OnNewAccountData(
 }
 
 func (n *Notifier) OnNewPeek(
-	roomID, userID, deviceID string,
+	frameID, userID, deviceID string,
 	posUpdate types.StreamingToken,
 ) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
 	n.currPos.ApplyUpdates(posUpdate)
-	n._addPeekingDevice(roomID, userID, deviceID)
+	n._addPeekingDevice(frameID, userID, deviceID)
 
-	// we don't wake up devices here given the roomserver consumer will do this shortly afterwards
+	// we don't wake up devices here given the dataframe consumer will do this shortly afterwards
 	// by calling OnNewEvent.
 }
 
 func (n *Notifier) OnRetirePeek(
-	roomID, userID, deviceID string,
+	frameID, userID, deviceID string,
 	posUpdate types.StreamingToken,
 ) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
 	n.currPos.ApplyUpdates(posUpdate)
-	n._removePeekingDevice(roomID, userID, deviceID)
+	n._removePeekingDevice(frameID, userID, deviceID)
 
-	// we don't wake up devices here given the roomserver consumer will do this shortly afterwards
+	// we don't wake up devices here given the dataframe consumer will do this shortly afterwards
 	// by calling OnRetireEvent.
 }
 
@@ -193,26 +193,26 @@ func (n *Notifier) OnNewSendToDevice(
 
 // OnNewReceipt updates the current position
 func (n *Notifier) OnNewTyping(
-	roomID string,
+	frameID string,
 	posUpdate types.StreamingToken,
 ) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
 	n.currPos.ApplyUpdates(posUpdate)
-	n._wakeupUsers(n._joinedUsers(roomID), nil, n.currPos)
+	n._wakeupUsers(n._joinedUsers(frameID), nil, n.currPos)
 }
 
 // OnNewReceipt updates the current position
 func (n *Notifier) OnNewReceipt(
-	roomID string,
+	frameID string,
 	posUpdate types.StreamingToken,
 ) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
 	n.currPos.ApplyUpdates(posUpdate)
-	n._wakeupUsers(n._joinedUsers(roomID), nil, n.currPos)
+	n._wakeupUsers(n._joinedUsers(frameID), nil, n.currPos)
 }
 
 func (n *Notifier) OnNewKeyChange(
@@ -267,11 +267,11 @@ func (n *Notifier) SharedUsers(userID string) []string {
 
 func (n *Notifier) _sharedUsers(userID string) []string {
 	n._sharedUserMap[userID] = struct{}{}
-	for roomID, users := range n.roomIDToJoinedUsers {
+	for frameID, users := range n.frameIDToJoinedUsers {
 		if ok := users.isIn(userID); !ok {
 			continue
 		}
-		for _, userID := range n._joinedUsers(roomID) {
+		for _, userID := range n._joinedUsers(frameID) {
 			n._sharedUserMap[userID] = struct{}{}
 		}
 	}
@@ -287,7 +287,7 @@ func (n *Notifier) IsSharedUser(userA, userB string) bool {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 	var okA, okB bool
-	for _, users := range n.roomIDToJoinedUsers {
+	for _, users := range n.frameIDToJoinedUsers {
 		okA = users.isIn(userA)
 		if !okA {
 			continue
@@ -305,11 +305,11 @@ func (n *Notifier) IsSharedUser(userA, userB string) bool {
 // notify for anything before sincePos
 func (n *Notifier) GetListener(req types.SyncRequest) UserDeviceStreamListener {
 	// Do what synapse does: https://github.com/withqb/synapse/blob/v0.20.0/synapse/notifier.py#L298
-	// - Bucket request into a lookup map keyed off a list of joined room IDs and separately a user ID
-	// - Incoming events wake requests for a matching room ID
+	// - Bucket request into a lookup map keyed off a list of joined frame IDs and separately a user ID
+	// - Incoming events wake requests for a matching frame ID
 	// - Incoming events wake requests for a matching user ID (needed for invites)
 
-	// TODO: v1 /events 'peeking' has an 'explicit room ID' which is also tracked,
+	// TODO: v1 /events 'peeking' has an 'explicit frame ID' which is also tracked,
 	//       but given we don't do /events, let's pretend it doesn't exist.
 
 	n.lock.Lock()
@@ -332,24 +332,24 @@ func (n *Notifier) Load(ctx context.Context, db storage.Database) error {
 	var succeeded bool
 	defer sqlutil.EndTransactionWithCheck(snapshot, &succeeded, &err)
 
-	roomToUsers, err := snapshot.AllJoinedUsersInRooms(ctx)
+	frameToUsers, err := snapshot.AllJoinedUsersInFrames(ctx)
 	if err != nil {
 		return err
 	}
-	n.setUsersJoinedToRooms(roomToUsers)
+	n.setUsersJoinedToFrames(frameToUsers)
 
-	roomToPeekingDevices, err := snapshot.AllPeekingDevicesInRooms(ctx)
+	frameToPeekingDevices, err := snapshot.AllPeekingDevicesInFrames(ctx)
 	if err != nil {
 		return err
 	}
-	n.setPeekingDevices(roomToPeekingDevices)
+	n.setPeekingDevices(frameToPeekingDevices)
 
 	succeeded = true
 	return nil
 }
 
-// LoadRooms loads the membership states required to notify users correctly.
-func (n *Notifier) LoadRooms(ctx context.Context, db storage.Database, roomIDs []string) error {
+// LoadFrames loads the membership states required to notify users correctly.
+func (n *Notifier) LoadFrames(ctx context.Context, db storage.Database, frameIDs []string) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -360,11 +360,11 @@ func (n *Notifier) LoadRooms(ctx context.Context, db storage.Database, roomIDs [
 	var succeeded bool
 	defer sqlutil.EndTransactionWithCheck(snapshot, &succeeded, &err)
 
-	roomToUsers, err := snapshot.AllJoinedUsersInRoom(ctx, roomIDs)
+	frameToUsers, err := snapshot.AllJoinedUsersInFrame(ctx, frameIDs)
 	if err != nil {
 		return err
 	}
-	n.setUsersJoinedToRooms(roomToUsers)
+	n.setUsersJoinedToFrames(frameToUsers)
 
 	succeeded = true
 	return nil
@@ -378,33 +378,33 @@ func (n *Notifier) CurrentPosition() types.StreamingToken {
 	return n.currPos
 }
 
-// setUsersJoinedToRooms marks the given users as 'joined' to the given rooms, such that new events from
-// these rooms will wake the given users /sync requests. This should be called prior to ANY calls to
+// setUsersJoinedToFrames marks the given users as 'joined' to the given frames, such that new events from
+// these frames will wake the given users /sync requests. This should be called prior to ANY calls to
 // OnNewEvent (eg on startup) to prevent racing.
-func (n *Notifier) setUsersJoinedToRooms(roomIDToUserIDs map[string][]string) {
+func (n *Notifier) setUsersJoinedToFrames(frameIDToUserIDs map[string][]string) {
 	// This is just the bulk form of addJoinedUser
-	for roomID, userIDs := range roomIDToUserIDs {
-		if _, ok := n.roomIDToJoinedUsers[roomID]; !ok {
-			n.roomIDToJoinedUsers[roomID] = newUserIDSet(len(userIDs))
+	for frameID, userIDs := range frameIDToUserIDs {
+		if _, ok := n.frameIDToJoinedUsers[frameID]; !ok {
+			n.frameIDToJoinedUsers[frameID] = newUserIDSet(len(userIDs))
 		}
 		for _, userID := range userIDs {
-			n.roomIDToJoinedUsers[roomID].add(userID)
+			n.frameIDToJoinedUsers[frameID].add(userID)
 		}
-		n.roomIDToJoinedUsers[roomID].precompute()
+		n.frameIDToJoinedUsers[frameID].precompute()
 	}
 }
 
-// setPeekingDevices marks the given devices as peeking in the given rooms, such that new events from
-// these rooms will wake the given devices' /sync requests. This should be called prior to ANY calls to
+// setPeekingDevices marks the given devices as peeking in the given frames, such that new events from
+// these frames will wake the given devices' /sync requests. This should be called prior to ANY calls to
 // OnNewEvent (eg on startup) to prevent racing.
-func (n *Notifier) setPeekingDevices(roomIDToPeekingDevices map[string][]types.PeekingDevice) {
+func (n *Notifier) setPeekingDevices(frameIDToPeekingDevices map[string][]types.PeekingDevice) {
 	// This is just the bulk form of addPeekingDevice
-	for roomID, peekingDevices := range roomIDToPeekingDevices {
-		if _, ok := n.roomIDToPeekingDevices[roomID]; !ok {
-			n.roomIDToPeekingDevices[roomID] = make(peekingDeviceSet, len(peekingDevices))
+	for frameID, peekingDevices := range frameIDToPeekingDevices {
+		if _, ok := n.frameIDToPeekingDevices[frameID]; !ok {
+			n.frameIDToPeekingDevices[frameID] = make(peekingDeviceSet, len(peekingDevices))
 		}
 		for _, peekingDevice := range peekingDevices {
-			n.roomIDToPeekingDevices[roomID].add(peekingDevice)
+			n.frameIDToPeekingDevices[frameID].add(peekingDevice)
 		}
 	}
 }
@@ -483,61 +483,61 @@ func (n *Notifier) _fetchUserStreams(userID string) []*UserDeviceStream {
 	return streams
 }
 
-func (n *Notifier) _addJoinedUser(roomID, userID string) {
-	if _, ok := n.roomIDToJoinedUsers[roomID]; !ok {
-		n.roomIDToJoinedUsers[roomID] = newUserIDSet(8)
+func (n *Notifier) _addJoinedUser(frameID, userID string) {
+	if _, ok := n.frameIDToJoinedUsers[frameID]; !ok {
+		n.frameIDToJoinedUsers[frameID] = newUserIDSet(8)
 	}
-	n.roomIDToJoinedUsers[roomID].add(userID)
-	n.roomIDToJoinedUsers[roomID].precompute()
+	n.frameIDToJoinedUsers[frameID].add(userID)
+	n.frameIDToJoinedUsers[frameID].precompute()
 }
 
-func (n *Notifier) _removeJoinedUser(roomID, userID string) {
-	if _, ok := n.roomIDToJoinedUsers[roomID]; !ok {
-		n.roomIDToJoinedUsers[roomID] = newUserIDSet(8)
+func (n *Notifier) _removeJoinedUser(frameID, userID string) {
+	if _, ok := n.frameIDToJoinedUsers[frameID]; !ok {
+		n.frameIDToJoinedUsers[frameID] = newUserIDSet(8)
 	}
-	n.roomIDToJoinedUsers[roomID].remove(userID)
-	n.roomIDToJoinedUsers[roomID].precompute()
+	n.frameIDToJoinedUsers[frameID].remove(userID)
+	n.frameIDToJoinedUsers[frameID].precompute()
 }
 
-func (n *Notifier) JoinedUsers(roomID string) (userIDs []string) {
+func (n *Notifier) JoinedUsers(frameID string) (userIDs []string) {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
-	return n._joinedUsers(roomID)
+	return n._joinedUsers(frameID)
 }
 
-func (n *Notifier) _joinedUsers(roomID string) (userIDs []string) {
-	if _, ok := n.roomIDToJoinedUsers[roomID]; !ok {
+func (n *Notifier) _joinedUsers(frameID string) (userIDs []string) {
+	if _, ok := n.frameIDToJoinedUsers[frameID]; !ok {
 		return
 	}
-	return n.roomIDToJoinedUsers[roomID].values()
+	return n.frameIDToJoinedUsers[frameID].values()
 }
 
-func (n *Notifier) _addPeekingDevice(roomID, userID, deviceID string) {
-	if _, ok := n.roomIDToPeekingDevices[roomID]; !ok {
-		n.roomIDToPeekingDevices[roomID] = make(peekingDeviceSet)
+func (n *Notifier) _addPeekingDevice(frameID, userID, deviceID string) {
+	if _, ok := n.frameIDToPeekingDevices[frameID]; !ok {
+		n.frameIDToPeekingDevices[frameID] = make(peekingDeviceSet)
 	}
-	n.roomIDToPeekingDevices[roomID].add(types.PeekingDevice{UserID: userID, DeviceID: deviceID})
+	n.frameIDToPeekingDevices[frameID].add(types.PeekingDevice{UserID: userID, DeviceID: deviceID})
 }
 
-func (n *Notifier) _removePeekingDevice(roomID, userID, deviceID string) {
-	if _, ok := n.roomIDToPeekingDevices[roomID]; !ok {
-		n.roomIDToPeekingDevices[roomID] = make(peekingDeviceSet)
+func (n *Notifier) _removePeekingDevice(frameID, userID, deviceID string) {
+	if _, ok := n.frameIDToPeekingDevices[frameID]; !ok {
+		n.frameIDToPeekingDevices[frameID] = make(peekingDeviceSet)
 	}
 	// XXX: is this going to work as a key?
-	n.roomIDToPeekingDevices[roomID].remove(types.PeekingDevice{UserID: userID, DeviceID: deviceID})
+	n.frameIDToPeekingDevices[frameID].remove(types.PeekingDevice{UserID: userID, DeviceID: deviceID})
 }
 
-func (n *Notifier) PeekingDevices(roomID string) (peekingDevices []types.PeekingDevice) {
+func (n *Notifier) PeekingDevices(frameID string) (peekingDevices []types.PeekingDevice) {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
-	return n._peekingDevices(roomID)
+	return n._peekingDevices(frameID)
 }
 
-func (n *Notifier) _peekingDevices(roomID string) (peekingDevices []types.PeekingDevice) {
-	if _, ok := n.roomIDToPeekingDevices[roomID]; !ok {
+func (n *Notifier) _peekingDevices(frameID string) (peekingDevices []types.PeekingDevice) {
+	if _, ok := n.frameIDToPeekingDevices[frameID]; !ok {
 		return
 	}
-	return n.roomIDToPeekingDevices[roomID].values()
+	return n.frameIDToPeekingDevices[frameID].values()
 }
 
 // _removeEmptyUserStreams iterates through the user stream map and removes any

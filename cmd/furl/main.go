@@ -18,14 +18,14 @@ import (
 )
 
 var requestFrom = flag.String("from", "", "the server name that the request should originate from")
-var requestKey = flag.String("key", "matrix_key.pem", "the private key to use when signing the request")
+var requestKey = flag.String("key", "coddy_key.pem", "the private key to use when signing the request")
 var requestPost = flag.Bool("post", false, "send a POST request instead of GET (pipe input into stdin or type followed by Ctrl-D)")
 
 func main() {
 	flag.Parse()
 
 	if requestFrom == nil || *requestFrom == "" {
-		fmt.Println("expecting: furl -from origin.com [-key matrix_key.pem] https://path/to/url")
+		fmt.Println("expecting: furl -from origin.com [-key coddy_key.pem] https://path/to/url")
 		fmt.Println("supported flags:")
 		flag.PrintDefaults()
 		os.Exit(1)

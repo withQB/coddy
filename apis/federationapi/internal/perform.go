@@ -18,9 +18,9 @@ import (
 	"github.com/withqb/coddy/apis/federationapi/api"
 	"github.com/withqb/coddy/apis/federationapi/consumers"
 	"github.com/withqb/coddy/apis/federationapi/statistics"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
-	"github.com/withqb/coddy/servers/roomserver/version"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
+	"github.com/withqb/coddy/servers/dataframe/version"
 )
 
 // PerformLeaveRequest implements api.FederationInternalAPI
@@ -33,17 +33,17 @@ func (r *FederationInternalAPI) PerformDirectoryLookup(
 		return fmt.Errorf("relay servers have no meaningful response for directory lookup.")
 	}
 
-	dir, err := r.federation.LookupRoomAlias(
+	dir, err := r.federation.LookupFrameAlias(
 		ctx,
 		r.cfg.Matrix.ServerName,
 		request.ServerName,
-		request.RoomAlias,
+		request.FrameAlias,
 	)
 	if err != nil {
 		r.statistics.ForServer(request.ServerName).Failure()
 		return err
 	}
-	response.RoomID = dir.RoomID
+	response.FrameID = dir.FrameID
 	response.ServerNames = dir.Servers
 	r.statistics.ForServer(request.ServerName).Success(statistics.SendDirect)
 	return nil
@@ -51,7 +51,7 @@ func (r *FederationInternalAPI) PerformDirectoryLookup(
 
 type federatedJoin struct {
 	UserID string
-	RoomID string
+	FrameID string
 }
 
 // PerformJoin implements api.FederationInternalAPI
@@ -60,14 +60,14 @@ func (r *FederationInternalAPI) PerformJoin(
 	request *api.PerformJoinRequest,
 	response *api.PerformJoinResponse,
 ) {
-	// Check that a join isn't already in progress for this user/room.
-	j := federatedJoin{request.UserID, request.RoomID}
+	// Check that a join isn't already in progress for this user/frame.
+	j := federatedJoin{request.UserID, request.FrameID}
 	if _, found := r.joins.Load(j); found {
 		response.LastError = &xcore.HTTPError{
 			Code: 429,
 			Message: `{
 				"errcode": "M_LIMIT_EXCEEDED",
-				"error": "There is already a federated join to this room in progress. Please wait for it to finish."
+				"error": "There is already a federated join to this frame in progress. Please wait for it to finish."
 			}`, // TODO: Why do none of our error types play nicely with each other?
 		}
 		return
@@ -95,7 +95,7 @@ func (r *FederationInternalAPI) PerformJoin(
 	for _, serverName := range request.ServerNames {
 		if err := r.performJoinUsingServer(
 			ctx,
-			request.RoomID,
+			request.FrameID,
 			request.UserID,
 			request.Content,
 			serverName,
@@ -103,8 +103,8 @@ func (r *FederationInternalAPI) PerformJoin(
 		); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"server_name": serverName,
-				"room_id":     request.RoomID,
-			}).Warnf("Failed to join room through server")
+				"frame_id":     request.FrameID,
+			}).Warnf("Failed to join frame through server")
 			lastErr = err
 			continue
 		}
@@ -131,14 +131,14 @@ func (r *FederationInternalAPI) PerformJoin(
 	}
 
 	logrus.Errorf(
-		"failed to join user %q to room %q through %d server(s): last error %s",
-		request.UserID, request.RoomID, len(request.ServerNames), lastErr,
+		"failed to join user %q to frame %q through %d server(s): last error %s",
+		request.UserID, request.FrameID, len(request.ServerNames), lastErr,
 	)
 }
 
 func (r *FederationInternalAPI) performJoinUsingServer(
 	ctx context.Context,
-	roomID, userID string,
+	frameID, userID string,
 	content map[string]interface{},
 	serverName spec.ServerName,
 	unsigned map[string]interface{},
@@ -151,44 +151,44 @@ func (r *FederationInternalAPI) performJoinUsingServer(
 	if err != nil {
 		return err
 	}
-	room, err := spec.NewRoomID(roomID)
+	frame, err := spec.NewFrameID(frameID)
 	if err != nil {
 		return err
 	}
 
 	joinInput := xtools.PerformJoinInput{
 		UserID:     user,
-		RoomID:     room,
+		FrameID:     frame,
 		ServerName: serverName,
 		Content:    content,
 		Unsigned:   unsigned,
 		PrivateKey: r.cfg.Matrix.PrivateKey,
 		KeyID:      r.cfg.Matrix.KeyID,
 		KeyRing:    r.keyRing,
-		EventProvider: federatedEventProvider(ctx, r.federation, r.keyRing, user.Domain(), serverName, func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return r.rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+		EventProvider: federatedEventProvider(ctx, r.federation, r.keyRing, user.Domain(), serverName, func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return r.rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 		}),
-		UserIDQuerier: func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return r.rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+		UserIDQuerier: func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return r.rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 		},
-		GetOrCreateSenderID: func(ctx context.Context, userID spec.UserID, roomID spec.RoomID, roomVersion string) (spec.SenderID, ed25519.PrivateKey, error) {
-			// assign a roomNID, otherwise we can't create a private key for the user
-			_, nidErr := r.rsAPI.AssignRoomNID(ctx, roomID, xtools.RoomVersion(roomVersion))
+		GetOrCreateSenderID: func(ctx context.Context, userID spec.UserID, frameID spec.FrameID, frameVersion string) (spec.SenderID, ed25519.PrivateKey, error) {
+			// assign a frameNID, otherwise we can't create a private key for the user
+			_, nidErr := r.rsAPI.AssignFrameNID(ctx, frameID, xtools.FrameVersion(frameVersion))
 			if nidErr != nil {
 				return "", nil, nidErr
 			}
-			key, keyErr := r.rsAPI.GetOrCreateUserRoomPrivateKey(ctx, userID, roomID)
+			key, keyErr := r.rsAPI.GetOrCreateUserFramePrivateKey(ctx, userID, frameID)
 			if keyErr != nil {
 				return "", nil, keyErr
 			}
 			return spec.SenderIDFromPseudoIDKey(key), key, nil
 		},
-		StoreSenderIDFromPublicID: func(ctx context.Context, senderID spec.SenderID, userIDRaw string, roomID spec.RoomID) error {
+		StoreSenderIDFromPublicID: func(ctx context.Context, senderID spec.SenderID, userIDRaw string, frameID spec.FrameID) error {
 			storeUserID, userErr := spec.NewUserID(userIDRaw, true)
 			if userErr != nil {
 				return userErr
 			}
-			return r.rsAPI.StoreUserRoomPublicKey(ctx, senderID, *storeUserID, roomID)
+			return r.rsAPI.StoreUserFramePublicKey(ctx, senderID, *storeUserID, frameID)
 		},
 	}
 	response, joinErr := xtools.PerformJoin(ctx, r, joinInput)
@@ -206,10 +206,10 @@ func (r *FederationInternalAPI) performJoinUsingServer(
 		return fmt.Errorf("Received nil response from xtools.PerformJoin")
 	}
 
-	// We need to immediately update our list of joined hosts for this room now as we are technically
-	// joined. We must do this synchronously: we cannot rely on the roomserver output events as they
+	// We need to immediately update our list of joined hosts for this frame now as we are technically
+	// joined. We must do this synchronously: we cannot rely on the dataframe output events as they
 	// will happen asyncly. If we don't update this table, you can end up with bad failure modes like
-	// joining a room, waiting for 200 OK then changing device keys and have those keys not be sent
+	// joining a frame, waiting for 200 OK then changing device keys and have those keys not be sent
 	// to other servers (this was a cause of a flakey sytest "Local device key changes get to remote servers")
 	// The events are trusted now as we performed auth checks above.
 	joinedHosts, err := consumers.JoinedHostsFromEvents(ctx, response.StateSnapshot.GetStateEvents().TrustedEvents(response.JoinEvent.Version(), false), r.rsAPI)
@@ -217,24 +217,24 @@ func (r *FederationInternalAPI) performJoinUsingServer(
 		return fmt.Errorf("JoinedHostsFromEvents: failed to get joined hosts: %s", err)
 	}
 
-	logrus.WithField("room", roomID).Infof("Joined federated room with %d hosts", len(joinedHosts))
-	if _, err = r.db.UpdateRoom(context.Background(), roomID, joinedHosts, nil, true); err != nil {
-		return fmt.Errorf("UpdatedRoom: failed to update room with joined hosts: %s", err)
+	logrus.WithField("frame", frameID).Infof("Joined federated frame with %d hosts", len(joinedHosts))
+	if _, err = r.db.UpdateFrame(context.Background(), frameID, joinedHosts, nil, true); err != nil {
+		return fmt.Errorf("UpdatedFrame: failed to update frame with joined hosts: %s", err)
 	}
 
 	// TODO: Can I change this to not take respState but instead just take an opaque list of events?
-	if err = roomserverAPI.SendEventWithState(
+	if err = dataframeAPI.SendEventWithState(
 		context.Background(),
 		r.rsAPI,
 		user.Domain(),
-		roomserverAPI.KindNew,
+		dataframeAPI.KindNew,
 		response.StateSnapshot,
 		&types.HeaderedEvent{PDU: response.JoinEvent},
 		serverName,
 		nil,
 		false,
 	); err != nil {
-		return fmt.Errorf("roomserverAPI.SendEventWithState: %w", err)
+		return fmt.Errorf("dataframeAPI.SendEventWithState: %w", err)
 	}
 	return nil
 }
@@ -245,9 +245,9 @@ func (r *FederationInternalAPI) PerformOutboundPeek(
 	request *api.PerformOutboundPeekRequest,
 	response *api.PerformOutboundPeekResponse,
 ) error {
-	// Look up the supported room versions.
-	var supportedVersions []xtools.RoomVersion
-	for version := range version.SupportedRoomVersions() {
+	// Look up the supported frame versions.
+	var supportedVersions []xtools.FrameVersion
+	for version := range version.SupportedFrameVersions() {
 		supportedVersions = append(supportedVersions, version)
 	}
 
@@ -265,9 +265,9 @@ func (r *FederationInternalAPI) PerformOutboundPeek(
 	}
 	request.ServerNames = uniqueList
 
-	// See if there's an existing outbound peek for this room ID with
+	// See if there's an existing outbound peek for this frame ID with
 	// one of the specified servers.
-	if peeks, err := r.db.GetOutboundPeeks(ctx, request.RoomID); err == nil {
+	if peeks, err := r.db.GetOutboundPeeks(ctx, request.FrameID); err == nil {
 		for _, peek := range peeks {
 			if _, ok := seenSet[peek.ServerName]; ok {
 				return nil
@@ -281,14 +281,14 @@ func (r *FederationInternalAPI) PerformOutboundPeek(
 	for _, serverName := range request.ServerNames {
 		if err := r.performOutboundPeekUsingServer(
 			ctx,
-			request.RoomID,
+			request.FrameID,
 			serverName,
 			supportedVersions,
 		); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"server_name": serverName,
-				"room_id":     request.RoomID,
-			}).Warnf("Failed to peek room through server")
+				"frame_id":     request.FrameID,
+			}).Warnf("Failed to peek frame through server")
 			lastErr = err
 			continue
 		}
@@ -311,8 +311,8 @@ func (r *FederationInternalAPI) PerformOutboundPeek(
 	}
 
 	logrus.Errorf(
-		"failed to peek room %q through %d server(s): last error %s",
-		request.RoomID, len(request.ServerNames), lastErr,
+		"failed to peek frame %q through %d server(s): last error %s",
+		request.FrameID, len(request.ServerNames), lastErr,
 	)
 
 	return lastErr
@@ -320,24 +320,24 @@ func (r *FederationInternalAPI) PerformOutboundPeek(
 
 func (r *FederationInternalAPI) performOutboundPeekUsingServer(
 	ctx context.Context,
-	roomID string,
+	frameID string,
 	serverName spec.ServerName,
-	supportedVersions []xtools.RoomVersion,
+	supportedVersions []xtools.FrameVersion,
 ) error {
 	if !r.shouldAttemptDirectFederation(serverName) {
 		return fmt.Errorf("relay servers have no meaningful response for outbound peek.")
 	}
 
 	// create a unique ID for this peek.
-	// for now we just use the room ID again. In future, if we ever
-	// support concurrent peeks to the same room with different filters
+	// for now we just use the frame ID again. In future, if we ever
+	// support concurrent peeks to the same frame with different filters
 	// then we would need to disambiguate further.
-	peekID := roomID
+	peekID := frameID
 
 	// check whether we're peeking already to try to avoid needlessly
 	// re-peeking on the server. we don't need a transaction for this,
 	// given this is a nice-to-have.
-	outboundPeek, err := r.db.GetOutboundPeek(ctx, serverName, roomID, peekID)
+	outboundPeek, err := r.db.GetOutboundPeek(ctx, serverName, frameID, peekID)
 	if err != nil {
 		return err
 	}
@@ -345,10 +345,10 @@ func (r *FederationInternalAPI) performOutboundPeekUsingServer(
 	if outboundPeek != nil {
 		nowMilli := time.Now().UnixNano() / int64(time.Millisecond)
 		if nowMilli > outboundPeek.RenewedTimestamp+outboundPeek.RenewalInterval {
-			logrus.Infof("stale outbound peek to %s for %s already exists; renewing", serverName, roomID)
+			logrus.Infof("stale outbound peek to %s for %s already exists; renewing", serverName, frameID)
 			renewing = true
 		} else {
-			logrus.Infof("live outbound peek to %s for %s already exists", serverName, roomID)
+			logrus.Infof("live outbound peek to %s for %s already exists", serverName, frameID)
 			return nil
 		}
 	}
@@ -359,7 +359,7 @@ func (r *FederationInternalAPI) performOutboundPeekUsingServer(
 		ctx,
 		r.cfg.Matrix.ServerName,
 		serverName,
-		roomID,
+		frameID,
 		peekID,
 		supportedVersions,
 	)
@@ -369,13 +369,13 @@ func (r *FederationInternalAPI) performOutboundPeekUsingServer(
 	}
 	r.statistics.ForServer(serverName).Success(statistics.SendDirect)
 
-	// Work out if we support the room version that has been supplied in
+	// Work out if we support the frame version that has been supplied in
 	// the peek response.
-	if respPeek.RoomVersion == "" {
-		respPeek.RoomVersion = xtools.RoomVersionV1
+	if respPeek.FrameVersion == "" {
+		respPeek.FrameVersion = xtools.FrameVersionV1
 	}
-	if !xtools.KnownRoomVersion(respPeek.RoomVersion) {
-		return fmt.Errorf("unknown room version: %s", respPeek.RoomVersion)
+	if !xtools.KnownFrameVersion(respPeek.FrameVersion) {
+		return fmt.Errorf("unknown frame version: %s", respPeek.FrameVersion)
 	}
 
 	// we have the peek state now so let's process regardless of whether upstream gives up
@@ -383,11 +383,11 @@ func (r *FederationInternalAPI) performOutboundPeekUsingServer(
 
 	// authenticate the state returned (check its auth events etc)
 	// the equivalent of CheckSendJoinResponse()
-	userIDProvider := func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-		return r.rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+	userIDProvider := func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+		return r.rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 	}
 	authEvents, stateEvents, err := xtools.CheckStateResponse(
-		ctx, &respPeek, respPeek.RoomVersion, r.keyRing, federatedEventProvider(ctx, r.federation, r.keyRing, r.cfg.Matrix.ServerName, serverName, userIDProvider), userIDProvider,
+		ctx, &respPeek, respPeek.FrameVersion, r.keyRing, federatedEventProvider(ctx, r.federation, r.keyRing, r.cfg.Matrix.ServerName, serverName, userIDProvider), userIDProvider,
 	)
 	if err != nil {
 		return fmt.Errorf("error checking state returned from peeking: %w", err)
@@ -398,20 +398,20 @@ func (r *FederationInternalAPI) performOutboundPeekUsingServer(
 
 	// If we've got this far, the remote server is peeking.
 	if renewing {
-		if err = r.db.RenewOutboundPeek(ctx, serverName, roomID, peekID, respPeek.RenewalInterval); err != nil {
+		if err = r.db.RenewOutboundPeek(ctx, serverName, frameID, peekID, respPeek.RenewalInterval); err != nil {
 			return err
 		}
 	} else {
-		if err = r.db.AddOutboundPeek(ctx, serverName, roomID, peekID, respPeek.RenewalInterval); err != nil {
+		if err = r.db.AddOutboundPeek(ctx, serverName, frameID, peekID, respPeek.RenewalInterval); err != nil {
 			return err
 		}
 	}
 
 	// logrus.Warnf("got respPeek %#v", respPeek)
-	// Send the newly returned state to the roomserver to update our local view.
-	if err = roomserverAPI.SendEventWithState(
+	// Send the newly returned state to the dataframe to update our local view.
+	if err = dataframeAPI.SendEventWithState(
 		ctx, r.rsAPI, r.cfg.Matrix.ServerName,
-		roomserverAPI.KindNew,
+		dataframeAPI.KindNew,
 		// use the authorized state from CheckStateResponse
 		&fclient.RespState{
 			StateEvents: xtools.NewEventJSONsFromEvents(stateEvents),
@@ -455,40 +455,40 @@ func (r *FederationInternalAPI) PerformLeave(
 			ctx,
 			userID.Domain(),
 			serverName,
-			request.RoomID,
+			request.FrameID,
 			request.UserID,
 		)
 		if err != nil {
-			// TODO: Check if the user was not allowed to leave the room.
+			// TODO: Check if the user was not allowed to leave the frame.
 			logrus.WithError(err).Warnf("r.federation.MakeLeave failed")
 			r.statistics.ForServer(serverName).Failure()
 			continue
 		}
 
-		// Work out if we support the room version that has been supplied in
+		// Work out if we support the frame version that has been supplied in
 		// the make_leave response.
-		verImpl, err := xtools.GetRoomVersion(respMakeLeave.RoomVersion)
+		verImpl, err := xtools.GetFrameVersion(respMakeLeave.FrameVersion)
 		if err != nil {
 			return err
 		}
 
 		// Set all the fields to be what they should be, this should be a no-op
 		// but it's possible that the remote server returned us something "odd"
-		roomID, err := spec.NewRoomID(request.RoomID)
+		frameID, err := spec.NewFrameID(request.FrameID)
 		if err != nil {
 			return err
 		}
-		senderID, err := r.rsAPI.QuerySenderIDForUser(ctx, *roomID, *userID)
+		senderID, err := r.rsAPI.QuerySenderIDForUser(ctx, *frameID, *userID)
 		if err != nil {
 			return err
 		} else if senderID == nil {
-			return fmt.Errorf("sender ID not found for %s in %s", *userID, *roomID)
+			return fmt.Errorf("sender ID not found for %s in %s", *userID, *frameID)
 		}
 		senderIDString := string(*senderID)
-		respMakeLeave.LeaveEvent.Type = spec.MRoomMember
+		respMakeLeave.LeaveEvent.Type = spec.MFrameMember
 		respMakeLeave.LeaveEvent.SenderID = senderIDString
 		respMakeLeave.LeaveEvent.StateKey = &senderIDString
-		respMakeLeave.LeaveEvent.RoomID = request.RoomID
+		respMakeLeave.LeaveEvent.FrameID = request.FrameID
 		respMakeLeave.LeaveEvent.Redacts = ""
 		leaveEB := verImpl.NewEventBuilderFromProtoEvent(&respMakeLeave.LeaveEvent)
 
@@ -537,8 +537,8 @@ func (r *FederationInternalAPI) PerformLeave(
 
 	// If we reach here then we didn't complete a leave for some reason.
 	return fmt.Errorf(
-		"failed to leave room %q through %d server(s)",
-		request.RoomID, len(request.ServerNames),
+		"failed to leave frame %q through %d server(s)",
+		request.FrameID, len(request.ServerNames),
 	)
 }
 
@@ -548,11 +548,11 @@ func (r *FederationInternalAPI) SendInvite(
 	event xtools.PDU,
 	strippedState []xtools.InviteStrippedState,
 ) (xtools.PDU, error) {
-	validRoomID, err := spec.NewRoomID(event.RoomID())
+	validFrameID, err := spec.NewFrameID(event.FrameID())
 	if err != nil {
 		return nil, err
 	}
-	inviter, err := r.rsAPI.QueryUserIDForSender(ctx, *validRoomID, event.SenderID())
+	inviter, err := r.rsAPI.QueryUserIDForSender(ctx, *validFrameID, event.SenderID())
 	if err != nil {
 		return nil, err
 	}
@@ -575,8 +575,8 @@ func (r *FederationInternalAPI) SendInvite(
 	logrus.WithFields(logrus.Fields{
 		"event_id":     event.EventID(),
 		"user_id":      *event.StateKey(),
-		"room_id":      event.RoomID(),
-		"room_version": event.Version(),
+		"frame_id":      event.FrameID(),
+		"frame_version": event.Version(),
 		"destination":  destination,
 	}).Info("Sending invite")
 
@@ -589,7 +589,7 @@ func (r *FederationInternalAPI) SendInvite(
 	if err != nil {
 		return nil, fmt.Errorf("r.federation.SendInviteV2: failed to send invite: %w", err)
 	}
-	verImpl, err := xtools.GetRoomVersion(event.Version())
+	verImpl, err := xtools.GetFrameVersion(event.Version())
 	if err != nil {
 		return nil, err
 	}
@@ -606,19 +606,19 @@ func (r *FederationInternalAPI) SendInviteV3(
 	ctx context.Context,
 	event xtools.ProtoEvent,
 	invitee spec.UserID,
-	version xtools.RoomVersion,
+	version xtools.FrameVersion,
 	strippedState []xtools.InviteStrippedState,
 ) (xtools.PDU, error) {
-	validRoomID, err := spec.NewRoomID(event.RoomID)
+	validFrameID, err := spec.NewFrameID(event.FrameID)
 	if err != nil {
 		return nil, err
 	}
-	verImpl, err := xtools.GetRoomVersion(version)
+	verImpl, err := xtools.GetFrameVersion(version)
 	if err != nil {
 		return nil, err
 	}
 
-	inviter, err := r.rsAPI.QueryUserIDForSender(ctx, *validRoomID, spec.SenderID(event.SenderID))
+	inviter, err := r.rsAPI.QueryUserIDForSender(ctx, *validFrameID, spec.SenderID(event.SenderID))
 	if err != nil {
 		return nil, err
 	}
@@ -631,8 +631,8 @@ func (r *FederationInternalAPI) SendInviteV3(
 
 	logrus.WithFields(logrus.Fields{
 		"user_id":      invitee.String(),
-		"room_id":      event.RoomID,
-		"room_version": version,
+		"frame_id":      event.FrameID,
+		"frame_version": version,
 		"destination":  invitee.Domain(),
 	}).Info("Sending invite")
 
@@ -670,7 +670,7 @@ func (r *FederationInternalAPI) PerformBroadcastEDU(
 	logrus.WithContext(ctx).Infof("Sending wake-up EDU to %d destination(s)", len(destinations))
 
 	edu := &xtools.EDU{
-		Type:   "org.matrix.dendrite.wakeup",
+		Type:   "org.coddy.dendrite.wakeup",
 		Origin: string(r.cfg.Matrix.ServerName),
 	}
 	if err = r.queues.SendEDU(edu, r.cfg.Matrix.ServerName, destinations); err != nil {
@@ -699,31 +699,30 @@ func (r *FederationInternalAPI) MarkServersAlive(destinations []spec.ServerName)
 }
 
 func checkEventsContainCreateEvent(events []xtools.PDU) error {
-	// sanity check we have a create event and it has a known room version
+	// sanity check we have a create event and it has a known frame version
 	for _, ev := range events {
-		if ev.Type() == spec.MRoomCreate && ev.StateKeyEquals("") {
-			// make sure the room version is known
+		if ev.Type() == spec.MFrameCreate && ev.StateKeyEquals("") {
+			// make sure the frame version is known
 			content := ev.Content()
 			verBody := struct {
-				Version string `json:"room_version"`
+				Version string `json:"frame_version"`
 			}{}
 			err := json.Unmarshal(content, &verBody)
 			if err != nil {
 				return err
 			}
 			if verBody.Version == "" {
-				// https://matrix.org/docs/spec/client_server/r0.6.0#m-room-create
-				// The version of the room. Defaults to "1" if the key does not exist.
+				// The version of the frame. Defaults to "1" if the key does not exist.
 				verBody.Version = "1"
 			}
-			knownVersions := xtools.RoomVersions()
-			if _, ok := knownVersions[xtools.RoomVersion(verBody.Version)]; !ok {
-				return fmt.Errorf("m.room.create event has an unknown room version: %s", verBody.Version)
+			knownVersions := xtools.FrameVersions()
+			if _, ok := knownVersions[xtools.FrameVersion(verBody.Version)]; !ok {
+				return fmt.Errorf("m.frame.create event has an unknown frame version: %s", verBody.Version)
 			}
 			return nil
 		}
 	}
-	return fmt.Errorf("response is missing m.room.create event")
+	return fmt.Errorf("response is missing m.frame.create event")
 }
 
 // federatedEventProvider is an event provider which fetches events from the server provided
@@ -739,9 +738,9 @@ func federatedEventProvider(
 	// Define a function which we can pass to Check to retrieve missing
 	// auth events inline. This greatly increases our chances of not having
 	// to repeat the entire set of checks just for a missing event or two.
-	return func(roomVersion xtools.RoomVersion, eventIDs []string) ([]xtools.PDU, error) {
+	return func(frameVersion xtools.FrameVersion, eventIDs []string) ([]xtools.PDU, error) {
 		returning := []xtools.PDU{}
-		verImpl, err := xtools.GetRoomVersion(roomVersion)
+		verImpl, err := xtools.GetFrameVersion(frameVersion)
 		if err != nil {
 			return nil, err
 		}

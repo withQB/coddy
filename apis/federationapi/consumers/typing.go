@@ -59,7 +59,7 @@ func (t *OutputTypingConsumer) Start() error {
 func (t *OutputTypingConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) bool {
 	msg := msgs[0] // Guaranteed to exist if onMessage is called
 	// Extract the typing event from msg.
-	roomID := msg.Header.Get(jetstream.RoomID)
+	frameID := msg.Header.Get(jetstream.FrameID)
 	userID := msg.Header.Get(jetstream.UserID)
 	typing, err := strconv.ParseBool(msg.Header.Get("typing"))
 	if err != nil {
@@ -78,9 +78,9 @@ func (t *OutputTypingConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) 
 		return true
 	}
 
-	joined, err := t.db.GetJoinedHosts(ctx, roomID)
+	joined, err := t.db.GetJoinedHosts(ctx, frameID)
 	if err != nil {
-		log.WithError(err).WithField("room_id", roomID).Error("failed to get joined hosts for room")
+		log.WithError(err).WithField("frame_id", frameID).Error("failed to get joined hosts for frame")
 		return false
 	}
 
@@ -91,7 +91,7 @@ func (t *OutputTypingConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) 
 
 	edu := &xtools.EDU{Type: "m.typing"}
 	if edu.Content, err = json.Marshal(map[string]interface{}{
-		"room_id": roomID,
+		"frame_id": frameID,
 		"user_id": userID,
 		"typing":  typing,
 	}); err != nil {

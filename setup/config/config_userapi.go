@@ -19,8 +19,8 @@ type UserAPI struct {
 	AccountDatabase DatabaseOptions `yaml:"account_database,omitempty"`
 
 	// Users who register on this homeserver will automatically
-	// be joined to the rooms listed under this option.
-	AutoJoinRooms []string `yaml:"auto_join_rooms"`
+	// be joined to the frames listed under this option.
+	AutoJoinFrames []string `yaml:"auto_join_frames"`
 }
 
 const DefaultOpenIDTokenLifetimeMS = 3600000 // 60 minutes

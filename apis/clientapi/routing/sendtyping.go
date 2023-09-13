@@ -20,7 +20,7 @@ import (
 	"github.com/withqb/coddy/apis/clientapi/httputil"
 	"github.com/withqb/coddy/apis/clientapi/producers"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	roomserverAPI "github.com/withqb/coddy/servers/roomserver/api"
+	dataframeAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/xtools/spec"
 )
 
@@ -29,11 +29,11 @@ type typingContentJSON struct {
 	Timeout int64 `json:"timeout"`
 }
 
-// SendTyping handles PUT /rooms/{roomID}/typing/{userID}
+// SendTyping handles PUT /frames/{frameID}/typing/{userID}
 // sends the typing events to client API typingProducer
 func SendTyping(
-	req *http.Request, device *userapi.Device, roomID string,
-	userID string, rsAPI roomserverAPI.ClientRoomserverAPI,
+	req *http.Request, device *userapi.Device, frameID string,
+	userID string, rsAPI dataframeAPI.ClientDataframeAPI,
 	syncProducer *producers.SyncAPIProducer,
 ) xutil.JSONResponse {
 	if device.UserID != userID {
@@ -51,8 +51,8 @@ func SendTyping(
 		}
 	}
 
-	// Verify that the user is a member of this room
-	resErr := checkMemberInRoom(req.Context(), rsAPI, *deviceUserID, roomID)
+	// Verify that the user is a member of this frame
+	resErr := checkMemberInFrame(req.Context(), rsAPI, *deviceUserID, frameID)
 	if resErr != nil {
 		return *resErr
 	}
@@ -64,7 +64,7 @@ func SendTyping(
 		return *resErr
 	}
 
-	if err := syncProducer.SendTyping(req.Context(), userID, roomID, r.Typing, r.Timeout); err != nil {
+	if err := syncProducer.SendTyping(req.Context(), userID, frameID, r.Typing, r.Timeout); err != nil {
 		xutil.GetLogger(req.Context()).WithError(err).Error("eduProducer.Send failed")
 		return xutil.JSONResponse{
 			Code: http.StatusInternalServerError,

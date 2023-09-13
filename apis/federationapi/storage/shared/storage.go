@@ -34,35 +34,35 @@ type Database struct {
 	ServerSigningKeys        tables.FederationServerSigningKeys
 }
 
-// UpdateRoom updates the joined hosts for a room and returns what the joined
+// UpdateFrame updates the joined hosts for a frame and returns what the joined
 // hosts were before the update, or nil if this was a duplicate message.
 // This is called when we receive a message from kafka, so we pass in
 // oldEventID and newEventID to check that we haven't missed any messages or
 // this isn't a duplicate message.
-func (d *Database) UpdateRoom(
+func (d *Database) UpdateFrame(
 	ctx context.Context,
-	roomID string,
+	frameID string,
 	addHosts []types.JoinedHost,
 	removeHosts []string,
-	purgeRoomFirst bool,
+	purgeFrameFirst bool,
 ) (joinedHosts []types.JoinedHost, err error) {
 	err = d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		if purgeRoomFirst {
-			if err = d.FederationJoinedHosts.DeleteJoinedHostsForRoom(ctx, txn, roomID); err != nil {
+		if purgeFrameFirst {
+			if err = d.FederationJoinedHosts.DeleteJoinedHostsForFrame(ctx, txn, frameID); err != nil {
 				return fmt.Errorf("d.FederationJoinedHosts.DeleteJoinedHosts: %w", err)
 			}
 			for _, add := range addHosts {
-				if err = d.FederationJoinedHosts.InsertJoinedHosts(ctx, txn, roomID, add.MemberEventID, add.ServerName); err != nil {
+				if err = d.FederationJoinedHosts.InsertJoinedHosts(ctx, txn, frameID, add.MemberEventID, add.ServerName); err != nil {
 					return err
 				}
 				joinedHosts = append(joinedHosts, add)
 			}
 		} else {
-			if joinedHosts, err = d.FederationJoinedHosts.SelectJoinedHostsWithTx(ctx, txn, roomID); err != nil {
+			if joinedHosts, err = d.FederationJoinedHosts.SelectJoinedHostsWithTx(ctx, txn, frameID); err != nil {
 				return err
 			}
 			for _, add := range addHosts {
-				if err = d.FederationJoinedHosts.InsertJoinedHosts(ctx, txn, roomID, add.MemberEventID, add.ServerName); err != nil {
+				if err = d.FederationJoinedHosts.InsertJoinedHosts(ctx, txn, frameID, add.MemberEventID, add.ServerName); err != nil {
 					return err
 				}
 			}
@@ -75,17 +75,17 @@ func (d *Database) UpdateRoom(
 	return
 }
 
-// GetJoinedHosts returns the currently joined hosts for room,
+// GetJoinedHosts returns the currently joined hosts for frame,
 // as known to federationserver.
 // Returns an error if something goes wrong.
 func (d *Database) GetJoinedHosts(
-	ctx context.Context, roomID string,
+	ctx context.Context, frameID string,
 ) ([]types.JoinedHost, error) {
-	return d.FederationJoinedHosts.SelectJoinedHosts(ctx, roomID)
+	return d.FederationJoinedHosts.SelectJoinedHosts(ctx, frameID)
 }
 
 // GetAllJoinedHosts returns the currently joined hosts for
-// all rooms known to the federation sender.
+// all frames known to the federation sender.
 // Returns an error if something goes wrong.
 func (d *Database) GetAllJoinedHosts(
 	ctx context.Context,
@@ -93,13 +93,13 @@ func (d *Database) GetAllJoinedHosts(
 	return d.FederationJoinedHosts.SelectAllJoinedHosts(ctx)
 }
 
-func (d *Database) GetJoinedHostsForRooms(
+func (d *Database) GetJoinedHostsForFrames(
 	ctx context.Context,
-	roomIDs []string,
+	frameIDs []string,
 	excludeSelf,
 	excludeBlacklisted bool,
 ) ([]spec.ServerName, error) {
-	servers, err := d.FederationJoinedHosts.SelectJoinedHostsForRooms(ctx, roomIDs, excludeBlacklisted)
+	servers, err := d.FederationJoinedHosts.SelectJoinedHostsForFrames(ctx, frameIDs, excludeBlacklisted)
 	if err != nil {
 		return nil, err
 	}
@@ -234,81 +234,81 @@ func (d *Database) P2PRemoveAllRelayServersForServer(
 func (d *Database) AddOutboundPeek(
 	ctx context.Context,
 	serverName spec.ServerName,
-	roomID string,
+	frameID string,
 	peekID string,
 	renewalInterval int64,
 ) error {
 	return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		return d.FederationOutboundPeeks.InsertOutboundPeek(ctx, txn, serverName, roomID, peekID, renewalInterval)
+		return d.FederationOutboundPeeks.InsertOutboundPeek(ctx, txn, serverName, frameID, peekID, renewalInterval)
 	})
 }
 
 func (d *Database) RenewOutboundPeek(
 	ctx context.Context,
 	serverName spec.ServerName,
-	roomID string,
+	frameID string,
 	peekID string,
 	renewalInterval int64,
 ) error {
 	return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		return d.FederationOutboundPeeks.RenewOutboundPeek(ctx, txn, serverName, roomID, peekID, renewalInterval)
+		return d.FederationOutboundPeeks.RenewOutboundPeek(ctx, txn, serverName, frameID, peekID, renewalInterval)
 	})
 }
 
 func (d *Database) GetOutboundPeek(
 	ctx context.Context,
 	serverName spec.ServerName,
-	roomID,
+	frameID,
 	peekID string,
 ) (*types.OutboundPeek, error) {
-	return d.FederationOutboundPeeks.SelectOutboundPeek(ctx, nil, serverName, roomID, peekID)
+	return d.FederationOutboundPeeks.SelectOutboundPeek(ctx, nil, serverName, frameID, peekID)
 }
 
 func (d *Database) GetOutboundPeeks(
 	ctx context.Context,
-	roomID string,
+	frameID string,
 ) ([]types.OutboundPeek, error) {
-	return d.FederationOutboundPeeks.SelectOutboundPeeks(ctx, nil, roomID)
+	return d.FederationOutboundPeeks.SelectOutboundPeeks(ctx, nil, frameID)
 }
 
 func (d *Database) AddInboundPeek(
 	ctx context.Context,
 	serverName spec.ServerName,
-	roomID string,
+	frameID string,
 	peekID string,
 	renewalInterval int64,
 ) error {
 	return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		return d.FederationInboundPeeks.InsertInboundPeek(ctx, txn, serverName, roomID, peekID, renewalInterval)
+		return d.FederationInboundPeeks.InsertInboundPeek(ctx, txn, serverName, frameID, peekID, renewalInterval)
 	})
 }
 
 func (d *Database) RenewInboundPeek(
 	ctx context.Context,
 	serverName spec.ServerName,
-	roomID string,
+	frameID string,
 	peekID string,
 	renewalInterval int64,
 ) error {
 	return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		return d.FederationInboundPeeks.RenewInboundPeek(ctx, txn, serverName, roomID, peekID, renewalInterval)
+		return d.FederationInboundPeeks.RenewInboundPeek(ctx, txn, serverName, frameID, peekID, renewalInterval)
 	})
 }
 
 func (d *Database) GetInboundPeek(
 	ctx context.Context,
 	serverName spec.ServerName,
-	roomID string,
+	frameID string,
 	peekID string,
 ) (*types.InboundPeek, error) {
-	return d.FederationInboundPeeks.SelectInboundPeek(ctx, nil, serverName, roomID, peekID)
+	return d.FederationInboundPeeks.SelectInboundPeek(ctx, nil, serverName, frameID, peekID)
 }
 
 func (d *Database) GetInboundPeeks(
 	ctx context.Context,
-	roomID string,
+	frameID string,
 ) ([]types.InboundPeek, error) {
-	return d.FederationInboundPeeks.SelectInboundPeeks(ctx, nil, roomID)
+	return d.FederationInboundPeeks.SelectInboundPeeks(ctx, nil, frameID)
 }
 
 func (d *Database) UpdateNotaryKeys(
@@ -321,7 +321,6 @@ func (d *Database) UpdateNotaryKeys(
 		// Servers MUST use the lesser of this field and 7 days into the future when determining if a key is valid.
 		// This is to avoid a situation where an attacker publishes a key which is valid for a significant amount of
 		// time without a way for the homeserver owner to revoke it.
-		// https://spec.matrix.org/unstable/server-server-api/#querying-keys-through-another-server
 		weekIntoFuture := time.Now().Add(7 * 24 * time.Hour)
 		if weekIntoFuture.Before(validUntil.Time()) {
 			validUntil = spec.AsTimestamp(weekIntoFuture)
@@ -361,15 +360,15 @@ func (d *Database) GetNotaryKeys(
 	return sks, err
 }
 
-func (d *Database) PurgeRoom(ctx context.Context, roomID string) error {
+func (d *Database) PurgeFrame(ctx context.Context, frameID string) error {
 	return d.Writer.Do(d.DB, nil, func(txn *sql.Tx) error {
-		if err := d.FederationJoinedHosts.DeleteJoinedHostsForRoom(ctx, txn, roomID); err != nil {
+		if err := d.FederationJoinedHosts.DeleteJoinedHostsForFrame(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge joined hosts: %w", err)
 		}
-		if err := d.FederationInboundPeeks.DeleteInboundPeeks(ctx, txn, roomID); err != nil {
+		if err := d.FederationInboundPeeks.DeleteInboundPeeks(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge inbound peeks: %w", err)
 		}
-		if err := d.FederationOutboundPeeks.DeleteOutboundPeeks(ctx, txn, roomID); err != nil {
+		if err := d.FederationOutboundPeeks.DeleteOutboundPeeks(ctx, txn, frameID); err != nil {
 			return fmt.Errorf("failed to purge outbound peeks: %w", err)
 		}
 		return nil

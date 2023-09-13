@@ -21,7 +21,7 @@ type PasswordRequest struct {
 	Password string `json:"password"`
 }
 
-// LoginTypePassword implements https://matrix.org/docs/spec/client_server/r0.6.1#password-based
+// LoginTypePassword implements
 type LoginTypePassword struct {
 	GetAccountByPassword GetAccountByPassword
 	Config               *config.ClientAPI

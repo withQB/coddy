@@ -47,13 +47,13 @@ type Account interface {
 }
 
 type AccountData interface {
-	SaveAccountData(ctx context.Context, localpart string, serverName spec.ServerName, roomID, dataType string, content json.RawMessage) error
-	GetAccountData(ctx context.Context, localpart string, serverName spec.ServerName) (global map[string]json.RawMessage, rooms map[string]map[string]json.RawMessage, err error)
+	SaveAccountData(ctx context.Context, localpart string, serverName spec.ServerName, frameID, dataType string, content json.RawMessage) error
+	GetAccountData(ctx context.Context, localpart string, serverName spec.ServerName) (global map[string]json.RawMessage, frames map[string]map[string]json.RawMessage, err error)
 	// GetAccountDataByType returns account data matching a given
-	// localpart, room ID and type.
+	// localpart, frame ID and type.
 	// If no account data could be found, returns nil
 	// Returns an error if there was an issue with the retrieval
-	GetAccountDataByType(ctx context.Context, localpart string, serverName spec.ServerName, roomID, dataType string) (data json.RawMessage, err error)
+	GetAccountDataByType(ctx context.Context, localpart string, serverName spec.ServerName, frameID, dataType string) (data json.RawMessage, err error)
 	QueryPushRules(ctx context.Context, localpart string, serverName spec.ServerName) (*pushrules.AccountRuleSets, error)
 }
 
@@ -82,7 +82,7 @@ type KeyBackup interface {
 	DeleteKeyBackup(ctx context.Context, userID, version string) (exists bool, err error)
 	GetKeyBackup(ctx context.Context, userID, version string) (versionResult, algorithm string, authData json.RawMessage, etag string, deleted bool, err error)
 	UpsertBackupKeys(ctx context.Context, version, userID string, uploads []api.InternalKeyBackupSession) (count int64, etag string, err error)
-	GetBackupKeys(ctx context.Context, version, userID, filterRoomID, filterSessionID string) (result map[string]map[string]api.KeyBackupSession, err error)
+	GetBackupKeys(ctx context.Context, version, userID, filterFrameID, filterSessionID string) (result map[string]map[string]api.KeyBackupSession, err error)
 	CountBackupKeys(ctx context.Context, version, userID string) (count int64, err error)
 }
 
@@ -120,11 +120,11 @@ type ThreePID interface {
 
 type Notification interface {
 	InsertNotification(ctx context.Context, localpart string, serverName spec.ServerName, eventID string, pos uint64, tweaks map[string]interface{}, n *api.Notification) error
-	DeleteNotificationsUpTo(ctx context.Context, localpart string, serverName spec.ServerName, roomID string, pos uint64) (affected bool, err error)
-	SetNotificationsRead(ctx context.Context, localpart string, serverName spec.ServerName, roomID string, pos uint64, read bool) (affected bool, err error)
+	DeleteNotificationsUpTo(ctx context.Context, localpart string, serverName spec.ServerName, frameID string, pos uint64) (affected bool, err error)
+	SetNotificationsRead(ctx context.Context, localpart string, serverName spec.ServerName, frameID string, pos uint64, read bool) (affected bool, err error)
 	GetNotifications(ctx context.Context, localpart string, serverName spec.ServerName, fromID int64, limit int, filter tables.NotificationFilter) ([]*api.Notification, int64, error)
 	GetNotificationCount(ctx context.Context, localpart string, serverName spec.ServerName, filter tables.NotificationFilter) (int64, error)
-	GetRoomNotificationCounts(ctx context.Context, localpart string, serverName spec.ServerName, roomID string) (total int64, highlight int64, _ error)
+	GetFrameNotificationCounts(ctx context.Context, localpart string, serverName spec.ServerName, frameID string) (total int64, highlight int64, _ error)
 	DeleteOldNotifications(ctx context.Context) error
 }
 
@@ -217,8 +217,8 @@ type KeyDatabase interface {
 
 type Statistics interface {
 	UserStatistics(ctx context.Context) (*types.UserStatistics, *types.DatabaseEngine, error)
-	DailyRoomsMessages(ctx context.Context, serverName spec.ServerName) (stats types.MessageStats, activeRooms, activeE2EERooms int64, err error)
-	UpsertDailyRoomsMessages(ctx context.Context, serverName spec.ServerName, stats types.MessageStats, activeRooms, activeE2EERooms int64) error
+	DailyFramesMessages(ctx context.Context, serverName spec.ServerName) (stats types.MessageStats, activeFrames, activeE2EEFrames int64, err error)
+	UpsertDailyFramesMessages(ctx context.Context, serverName spec.ServerName, stats types.MessageStats, activeFrames, activeE2EEFrames int64) error
 }
 
 // Err3PIDInUse is the error returned when trying to save an association involving

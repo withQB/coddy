@@ -2,6 +2,15 @@ module github.com/withqb/coddy
 
 go 1.21
 
+replace (
+
+github.com/withqb/xcore => ../pkg/xcore
+github.com/withqb/xlogrus => ../pkg/xlogrus
+github.com/withqb/xtools => ../pkg/xtools
+github.com/withqb/xutil => ../pkg/xutil
+
+)
+
 require (
 	github.com/Arceliar/phony v0.0.0-20220903101357-530938a4b13d
 	github.com/MFAshby/stdemuxerhook v1.0.0

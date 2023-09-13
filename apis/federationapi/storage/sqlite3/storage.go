@@ -76,8 +76,8 @@ func NewDatabase(ctx context.Context, conMan *sqlutil.Connections, dbProperties 
 	}
 	m := sqlutil.NewMigrator(d.db)
 	m.AddMigrations(sqlutil.Migration{
-		Version: "federationsender: drop federationsender_rooms",
-		Up:      deltas.UpRemoveRoomsTable,
+		Version: "federationsender: drop federationsender_frames",
+		Up:      deltas.UpRemoveFramesTable,
 	})
 	err = m.Up(ctx)
 	if err != nil {

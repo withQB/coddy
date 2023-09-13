@@ -2,37 +2,37 @@ package internal
 
 import "sync"
 
-type MutexByRoom struct {
+type MutexByFrame struct {
 	mu       *sync.Mutex // protects the map
-	roomToMu map[string]*sync.Mutex
+	frameToMu map[string]*sync.Mutex
 }
 
-func NewMutexByRoom() *MutexByRoom {
-	return &MutexByRoom{
+func NewMutexByFrame() *MutexByFrame {
+	return &MutexByFrame{
 		mu:       &sync.Mutex{},
-		roomToMu: make(map[string]*sync.Mutex),
+		frameToMu: make(map[string]*sync.Mutex),
 	}
 }
 
-func (m *MutexByRoom) Lock(roomID string) {
+func (m *MutexByFrame) Lock(frameID string) {
 	m.mu.Lock()
-	roomMu := m.roomToMu[roomID]
-	if roomMu == nil {
-		roomMu = &sync.Mutex{}
+	frameMu := m.frameToMu[frameID]
+	if frameMu == nil {
+		frameMu = &sync.Mutex{}
 	}
-	m.roomToMu[roomID] = roomMu
+	m.frameToMu[frameID] = frameMu
 	m.mu.Unlock()
 	// don't lock inside m.mu else we can deadlock
-	roomMu.Lock()
+	frameMu.Lock()
 }
 
-func (m *MutexByRoom) Unlock(roomID string) {
+func (m *MutexByFrame) Unlock(frameID string) {
 	m.mu.Lock()
-	roomMu := m.roomToMu[roomID]
-	if roomMu == nil {
-		panic("MutexByRoom: Unlock before Lock")
+	frameMu := m.frameToMu[frameID]
+	if frameMu == nil {
+		panic("MutexByFrame: Unlock before Lock")
 	}
 	m.mu.Unlock()
 
-	roomMu.Unlock()
+	frameMu.Unlock()
 }

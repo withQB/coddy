@@ -26,9 +26,9 @@ type RegistrationTokensTable interface {
 }
 
 type AccountDataTable interface {
-	InsertAccountData(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, roomID, dataType string, content json.RawMessage) error
+	InsertAccountData(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, frameID, dataType string, content json.RawMessage) error
 	SelectAccountData(ctx context.Context, localpart string, serverName spec.ServerName) (map[string]json.RawMessage, map[string]map[string]json.RawMessage, error)
-	SelectAccountDataByType(ctx context.Context, localpart string, serverName spec.ServerName, roomID, dataType string) (data json.RawMessage, err error)
+	SelectAccountDataByType(ctx context.Context, localpart string, serverName spec.ServerName, frameID, dataType string) (data json.RawMessage, err error)
 }
 
 type AccountsTable interface {
@@ -59,8 +59,8 @@ type KeyBackupTable interface {
 	InsertBackupKey(ctx context.Context, txn *sql.Tx, userID, version string, key api.InternalKeyBackupSession) (err error)
 	UpdateBackupKey(ctx context.Context, txn *sql.Tx, userID, version string, key api.InternalKeyBackupSession) (err error)
 	SelectKeys(ctx context.Context, txn *sql.Tx, userID, version string) (map[string]map[string]api.KeyBackupSession, error)
-	SelectKeysByRoomID(ctx context.Context, txn *sql.Tx, userID, version, roomID string) (map[string]map[string]api.KeyBackupSession, error)
-	SelectKeysByRoomIDAndSessionID(ctx context.Context, txn *sql.Tx, userID, version, roomID, sessionID string) (map[string]map[string]api.KeyBackupSession, error)
+	SelectKeysByFrameID(ctx context.Context, txn *sql.Tx, userID, version, frameID string) (map[string]map[string]api.KeyBackupSession, error)
+	SelectKeysByFrameIDAndSessionID(ctx context.Context, txn *sql.Tx, userID, version, frameID, sessionID string) (map[string]map[string]api.KeyBackupSession, error)
 }
 
 type KeyBackupVersionTable interface {
@@ -107,18 +107,18 @@ type PusherTable interface {
 type NotificationTable interface {
 	Clean(ctx context.Context, txn *sql.Tx) error
 	Insert(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, eventID string, pos uint64, highlight bool, n *api.Notification) error
-	DeleteUpTo(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, roomID string, pos uint64) (affected bool, _ error)
-	UpdateRead(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, roomID string, pos uint64, v bool) (affected bool, _ error)
+	DeleteUpTo(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, frameID string, pos uint64) (affected bool, _ error)
+	UpdateRead(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, frameID string, pos uint64, v bool) (affected bool, _ error)
 	Select(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, fromID int64, limit int, filter NotificationFilter) ([]*api.Notification, int64, error)
 	SelectCount(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, filter NotificationFilter) (int64, error)
-	SelectRoomCounts(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, roomID string) (total int64, highlight int64, _ error)
+	SelectFrameCounts(ctx context.Context, txn *sql.Tx, localpart string, serverName spec.ServerName, frameID string) (total int64, highlight int64, _ error)
 }
 
 type StatsTable interface {
 	UserStatistics(ctx context.Context, txn *sql.Tx) (*types.UserStatistics, *types.DatabaseEngine, error)
-	DailyRoomsMessages(ctx context.Context, txn *sql.Tx, serverName spec.ServerName) (msgStats types.MessageStats, activeRooms, activeE2EERooms int64, err error)
+	DailyFramesMessages(ctx context.Context, txn *sql.Tx, serverName spec.ServerName) (msgStats types.MessageStats, activeFrames, activeE2EEFrames int64, err error)
 	UpdateUserDailyVisits(ctx context.Context, txn *sql.Tx, startTime, lastUpdate time.Time) error
-	UpsertDailyStats(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, stats types.MessageStats, activeRooms, activeE2EERooms int64) error
+	UpsertDailyStats(ctx context.Context, txn *sql.Tx, serverName spec.ServerName, stats types.MessageStats, activeFrames, activeE2EEFrames int64) error
 }
 
 type NotificationFilter uint32

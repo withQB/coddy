@@ -9,8 +9,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/withqb/coddy/apis/syncapi/synctypes"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/spec"
 	"github.com/withqb/xutil"
@@ -22,23 +22,23 @@ type stateEventInStateResp struct {
 	ReplacesState string          `json:"replaces_state,omitempty"`
 }
 
-// OnIncomingStateRequest is called when a client makes a /rooms/{roomID}/state
-// request. It will fetch all the state events from the specified room and will
+// OnIncomingStateRequest is called when a client makes a /frames/{frameID}/state
+// request. It will fetch all the state events from the specified frame and will
 // append the necessary keys to them if applicable before returning them.
 // Returns an error if something went wrong in the process.
-// TODO: Check if the user is in the room. If not, check if the room's history
+// TODO: Check if the user is in the frame. If not, check if the frame's history
 // is publicly visible. Current behaviour is returning an empty array if the
-// user cannot see the room's history.
-func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI api.ClientRoomserverAPI, roomID string) xutil.JSONResponse {
+// user cannot see the frame's history.
+func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI api.ClientDataframeAPI, frameID string) xutil.JSONResponse {
 	var worldReadable bool
 	var wantLatestState bool
 
-	// First of all, get the latest state of the room. We need to do this
-	// so that we can look at the history visibility of the room. If the
-	// room is world-readable then we will always return the latest state.
+	// First of all, get the latest state of the frame. We need to do this
+	// so that we can look at the history visibility of the frame. If the
+	// frame is world-readable then we will always return the latest state.
 	stateRes := api.QueryLatestEventsAndStateResponse{}
 	if err := rsAPI.QueryLatestEventsAndState(ctx, &api.QueryLatestEventsAndStateRequest{
-		RoomID:       roomID,
+		FrameID:       frameID,
 		StateToFetch: []xtools.StateKeyTuple{},
 	}, &stateRes); err != nil {
 		xutil.GetLogger(ctx).WithError(err).Error("queryAPI.QueryLatestEventsAndState failed")
@@ -47,18 +47,18 @@ func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI a
 			JSON: spec.InternalServerError{},
 		}
 	}
-	if !stateRes.RoomExists {
+	if !stateRes.FrameExists {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden("room does not exist"),
+			JSON: spec.Forbidden("frame does not exist"),
 		}
 	}
 
-	// Look at the room state and see if we have a history visibility event
-	// that marks the room as world-readable. If we don't then we assume that
-	// the room is not world-readable.
+	// Look at the frame state and see if we have a history visibility event
+	// that marks the frame as world-readable. If we don't then we assume that
+	// the frame is not world-readable.
 	for _, ev := range stateRes.StateEvents {
-		if ev.Type() == spec.MRoomHistoryVisibility {
+		if ev.Type() == spec.MFrameHistoryVisibility {
 			content := map[string]string{}
 			if err := json.Unmarshal(ev.Content(), &content); err != nil {
 				xutil.GetLogger(ctx).WithError(err).Error("json.Unmarshal for history visibility failed")
@@ -74,16 +74,16 @@ func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI a
 		}
 	}
 
-	// If the room isn't world-readable then we will instead try to find out
-	// the state of the room based on the user's membership. If the user is
-	// in the room then we'll want the latest state. If the user has never
-	// been in the room and the room isn't world-readable, then we won't
-	// return any state. If the user was in the room previously but is no
+	// If the frame isn't world-readable then we will instead try to find out
+	// the state of the frame based on the user's membership. If the user is
+	// in the frame then we'll want the latest state. If the user has never
+	// been in the frame and the frame isn't world-readable, then we won't
+	// return any state. If the user was in the frame previously but is no
 	// longer then we will return the state at the time that the user left.
-	// membershipRes will only be populated if the room is not world-readable.
+	// membershipRes will only be populated if the frame is not world-readable.
 	var membershipRes api.QueryMembershipForUserResponse
 	if !worldReadable {
-		// The room isn't world-readable so try to work out based on the
+		// The frame isn't world-readable so try to work out based on the
 		// user's membership if we want the latest state or not.
 		userID, err := spec.NewUserID(device.UserID, true)
 		if err != nil {
@@ -94,7 +94,7 @@ func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI a
 			}
 		}
 		err = rsAPI.QueryMembershipForUser(ctx, &api.QueryMembershipForUserRequest{
-			RoomID: roomID,
+			FrameID: frameID,
 			UserID: *userID,
 		}, &membershipRes)
 		if err != nil {
@@ -104,49 +104,49 @@ func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI a
 				JSON: spec.InternalServerError{},
 			}
 		}
-		// If the user has never been in the room then stop at this point.
-		// We won't tell the user about a room they have never joined.
-		if !membershipRes.HasBeenInRoom {
+		// If the user has never been in the frame then stop at this point.
+		// We won't tell the user about a frame they have never joined.
+		if !membershipRes.HasBeenInFrame {
 			return xutil.JSONResponse{
 				Code: http.StatusForbidden,
-				JSON: spec.Forbidden(fmt.Sprintf("Unknown room %q or user %q has never joined this room", roomID, device.UserID)),
+				JSON: spec.Forbidden(fmt.Sprintf("Unknown frame %q or user %q has never joined this frame", frameID, device.UserID)),
 			}
 		}
-		// Otherwise, if the user has been in the room, whether or not we
+		// Otherwise, if the user has been in the frame, whether or not we
 		// give them the latest state will depend on if they are *still* in
-		// the room.
-		wantLatestState = membershipRes.IsInRoom
+		// the frame.
+		wantLatestState = membershipRes.IsInFrame
 	} else {
-		// The room is world-readable so the user join state is irrelevant,
-		// just get the latest room state instead.
+		// The frame is world-readable so the user join state is irrelevant,
+		// just get the latest frame state instead.
 		wantLatestState = true
 	}
 
 	xutil.GetLogger(ctx).WithFields(log.Fields{
-		"roomID":         roomID,
+		"frameID":         frameID,
 		"state_at_event": !wantLatestState,
 	}).Info("Fetching all state")
 
 	stateEvents := []synctypes.ClientEvent{}
 	if wantLatestState {
 		// If we are happy to use the latest state, either because the user is
-		// still in the room, or because the room is world-readable, then just
+		// still in the frame, or because the frame is world-readable, then just
 		// use the result of the previous QueryLatestEventsAndState response
 		// to find the state event, if provided.
 		for _, ev := range stateRes.StateEvents {
 			stateEvents = append(
 				stateEvents,
-				synctypes.ToClientEventDefault(func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-					return rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+				synctypes.ToClientEventDefault(func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+					return rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 				}, ev),
 			)
 		}
 	} else {
 		// Otherwise, take the event ID of their leave event and work out what
-		// the state of the room was before that event.
+		// the state of the frame was before that event.
 		var stateAfterRes api.QueryStateAfterEventsResponse
 		err := rsAPI.QueryStateAfterEvents(ctx, &api.QueryStateAfterEventsRequest{
-			RoomID:       roomID,
+			FrameID:       frameID,
 			PrevEventIDs: []string{membershipRes.EventID},
 			StateToFetch: []xtools.StateKeyTuple{},
 		}, &stateAfterRes)
@@ -159,19 +159,19 @@ func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI a
 		}
 		for _, ev := range stateAfterRes.StateEvents {
 			sender := spec.UserID{}
-			evRoomID, err := spec.NewRoomID(ev.RoomID())
+			evFrameID, err := spec.NewFrameID(ev.FrameID())
 			if err != nil {
-				xutil.GetLogger(ctx).WithError(err).Error("Event roomID is invalid")
+				xutil.GetLogger(ctx).WithError(err).Error("Event frameID is invalid")
 				continue
 			}
-			userID, err := rsAPI.QueryUserIDForSender(ctx, *evRoomID, ev.SenderID())
+			userID, err := rsAPI.QueryUserIDForSender(ctx, *evFrameID, ev.SenderID())
 			if err == nil && userID != nil {
 				sender = *userID
 			}
 
 			sk := ev.StateKey()
 			if sk != nil && *sk != "" {
-				skUserID, err := rsAPI.QueryUserIDForSender(ctx, *evRoomID, spec.SenderID(*ev.StateKey()))
+				skUserID, err := rsAPI.QueryUserIDForSender(ctx, *evFrameID, spec.SenderID(*ev.StateKey()))
 				if err == nil && skUserID != nil {
 					skString := skUserID.String()
 					sk = &skString
@@ -192,36 +192,36 @@ func OnIncomingStateRequest(ctx context.Context, device *userapi.Device, rsAPI a
 }
 
 // OnIncomingStateTypeRequest is called when a client makes a
-// /rooms/{roomID}/state/{type}/{statekey} request. It will look in current
+// /frames/{frameID}/state/{type}/{statekey} request. It will look in current
 // state to see if there is an event with that type and state key, if there
 // is then (by default) we return the content, otherwise a 404.
 // If eventFormat=true, sends the whole event else just the content.
 func OnIncomingStateTypeRequest(
-	ctx context.Context, device *userapi.Device, rsAPI api.ClientRoomserverAPI,
-	roomID, evType, stateKey string, eventFormat bool,
+	ctx context.Context, device *userapi.Device, rsAPI api.ClientDataframeAPI,
+	frameID, evType, stateKey string, eventFormat bool,
 ) xutil.JSONResponse {
 	var worldReadable bool
 	var wantLatestState bool
 
-	roomVer, err := rsAPI.QueryRoomVersionForRoom(ctx, roomID)
+	frameVer, err := rsAPI.QueryFrameVersionForFrame(ctx, frameID)
 	if err != nil {
 		return xutil.JSONResponse{
 			Code: http.StatusForbidden,
-			JSON: spec.Forbidden(fmt.Sprintf("Unknown room %q or user %q has never joined this room", roomID, device.UserID)),
+			JSON: spec.Forbidden(fmt.Sprintf("Unknown frame %q or user %q has never joined this frame", frameID, device.UserID)),
 		}
 	}
 
-	// Translate user ID state keys to room keys in pseudo ID rooms
-	if roomVer == xtools.RoomVersionPseudoIDs {
-		parsedRoomID, err := spec.NewRoomID(roomID)
+	// Translate user ID state keys to frame keys in pseudo ID frames
+	if frameVer == xtools.FrameVersionPseudoIDs {
+		parsedFrameID, err := spec.NewFrameID(frameID)
 		if err != nil {
 			return xutil.JSONResponse{
 				Code: http.StatusNotFound,
-				JSON: spec.InvalidParam("invalid room ID"),
+				JSON: spec.InvalidParam("invalid frame ID"),
 			}
 		}
-		newStateKey, err := synctypes.FromClientStateKey(*parsedRoomID, stateKey, func(roomID spec.RoomID, userID spec.UserID) (*spec.SenderID, error) {
-			return rsAPI.QuerySenderIDForUser(ctx, roomID, userID)
+		newStateKey, err := synctypes.FromClientStateKey(*parsedFrameID, stateKey, func(frameID spec.FrameID, userID spec.UserID) (*spec.SenderID, error) {
+			return rsAPI.QuerySenderIDForUser(ctx, frameID, userID)
 		})
 		if err != nil {
 			// TODO: work out better logic for failure cases (e.g. sender ID not found)
@@ -244,19 +244,19 @@ func OnIncomingStateTypeRequest(
 			StateKey:  stateKey,
 		},
 	}
-	if evType != spec.MRoomHistoryVisibility && stateKey != "" {
+	if evType != spec.MFrameHistoryVisibility && stateKey != "" {
 		stateToFetch = append(stateToFetch, xtools.StateKeyTuple{
-			EventType: spec.MRoomHistoryVisibility,
+			EventType: spec.MFrameHistoryVisibility,
 			StateKey:  "",
 		})
 	}
 
-	// First of all, get the latest state of the room. We need to do this
-	// so that we can look at the history visibility of the room. If the
-	// room is world-readable then we will always return the latest state.
+	// First of all, get the latest state of the frame. We need to do this
+	// so that we can look at the history visibility of the frame. If the
+	// frame is world-readable then we will always return the latest state.
 	stateRes := api.QueryLatestEventsAndStateResponse{}
 	if err := rsAPI.QueryLatestEventsAndState(ctx, &api.QueryLatestEventsAndStateRequest{
-		RoomID:       roomID,
+		FrameID:       frameID,
 		StateToFetch: stateToFetch,
 	}, &stateRes); err != nil {
 		xutil.GetLogger(ctx).WithError(err).Error("queryAPI.QueryLatestEventsAndState failed")
@@ -266,11 +266,11 @@ func OnIncomingStateTypeRequest(
 		}
 	}
 
-	// Look at the room state and see if we have a history visibility event
-	// that marks the room as world-readable. If we don't then we assume that
-	// the room is not world-readable.
+	// Look at the frame state and see if we have a history visibility event
+	// that marks the frame as world-readable. If we don't then we assume that
+	// the frame is not world-readable.
 	for _, ev := range stateRes.StateEvents {
-		if ev.Type() == spec.MRoomHistoryVisibility {
+		if ev.Type() == spec.MFrameHistoryVisibility {
 			content := map[string]string{}
 			if err := json.Unmarshal(ev.Content(), &content); err != nil {
 				xutil.GetLogger(ctx).WithError(err).Error("json.Unmarshal for history visibility failed")
@@ -286,13 +286,13 @@ func OnIncomingStateTypeRequest(
 		}
 	}
 
-	// If the room isn't world-readable then we will instead try to find out
-	// the state of the room based on the user's membership. If the user is
-	// in the room then we'll want the latest state. If the user has never
-	// been in the room and the room isn't world-readable, then we won't
-	// return any state. If the user was in the room previously but is no
+	// If the frame isn't world-readable then we will instead try to find out
+	// the state of the frame based on the user's membership. If the user is
+	// in the frame then we'll want the latest state. If the user has never
+	// been in the frame and the frame isn't world-readable, then we won't
+	// return any state. If the user was in the frame previously but is no
 	// longer then we will return the state at the time that the user left.
-	// membershipRes will only be populated if the room is not world-readable.
+	// membershipRes will only be populated if the frame is not world-readable.
 	var membershipRes api.QueryMembershipForUserResponse
 	if !worldReadable {
 		userID, err := spec.NewUserID(device.UserID, true)
@@ -303,10 +303,10 @@ func OnIncomingStateTypeRequest(
 				JSON: spec.Unknown("Device UserID is invalid"),
 			}
 		}
-		// The room isn't world-readable so try to work out based on the
+		// The frame isn't world-readable so try to work out based on the
 		// user's membership if we want the latest state or not.
 		err = rsAPI.QueryMembershipForUser(ctx, &api.QueryMembershipForUserRequest{
-			RoomID: roomID,
+			FrameID: frameID,
 			UserID: *userID,
 		}, &membershipRes)
 		if err != nil {
@@ -316,26 +316,26 @@ func OnIncomingStateTypeRequest(
 				JSON: spec.InternalServerError{},
 			}
 		}
-		// If the user has never been in the room then stop at this point.
-		// We won't tell the user about a room they have never joined.
-		if !membershipRes.HasBeenInRoom || membershipRes.Membership == spec.Ban {
+		// If the user has never been in the frame then stop at this point.
+		// We won't tell the user about a frame they have never joined.
+		if !membershipRes.HasBeenInFrame || membershipRes.Membership == spec.Ban {
 			return xutil.JSONResponse{
 				Code: http.StatusForbidden,
-				JSON: spec.Forbidden(fmt.Sprintf("Unknown room %q or user %q has never joined this room", roomID, device.UserID)),
+				JSON: spec.Forbidden(fmt.Sprintf("Unknown frame %q or user %q has never joined this frame", frameID, device.UserID)),
 			}
 		}
-		// Otherwise, if the user has been in the room, whether or not we
+		// Otherwise, if the user has been in the frame, whether or not we
 		// give them the latest state will depend on if they are *still* in
-		// the room.
-		wantLatestState = membershipRes.IsInRoom
+		// the frame.
+		wantLatestState = membershipRes.IsInFrame
 	} else {
-		// The room is world-readable so the user join state is irrelevant,
-		// just get the latest room state instead.
+		// The frame is world-readable so the user join state is irrelevant,
+		// just get the latest frame state instead.
 		wantLatestState = true
 	}
 
 	xutil.GetLogger(ctx).WithFields(log.Fields{
-		"roomID":         roomID,
+		"frameID":         frameID,
 		"evType":         evType,
 		"stateKey":       stateKey,
 		"state_at_event": !wantLatestState,
@@ -344,7 +344,7 @@ func OnIncomingStateTypeRequest(
 	var event *types.HeaderedEvent
 	if wantLatestState {
 		// If we are happy to use the latest state, either because the user is
-		// still in the room, or because the room is world-readable, then just
+		// still in the frame, or because the frame is world-readable, then just
 		// use the result of the previous QueryLatestEventsAndState response
 		// to find the state event, if provided.
 		for _, ev := range stateRes.StateEvents {
@@ -355,10 +355,10 @@ func OnIncomingStateTypeRequest(
 		}
 	} else {
 		// Otherwise, take the event ID of their leave event and work out what
-		// the state of the room was before that event.
+		// the state of the frame was before that event.
 		var stateAfterRes api.QueryStateAfterEventsResponse
 		err := rsAPI.QueryStateAfterEvents(ctx, &api.QueryStateAfterEventsRequest{
-			RoomID:       roomID,
+			FrameID:       frameID,
 			PrevEventIDs: []string{membershipRes.EventID},
 			StateToFetch: []xtools.StateKeyTuple{
 				{
@@ -389,8 +389,8 @@ func OnIncomingStateTypeRequest(
 	}
 
 	stateEvent := stateEventInStateResp{
-		ClientEvent: synctypes.ToClientEventDefault(func(roomID spec.RoomID, senderID spec.SenderID) (*spec.UserID, error) {
-			return rsAPI.QueryUserIDForSender(ctx, roomID, senderID)
+		ClientEvent: synctypes.ToClientEventDefault(func(frameID spec.FrameID, senderID spec.SenderID) (*spec.UserID, error) {
+			return rsAPI.QueryUserIDForSender(ctx, frameID, senderID)
 		}, event),
 	}
 

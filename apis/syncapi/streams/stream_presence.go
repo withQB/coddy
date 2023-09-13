@@ -84,7 +84,7 @@ func (p *PresenceStreamProvider) IncrementalSync(
 		if presence == nil {
 			continue
 		}
-		// Ignore users we don't share a room with
+		// Ignore users we don't share a frame with
 		if req.Device.UserID != presence.UserID && !p.notifier.IsSharedUser(req.Device.UserID, presence.UserID) {
 			continue
 		}
@@ -140,7 +140,7 @@ func (p *PresenceStreamProvider) IncrementalSync(
 
 func (p *PresenceStreamProvider) getNeededUsersFromRequest(ctx context.Context, req *types.SyncRequest, presences map[string]*types.PresenceInternal) ([]string, error) {
 	getPresenceForUsers := []string{}
-	// Add presence for users which newly joined a room
+	// Add presence for users which newly joined a frame
 	for userID := range req.MembershipChanges {
 		if _, ok := presences[userID]; ok {
 			continue
@@ -148,52 +148,52 @@ func (p *PresenceStreamProvider) getNeededUsersFromRequest(ctx context.Context, 
 		getPresenceForUsers = append(getPresenceForUsers, userID)
 	}
 
-	// add newly joined rooms user presences
-	newlyJoined := joinedRooms(req.Response, req.Device.UserID)
+	// add newly joined frames user presences
+	newlyJoined := joinedFrames(req.Response, req.Device.UserID)
 	if len(newlyJoined) == 0 {
 		return getPresenceForUsers, nil
 	}
 
 	// TODO: Check if this is working better than before.
-	if err := p.notifier.LoadRooms(ctx, p.DB, newlyJoined); err != nil {
+	if err := p.notifier.LoadFrames(ctx, p.DB, newlyJoined); err != nil {
 		return getPresenceForUsers, fmt.Errorf("unable to refresh notifier lists: %w", err)
 	}
-	for _, roomID := range newlyJoined {
-		roomUsers := p.notifier.JoinedUsers(roomID)
-		for i := range roomUsers {
+	for _, frameID := range newlyJoined {
+		frameUsers := p.notifier.JoinedUsers(frameID)
+		for i := range frameUsers {
 			// we already got a presence from this user
-			if _, ok := presences[roomUsers[i]]; ok {
+			if _, ok := presences[frameUsers[i]]; ok {
 				continue
 			}
-			getPresenceForUsers = append(getPresenceForUsers, roomUsers[i])
+			getPresenceForUsers = append(getPresenceForUsers, frameUsers[i])
 		}
 	}
 	return getPresenceForUsers, nil
 }
 
-func joinedRooms(res *types.Response, userID string) []string {
-	var roomIDs []string
-	for roomID, join := range res.Rooms.Join {
-		// we would expect to see our join event somewhere if we newly joined the room.
-		// Normal events get put in the join section so it's not enough to know the room ID is present in 'join'.
+func joinedFrames(res *types.Response, userID string) []string {
+	var frameIDs []string
+	for frameID, join := range res.Frames.Join {
+		// we would expect to see our join event somewhere if we newly joined the frame.
+		// Normal events get put in the join section so it's not enough to know the frame ID is present in 'join'.
 		newlyJoined := membershipEventPresent(join.State.Events, userID)
 		if newlyJoined {
-			roomIDs = append(roomIDs, roomID)
+			frameIDs = append(frameIDs, frameID)
 			continue
 		}
 		newlyJoined = membershipEventPresent(join.Timeline.Events, userID)
 		if newlyJoined {
-			roomIDs = append(roomIDs, roomID)
+			frameIDs = append(frameIDs, frameID)
 		}
 	}
-	return roomIDs
+	return frameIDs
 }
 
 func membershipEventPresent(events []synctypes.ClientEvent, userID string) bool {
 	for _, ev := range events {
 		// it's enough to know that we have our member event here, don't need to check membership content
 		// as it's implied by being in the respective section of the sync response.
-		if ev.Type == spec.MRoomMember && ev.StateKey != nil && *ev.StateKey == userID {
+		if ev.Type == spec.MFrameMember && ev.StateKey != nil && *ev.StateKey == userID {
 			// ignore e.g. join -> join changes
 			if gjson.GetBytes(ev.Unsigned, "prev_content.membership").Str == gjson.GetBytes(ev.Content, "membership").Str {
 				continue

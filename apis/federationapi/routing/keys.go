@@ -22,7 +22,6 @@ type queryKeysRequest struct {
 }
 
 // QueryDeviceKeys returns device keys for users on this server.
-// https://matrix.org/docs/spec/server_server/latest#post-matrix-federation-v1-user-keys-query
 func QueryDeviceKeys(
 	httpReq *http.Request, request *fclient.FederationRequest, keyAPI api.FederationKeyAPI, thisServer spec.ServerName,
 ) xutil.JSONResponse {
@@ -77,7 +76,6 @@ type claimOTKsRequest struct {
 }
 
 // ClaimOneTimeKeys claims OTKs for users on this server.
-// https://matrix.org/docs/spec/server_server/latest#post-matrix-federation-v1-user-keys-claim
 func ClaimOneTimeKeys(
 	httpReq *http.Request, request *fclient.FederationRequest, keyAPI api.FederationKeyAPI, thisServer spec.ServerName,
 ) xutil.JSONResponse {
@@ -122,7 +120,6 @@ func ClaimOneTimeKeys(
 }
 
 // LocalKeys returns the local keys for the server.
-// See https://matrix.org/docs/spec/server_server/unstable.html#publishing-keys
 func LocalKeys(cfg *config.FederationAPI, serverName spec.ServerName) xutil.JSONResponse {
 	keys, err := localKeys(cfg, serverName)
 	if err != nil {

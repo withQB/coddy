@@ -7,31 +7,31 @@ import (
 	"github.com/withqb/xtools"
 )
 
-type RoomServer struct {
+type DataFrame struct {
 	Matrix *Global `yaml:"-"`
 
-	DefaultRoomVersion xtools.RoomVersion `yaml:"default_room_version,omitempty"`
+	DefaultFrameVersion xtools.FrameVersion `yaml:"default_frame_version,omitempty"`
 
 	Database DatabaseOptions `yaml:"database,omitempty"`
 }
 
-func (c *RoomServer) Defaults(opts DefaultOpts) {
-	c.DefaultRoomVersion = xtools.RoomVersionV10
+func (c *DataFrame) Defaults(opts DefaultOpts) {
+	c.DefaultFrameVersion = xtools.FrameVersionV10
 	if opts.Generate {
 		if !opts.SingleDatabase {
-			c.Database.ConnectionString = "file:roomserver.db"
+			c.Database.ConnectionString = "file:dataframe.db"
 		}
 	}
 }
 
-func (c *RoomServer) Verify(configErrs *ConfigErrors) {
+func (c *DataFrame) Verify(configErrs *ConfigErrors) {
 	if c.Matrix.DatabaseOptions.ConnectionString == "" {
-		checkNotEmpty(configErrs, "room_server.database.connection_string", string(c.Database.ConnectionString))
+		checkNotEmpty(configErrs, "frame_server.database.connection_string", string(c.Database.ConnectionString))
 	}
 
-	if !xtools.KnownRoomVersion(c.DefaultRoomVersion) {
-		configErrs.Add(fmt.Sprintf("invalid value for config key 'room_server.default_room_version': unsupported room version: %q", c.DefaultRoomVersion))
-	} else if !xtools.StableRoomVersion(c.DefaultRoomVersion) {
-		log.Warnf("WARNING: Provided default room version %q is unstable", c.DefaultRoomVersion)
+	if !xtools.KnownFrameVersion(c.DefaultFrameVersion) {
+		configErrs.Add(fmt.Sprintf("invalid value for config key 'frame_server.default_frame_version': unsupported frame version: %q", c.DefaultFrameVersion))
+	} else if !xtools.StableFrameVersion(c.DefaultFrameVersion) {
+		log.Warnf("WARNING: Provided default frame version %q is unstable", c.DefaultFrameVersion)
 	}
 }

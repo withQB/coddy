@@ -13,15 +13,14 @@ import (
 	"github.com/withqb/coddy/apis/clientapi/auth/authtypes"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
 	"github.com/withqb/coddy/internal/eventutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	"github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	"github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/spec"
 )
 
 // MembershipRequest represents the body of an incoming POST request
-// on /rooms/{roomID}/(join|kick|ban|unban|leave|invite)
 type MembershipRequest struct {
 	UserID   string `json:"user_id"`
 	Reason   string `json:"reason"`
@@ -30,7 +29,7 @@ type MembershipRequest struct {
 	Address  string `json:"address"`
 }
 
-// idServerLookupResponse represents the response described at https://matrix.org/docs/spec/client_server/r0.2.0.html#get-matrix-identity-api-v1-lookup
+// idServerLookupResponse represents the response described
 type idServerLookupResponse struct {
 	TS         int64                        `json:"ts"`
 	NotBefore  int64                        `json:"not_before"`
@@ -41,7 +40,7 @@ type idServerLookupResponse struct {
 	Signatures map[string]map[string]string `json:"signatures"`
 }
 
-// idServerLookupResponse represents the response described at https://matrix.org/docs/spec/client_server/r0.2.0.html#invitation-storage
+// idServerLookupResponse represents the response described
 type idServerStoreInviteResponse struct {
 	PublicKey   string             `json:"public_key"`
 	Token       string             `json:"token"`
@@ -82,7 +81,7 @@ func (e ErrNotTrusted) Unwrap() error {
 // If the fields relative to a third-party-invite are all supplied, lookups the
 // matching Matrix ID from the given identity server. If no Matrix ID is
 // associated to the given 3PID, asks the identity server to store the invite
-// and emit a "m.room.third_party_invite" event.
+// and emit a "m.frame.third_party_invite" event.
 // Returns a representation of the HTTP response to send to the user.
 // Returns a representation of a non-200 HTTP response if something went wrong
 // in the process, or if some 3PID fields aren't supplied but others are.
@@ -94,8 +93,8 @@ func (e ErrNotTrusted) Unwrap() error {
 func CheckAndProcessInvite(
 	ctx context.Context,
 	device *userapi.Device, body *MembershipRequest, cfg *config.ClientAPI,
-	rsAPI api.ClientRoomserverAPI, db userapi.ClientUserAPI,
-	roomID string,
+	rsAPI api.ClientDataframeAPI, db userapi.ClientUserAPI,
+	frameID string,
 	evTime time.Time,
 ) (inviteStoredOnIDServer bool, err error) {
 	if body.Address == "" && body.IDServer == "" && body.Medium == "" {
@@ -109,17 +108,17 @@ func CheckAndProcessInvite(
 		return
 	}
 
-	lookupRes, storeInviteRes, err := queryIDServer(ctx, db, cfg, device, body, roomID)
+	lookupRes, storeInviteRes, err := queryIDServer(ctx, db, cfg, device, body, frameID)
 	if err != nil {
 		return
 	}
 
 	if lookupRes.MXID == "" {
 		// No Matrix ID could be found for this 3PID, meaning that a
-		// "m.room.third_party_invite" have to be emitted from the data in
+		// "m.frame.third_party_invite" have to be emitted from the data in
 		// storeInviteRes.
 		err = emit3PIDInviteEvent(
-			ctx, body, storeInviteRes, device, roomID, cfg, rsAPI, evTime,
+			ctx, body, storeInviteRes, device, frameID, cfg, rsAPI, evTime,
 		)
 		inviteStoredOnIDServer = err == nil
 
@@ -127,7 +126,7 @@ func CheckAndProcessInvite(
 	}
 
 	// A Matrix ID have been found: set it in the body request and let the process
-	// continue to create a "m.room.member" event with an "invite" membership
+	// continue to create a "m.frame.member" event with an "invite" membership
 	body.UserID = lookupRes.MXID
 
 	return
@@ -145,7 +144,7 @@ func CheckAndProcessInvite(
 func queryIDServer(
 	ctx context.Context,
 	userAPI userapi.ClientUserAPI, cfg *config.ClientAPI, device *userapi.Device,
-	body *MembershipRequest, roomID string,
+	body *MembershipRequest, frameID string,
 ) (lookupRes *idServerLookupResponse, storeInviteRes *idServerStoreInviteResponse, err error) {
 	if err = isTrusted(body.IDServer, cfg); err != nil {
 		return
@@ -160,7 +159,7 @@ func queryIDServer(
 	if lookupRes.MXID == "" {
 		// No Matrix ID matches with the given 3PID, ask the server to store the
 		// invite and return a token
-		storeInviteRes, err = queryIDServerStoreInvite(ctx, userAPI, cfg, device, body, roomID)
+		storeInviteRes, err = queryIDServerStoreInvite(ctx, userAPI, cfg, device, body, frameID)
 		return
 	}
 
@@ -171,7 +170,7 @@ func queryIDServer(
 	if lookupRes.NotBefore > now || now > lookupRes.NotAfter {
 		// If the current timestamp isn't in the time frame in which the association
 		// is known to be valid, re-run the query
-		return queryIDServer(ctx, userAPI, cfg, device, body, roomID)
+		return queryIDServer(ctx, userAPI, cfg, device, body, frameID)
 	}
 
 	// Check the request signatures and send an error if one isn't valid
@@ -182,12 +181,12 @@ func queryIDServer(
 	return
 }
 
-// queryIDServerLookup sends a response to the identity server on /_matrix/identity/api/v1/lookup
+// queryIDServerLookup sends a response to the identity server on /_coddy/identity/api/v1/lookup
 // and returns the response as a structure.
 // Returns an error if the request failed to send or if the response couldn't be parsed.
 func queryIDServerLookup(ctx context.Context, body *MembershipRequest) (*idServerLookupResponse, error) {
 	address := url.QueryEscape(body.Address)
-	requestURL := fmt.Sprintf("https://%s/_matrix/identity/api/v1/lookup?medium=%s&address=%s", body.IDServer, body.Medium, address)
+	requestURL := fmt.Sprintf("https://%s/_coddy/identity/api/v1/lookup?medium=%s&address=%s", body.IDServer, body.Medium, address)
 	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
@@ -208,13 +207,13 @@ func queryIDServerLookup(ctx context.Context, body *MembershipRequest) (*idServe
 	return &res, err
 }
 
-// queryIDServerStoreInvite sends a response to the identity server on /_matrix/identity/api/v1/store-invite
+// queryIDServerStoreInvite sends a response to the identity server on /_coddy/identity/api/v1/store-invite
 // and returns the response as a structure.
 // Returns an error if the request failed to send or if the response couldn't be parsed.
 func queryIDServerStoreInvite(
 	ctx context.Context,
 	userAPI userapi.ClientUserAPI, cfg *config.ClientAPI, device *userapi.Device,
-	body *MembershipRequest, roomID string,
+	body *MembershipRequest, frameID string,
 ) (*idServerStoreInviteResponse, error) {
 	// Retrieve the sender's profile to get their display name
 	_, serverName, err := xtools.SplitID('@', device.UserID)
@@ -237,17 +236,17 @@ func queryIDServerStoreInvite(
 	data := url.Values{}
 	data.Add("medium", body.Medium)
 	data.Add("address", body.Address)
-	data.Add("room_id", roomID)
+	data.Add("frame_id", frameID)
 	data.Add("sender", device.UserID)
 	data.Add("sender_display_name", profile.DisplayName)
 	// TODO: Also send:
-	//      - The room name (room_name)
-	//      - The room's avatar url (room_avatar_url)
+	//      - The frame name (frame_name)
+	//      - The frame's avatar url (frame_avatar_url)
 	//      See https://github.com/withqb/sydent/blob/master/sydent/http/servlets/store_invite_servlet.py#L82-L91
-	//      These can be easily retrieved by requesting the public rooms API
+	//      These can be easily retrieved by requesting the public frames API
 	//      server's database.
 
-	requestURL := fmt.Sprintf("https://%s/_matrix/identity/api/v1/store-invite", body.IDServer)
+	requestURL := fmt.Sprintf("https://%s/_coddy/identity/api/v1/store-invite", body.IDServer)
 	req, err := http.NewRequest(http.MethodPost, requestURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, err
@@ -275,7 +274,7 @@ func queryIDServerStoreInvite(
 // Returns an error if the request couldn't be sent, if its body couldn't be parsed
 // or if the key couldn't be decoded from base64.
 func queryIDServerPubKey(ctx context.Context, idServerName string, keyID string) ([]byte, error) {
-	requestURL := fmt.Sprintf("https://%s/_matrix/identity/api/v1/pubkey/%s", idServerName, keyID)
+	requestURL := fmt.Sprintf("https://%s/_coddy/identity/api/v1/pubkey/%s", idServerName, keyID)
 	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
@@ -332,37 +331,37 @@ func checkIDServerSignatures(
 	return nil
 }
 
-// emit3PIDInviteEvent builds and sends a "m.room.third_party_invite" event.
+// emit3PIDInviteEvent builds and sends a "m.frame.third_party_invite" event.
 // Returns an error if something failed in the process.
 func emit3PIDInviteEvent(
 	ctx context.Context,
 	body *MembershipRequest, res *idServerStoreInviteResponse,
-	device *userapi.Device, roomID string, cfg *config.ClientAPI,
-	rsAPI api.ClientRoomserverAPI,
+	device *userapi.Device, frameID string, cfg *config.ClientAPI,
+	rsAPI api.ClientDataframeAPI,
 	evTime time.Time,
 ) error {
 	userID, err := spec.NewUserID(device.UserID, true)
 	if err != nil {
 		return err
 	}
-	validRoomID, err := spec.NewRoomID(roomID)
+	validFrameID, err := spec.NewFrameID(frameID)
 	if err != nil {
 		return err
 	}
-	sender, err := rsAPI.QuerySenderIDForUser(ctx, *validRoomID, *userID)
+	sender, err := rsAPI.QuerySenderIDForUser(ctx, *validFrameID, *userID)
 	if err != nil {
 		return err
 	} else if sender == nil {
-		return fmt.Errorf("sender ID not found for %s in %s", *userID, *validRoomID)
+		return fmt.Errorf("sender ID not found for %s in %s", *userID, *validFrameID)
 	}
 	proto := &xtools.ProtoEvent{
 		SenderID: string(*sender),
-		RoomID:   roomID,
-		Type:     "m.room.third_party_invite",
+		FrameID:   frameID,
+		Type:     "m.frame.third_party_invite",
 		StateKey: &res.Token,
 	}
 
-	validityURL := fmt.Sprintf("https://%s/_matrix/identity/api/v1/pubkey/isvalid", body.IDServer)
+	validityURL := fmt.Sprintf("https://%s/_coddy/identity/api/v1/pubkey/isvalid", body.IDServer)
 	content := xtools.ThirdPartyInviteContent{
 		DisplayName:    res.DisplayName,
 		KeyValidityURL: validityURL,

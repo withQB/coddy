@@ -20,19 +20,19 @@ import (
 	"github.com/withqb/coddy/apis/syncapi/types"
 	"github.com/withqb/coddy/internal/fulltext"
 	"github.com/withqb/coddy/internal/sqlutil"
-	"github.com/withqb/coddy/servers/roomserver/api"
-	rstypes "github.com/withqb/coddy/servers/roomserver/types"
+	"github.com/withqb/coddy/servers/dataframe/api"
+	rstypes "github.com/withqb/coddy/servers/dataframe/types"
 	"github.com/withqb/coddy/setup/config"
 	"github.com/withqb/coddy/setup/jetstream"
 	"github.com/withqb/coddy/setup/process"
 	"github.com/withqb/xtools/spec"
 )
 
-// OutputRoomEventConsumer consumes events that originated in the room server.
-type OutputRoomEventConsumer struct {
+// OutputFrameEventConsumer consumes events that originated in the frame server.
+type OutputFrameEventConsumer struct {
 	ctx          context.Context
 	cfg          *config.SyncAPI
-	rsAPI        api.SyncRoomserverAPI
+	rsAPI        api.SyncDataframeAPI
 	jetstream    nats.JetStreamContext
 	durable      string
 	topic        string
@@ -43,8 +43,8 @@ type OutputRoomEventConsumer struct {
 	fts          fulltext.Indexer
 }
 
-// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer. Call Start() to begin consuming from room servers.
-func NewOutputRoomEventConsumer(
+// NewOutputFrameEventConsumer creates a new OutputFrameEventConsumer. Call Start() to begin consuming from frame servers.
+func NewOutputFrameEventConsumer(
 	process *process.ProcessContext,
 	cfg *config.SyncAPI,
 	js nats.JetStreamContext,
@@ -52,15 +52,15 @@ func NewOutputRoomEventConsumer(
 	notifier *notifier.Notifier,
 	pduStream streams.StreamProvider,
 	inviteStream streams.StreamProvider,
-	rsAPI api.SyncRoomserverAPI,
+	rsAPI api.SyncDataframeAPI,
 	fts *fulltext.Search,
-) *OutputRoomEventConsumer {
-	return &OutputRoomEventConsumer{
+) *OutputFrameEventConsumer {
+	return &OutputFrameEventConsumer{
 		ctx:          process.Context(),
 		cfg:          cfg,
 		jetstream:    js,
-		topic:        cfg.Matrix.JetStream.Prefixed(jetstream.OutputRoomEvent),
-		durable:      cfg.Matrix.JetStream.Durable("SyncAPIRoomServerConsumer"),
+		topic:        cfg.Matrix.JetStream.Prefixed(jetstream.OutputFrameEvent),
+		durable:      cfg.Matrix.JetStream.Durable("SyncAPIDataFrameConsumer"),
 		db:           store,
 		notifier:     notifier,
 		pduStream:    pduStream,
@@ -70,43 +70,43 @@ func NewOutputRoomEventConsumer(
 	}
 }
 
-// Start consuming from room servers
-func (s *OutputRoomEventConsumer) Start() error {
+// Start consuming from frame servers
+func (s *OutputFrameEventConsumer) Start() error {
 	return jetstream.JetStreamConsumer(
 		s.ctx, s.jetstream, s.topic, s.durable, 1,
 		s.onMessage, nats.DeliverAll(), nats.ManualAck(),
 	)
 }
 
-// onMessage is called when the sync server receives a new event from the room server output log.
+// onMessage is called when the sync server receives a new event from the frame server output log.
 // It is not safe for this function to be called from multiple goroutines, or else the
 // sync stream position may race and be incorrectly calculated.
-func (s *OutputRoomEventConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) bool {
+func (s *OutputFrameEventConsumer) onMessage(ctx context.Context, msgs []*nats.Msg) bool {
 	msg := msgs[0] // Guaranteed to exist if onMessage is called
 	// Parse out the event JSON
 	var err error
 	var output api.OutputEvent
 	if err = json.Unmarshal(msg.Data, &output); err != nil {
 		// If the message was invalid, log it and move on to the next message in the stream
-		log.WithError(err).Errorf("roomserver output log: message parse failure")
+		log.WithError(err).Errorf("dataframe output log: message parse failure")
 		return true
 	}
 
 	switch output.Type {
-	case api.OutputTypeNewRoomEvent:
+	case api.OutputTypeNewFrameEvent:
 		// Ignore redaction events. We will add them to the database when they are
 		// validated (when we receive OutputTypeRedactedEvent)
-		event := output.NewRoomEvent.Event
-		if event.Type() == spec.MRoomRedaction && event.StateKey() == nil {
+		event := output.NewFrameEvent.Event
+		if event.Type() == spec.MFrameRedaction && event.StateKey() == nil {
 			// in the special case where the event redacts itself, just pass the message through because
 			// we will never see the other part of the pair
 			if event.Redacts() != event.EventID() {
 				return true
 			}
 		}
-		err = s.onNewRoomEvent(s.ctx, *output.NewRoomEvent)
-	case api.OutputTypeOldRoomEvent:
-		err = s.onOldRoomEvent(s.ctx, *output.OldRoomEvent)
+		err = s.onNewFrameEvent(s.ctx, *output.NewFrameEvent)
+	case api.OutputTypeOldFrameEvent:
+		err = s.onOldFrameEvent(s.ctx, *output.OldFrameEvent)
 	case api.OutputTypeNewInviteEvent:
 		s.onNewInviteEvent(s.ctx, *output.NewInviteEvent)
 	case api.OutputTypeRetireInviteEvent:
@@ -117,15 +117,15 @@ func (s *OutputRoomEventConsumer) onMessage(ctx context.Context, msgs []*nats.Ms
 		s.onRetirePeek(s.ctx, *output.RetirePeek)
 	case api.OutputTypeRedactedEvent:
 		err = s.onRedactEvent(s.ctx, *output.RedactedEvent)
-	case api.OutputTypePurgeRoom:
-		err = s.onPurgeRoom(s.ctx, *output.PurgeRoom)
+	case api.OutputTypePurgeFrame:
+		err = s.onPurgeFrame(s.ctx, *output.PurgeFrame)
 		if err != nil {
-			logrus.WithField("room_id", output.PurgeRoom.RoomID).WithError(err).Error("Failed to purge room from sync API")
-			return true // non-fatal, as otherwise we end up in a loop of trying to purge the room
+			logrus.WithField("frame_id", output.PurgeFrame.FrameID).WithError(err).Error("Failed to purge frame from sync API")
+			return true // non-fatal, as otherwise we end up in a loop of trying to purge the frame
 		}
 	default:
 		log.WithField("type", output.Type).Debug(
-			"roomserver output log: ignoring unknown output type",
+			"dataframe output log: ignoring unknown output type",
 		)
 	}
 	if err != nil {
@@ -135,7 +135,7 @@ func (s *OutputRoomEventConsumer) onMessage(ctx context.Context, msgs []*nats.Ms
 		}
 		log.WithFields(log.Fields{
 			"type": output.Type,
-		}).WithError(err).Error("roomserver output log: failed to process event")
+		}).WithError(err).Error("dataframe output log: failed to process event")
 		sentry.CaptureException(err)
 		return false
 	}
@@ -143,7 +143,7 @@ func (s *OutputRoomEventConsumer) onMessage(ctx context.Context, msgs []*nats.Ms
 	return true
 }
 
-func (s *OutputRoomEventConsumer) onRedactEvent(
+func (s *OutputFrameEventConsumer) onRedactEvent(
 	ctx context.Context, msg api.OutputRedactedEvent,
 ) error {
 	err := s.db.RedactEvent(ctx, msg.RedactedEventID, msg.RedactedBecause, s.rsAPI)
@@ -152,31 +152,31 @@ func (s *OutputRoomEventConsumer) onRedactEvent(
 		return err
 	}
 
-	if err = s.db.RedactRelations(ctx, msg.RedactedBecause.RoomID(), msg.RedactedEventID); err != nil {
+	if err = s.db.RedactRelations(ctx, msg.RedactedBecause.FrameID(), msg.RedactedEventID); err != nil {
 		log.WithFields(log.Fields{
-			"room_id":           msg.RedactedBecause.RoomID(),
+			"frame_id":           msg.RedactedBecause.FrameID(),
 			"event_id":          msg.RedactedBecause.EventID(),
 			"redacted_event_id": msg.RedactedEventID,
 		}).WithError(err).Warn("Failed to redact relations")
 		return err
 	}
 
-	// fake a room event so we notify clients about the redaction, as if it were
+	// fake a frame event so we notify clients about the redaction, as if it were
 	// a normal event.
-	return s.onNewRoomEvent(ctx, api.OutputNewRoomEvent{
+	return s.onNewFrameEvent(ctx, api.OutputNewFrameEvent{
 		Event: msg.RedactedBecause,
 	})
 }
 
-func (s *OutputRoomEventConsumer) onNewRoomEvent(
-	ctx context.Context, msg api.OutputNewRoomEvent,
+func (s *OutputFrameEventConsumer) onNewFrameEvent(
+	ctx context.Context, msg api.OutputNewFrameEvent,
 ) error {
 	ev := msg.Event
 	addsStateEvents, missingEventIDs := msg.NeededStateEventIDs()
 
 	// Work out the list of events we need to find out about. Either
 	// they will be the event supplied in the request, we will find it
-	// in the sync API database or we'll need to ask the roomserver.
+	// in the sync API database or we'll need to ask the dataframe.
 	knownEventIDs := make(map[string]bool, len(msg.AddsStateEventIDs))
 	for _, eventID := range missingEventIDs {
 		knownEventIDs[eventID] = false
@@ -196,7 +196,7 @@ func (s *OutputRoomEventConsumer) onNewRoomEvent(
 	}
 
 	// Now work out if there are any remaining events we don't know. For
-	// these we will need to ask the roomserver for help.
+	// these we will need to ask the dataframe for help.
 	missingEventIDs = missingEventIDs[:0]
 	for eventID, known := range knownEventIDs {
 		if !known {
@@ -204,11 +204,11 @@ func (s *OutputRoomEventConsumer) onNewRoomEvent(
 		}
 	}
 
-	// Ask the roomserver and add in the rest of the results into the set.
+	// Ask the dataframe and add in the rest of the results into the set.
 	// Finally, work out if there are any more events missing.
 	if len(missingEventIDs) > 0 {
 		eventsReq := &api.QueryEventsByIDRequest{
-			RoomID:   ev.RoomID(),
+			FrameID:   ev.FrameID(),
 			EventIDs: missingEventIDs,
 		}
 		eventsRes := &api.QueryEventsByIDResponse{}
@@ -221,7 +221,7 @@ func (s *OutputRoomEventConsumer) onNewRoomEvent(
 		}
 
 		// This should never happen because this would imply that the
-		// roomserver has sent us adds_state_event_ids for events that it
+		// dataframe has sent us adds_state_event_ids for events that it
 		// also doesn't know about, but let's just be sure.
 		for eventID, found := range knownEventIDs {
 			if !found {
@@ -243,17 +243,17 @@ func (s *OutputRoomEventConsumer) onNewRoomEvent(
 	}
 
 	if msg.RewritesState {
-		if err = s.db.PurgeRoomState(ctx, ev.RoomID()); err != nil {
-			return fmt.Errorf("s.db.PurgeRoom: %w", err)
+		if err = s.db.PurgeFrameState(ctx, ev.FrameID()); err != nil {
+			return fmt.Errorf("s.db.PurgeFrame: %w", err)
 		}
 	}
 
-	validRoomID, err := spec.NewRoomID(ev.RoomID())
+	validFrameID, err := spec.NewFrameID(ev.FrameID())
 	if err != nil {
 		return err
 	}
 
-	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, ev.SenderID())
+	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, ev.SenderID())
 	if err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ func (s *OutputRoomEventConsumer) onNewRoomEvent(
 			log.ErrorKey: err,
 			"add":        msg.AddsStateEventIDs,
 			"del":        msg.RemovesStateEventIDs,
-		}).Panicf("roomserver output log: write new event failure")
+		}).Panicf("dataframe output log: write new event failure")
 		return nil
 	}
 	if err = s.writeFTS(ev, pduPos); err != nil {
@@ -293,13 +293,13 @@ func (s *OutputRoomEventConsumer) onNewRoomEvent(
 	}
 
 	s.pduStream.Advance(pduPos)
-	s.notifier.OnNewEvent(ev, ev.RoomID(), nil, types.StreamingToken{PDUPosition: pduPos})
+	s.notifier.OnNewEvent(ev, ev.FrameID(), nil, types.StreamingToken{PDUPosition: pduPos})
 
 	return nil
 }
 
-func (s *OutputRoomEventConsumer) onOldRoomEvent(
-	ctx context.Context, msg api.OutputOldRoomEvent,
+func (s *OutputFrameEventConsumer) onOldFrameEvent(
+	ctx context.Context, msg api.OutputOldFrameEvent,
 ) error {
 	ev := msg.Event
 
@@ -308,14 +308,14 @@ func (s *OutputRoomEventConsumer) onOldRoomEvent(
 	// allowing normal timeline events through. This is an absolute
 	// hack but until we have some better strategy for dealing with
 	// old events in the sync API, this should at least prevent us
-	// from confusing clients into thinking they've joined/left rooms.
+	// from confusing clients into thinking they've joined/left frames.
 
-	validRoomID, err := spec.NewRoomID(ev.RoomID())
+	validFrameID, err := spec.NewFrameID(ev.FrameID())
 	if err != nil {
 		return err
 	}
 
-	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, ev.SenderID())
+	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, ev.SenderID())
 	if err != nil {
 		return err
 	}
@@ -328,7 +328,7 @@ func (s *OutputRoomEventConsumer) onOldRoomEvent(
 			"event_id":   ev.EventID(),
 			"event":      string(ev.JSON()),
 			log.ErrorKey: err,
-		}).Panicf("roomserver output log: write old event failure")
+		}).Panicf("dataframe output log: write old event failure")
 		return nil
 	}
 
@@ -341,7 +341,7 @@ func (s *OutputRoomEventConsumer) onOldRoomEvent(
 
 	if err = s.db.UpdateRelations(ctx, ev); err != nil {
 		log.WithFields(log.Fields{
-			"room_id":  ev.RoomID(),
+			"frame_id":  ev.FrameID(),
 			"event_id": ev.EventID(),
 			"type":     ev.Type(),
 		}).WithError(err).Warn("Failed to update relations")
@@ -354,13 +354,13 @@ func (s *OutputRoomEventConsumer) onOldRoomEvent(
 	}
 
 	s.pduStream.Advance(pduPos)
-	s.notifier.OnNewEvent(ev, ev.RoomID(), nil, types.StreamingToken{PDUPosition: pduPos})
+	s.notifier.OnNewEvent(ev, ev.FrameID(), nil, types.StreamingToken{PDUPosition: pduPos})
 
 	return nil
 }
 
-func (s *OutputRoomEventConsumer) notifyJoinedPeeks(ctx context.Context, ev *rstypes.HeaderedEvent, sp types.StreamPosition) (types.StreamPosition, error) {
-	if ev.Type() != spec.MRoomMember {
+func (s *OutputFrameEventConsumer) notifyJoinedPeeks(ctx context.Context, ev *rstypes.HeaderedEvent, sp types.StreamPosition) (types.StreamPosition, error) {
+	if ev.Type() != spec.MFrameMember {
 		return sp, nil
 	}
 	membership, err := ev.Membership()
@@ -374,11 +374,11 @@ func (s *OutputRoomEventConsumer) notifyJoinedPeeks(ctx context.Context, ev *rst
 			return sp, fmt.Errorf("unexpected nil state_key")
 		}
 
-		validRoomID, err := spec.NewRoomID(ev.RoomID())
+		validFrameID, err := spec.NewFrameID(ev.FrameID())
 		if err != nil {
 			return sp, err
 		}
-		userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, spec.SenderID(*ev.StateKey()))
+		userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, spec.SenderID(*ev.StateKey()))
 		if err != nil || userID == nil {
 			return sp, fmt.Errorf("failed getting userID for sender: %w", err)
 		}
@@ -387,7 +387,7 @@ func (s *OutputRoomEventConsumer) notifyJoinedPeeks(ctx context.Context, ev *rst
 		}
 
 		// cancel any peeks for it
-		peekSP, peekErr := s.db.DeletePeeks(ctx, ev.RoomID(), *ev.StateKey())
+		peekSP, peekErr := s.db.DeletePeeks(ctx, ev.FrameID(), *ev.StateKey())
 		if peekErr != nil {
 			return sp, fmt.Errorf("s.db.DeletePeeks: %w", peekErr)
 		}
@@ -398,18 +398,18 @@ func (s *OutputRoomEventConsumer) notifyJoinedPeeks(ctx context.Context, ev *rst
 	return sp, nil
 }
 
-func (s *OutputRoomEventConsumer) onNewInviteEvent(
+func (s *OutputFrameEventConsumer) onNewInviteEvent(
 	ctx context.Context, msg api.OutputNewInviteEvent,
 ) {
 	if msg.Event.StateKey() == nil {
 		return
 	}
 
-	validRoomID, err := spec.NewRoomID(msg.Event.RoomID())
+	validFrameID, err := spec.NewFrameID(msg.Event.FrameID())
 	if err != nil {
 		return
 	}
-	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, spec.SenderID(*msg.Event.StateKey()))
+	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, spec.SenderID(*msg.Event.StateKey()))
 	if err != nil || userID == nil {
 		return
 	}
@@ -427,7 +427,7 @@ func (s *OutputRoomEventConsumer) onNewInviteEvent(
 			"event":      string(msg.Event.JSON()),
 			"pdupos":     pduPos,
 			log.ErrorKey: err,
-		}).Errorf("roomserver output log: write invite failure")
+		}).Errorf("dataframe output log: write invite failure")
 		return
 	}
 
@@ -435,7 +435,7 @@ func (s *OutputRoomEventConsumer) onNewInviteEvent(
 	s.notifier.OnNewInvite(types.StreamingToken{InvitePosition: pduPos}, *msg.Event.StateKey())
 }
 
-func (s *OutputRoomEventConsumer) onRetireInviteEvent(
+func (s *OutputFrameEventConsumer) onRetireInviteEvent(
 	ctx context.Context, msg api.OutputRetireInviteEvent,
 ) {
 	pduPos, err := s.db.RetireInviteEvent(ctx, msg.EventID)
@@ -446,7 +446,7 @@ func (s *OutputRoomEventConsumer) onRetireInviteEvent(
 		log.WithFields(log.Fields{
 			"event_id":   msg.EventID,
 			log.ErrorKey: err,
-		}).Errorf("roomserver output log: remove invite failure")
+		}).Errorf("dataframe output log: remove invite failure")
 		return
 	}
 
@@ -459,16 +459,16 @@ func (s *OutputRoomEventConsumer) onRetireInviteEvent(
 
 	// Notify any active sync requests that the invite has been retired.
 	s.inviteStream.Advance(pduPos)
-	validRoomID, err := spec.NewRoomID(msg.RoomID)
+	validFrameID, err := spec.NewFrameID(msg.FrameID)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"event_id":   msg.EventID,
-			"room_id":    msg.RoomID,
+			"frame_id":    msg.FrameID,
 			log.ErrorKey: err,
-		}).Errorf("roomID is invalid")
+		}).Errorf("frameID is invalid")
 		return
 	}
-	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validRoomID, msg.TargetSenderID)
+	userID, err := s.rsAPI.QueryUserIDForSender(ctx, *validFrameID, msg.TargetSenderID)
 	if err != nil || userID == nil {
 		log.WithFields(log.Fields{
 			"event_id":   msg.EventID,
@@ -480,15 +480,15 @@ func (s *OutputRoomEventConsumer) onRetireInviteEvent(
 	s.notifier.OnNewInvite(types.StreamingToken{InvitePosition: pduPos}, userID.String())
 }
 
-func (s *OutputRoomEventConsumer) onNewPeek(
+func (s *OutputFrameEventConsumer) onNewPeek(
 	ctx context.Context, msg api.OutputNewPeek,
 ) {
-	sp, err := s.db.AddPeek(ctx, msg.RoomID, msg.UserID, msg.DeviceID)
+	sp, err := s.db.AddPeek(ctx, msg.FrameID, msg.UserID, msg.DeviceID)
 	if err != nil {
 		// panic rather than continue with an inconsistent database
 		log.WithFields(log.Fields{
 			log.ErrorKey: err,
-		}).Errorf("roomserver output log: write peek failure")
+		}).Errorf("dataframe output log: write peek failure")
 		return
 	}
 
@@ -496,18 +496,18 @@ func (s *OutputRoomEventConsumer) onNewPeek(
 	// TODO: This only works because the peeks table is reusing the same
 	// index as PDUs, but we should fix this
 	s.pduStream.Advance(sp)
-	s.notifier.OnNewPeek(msg.RoomID, msg.UserID, msg.DeviceID, types.StreamingToken{PDUPosition: sp})
+	s.notifier.OnNewPeek(msg.FrameID, msg.UserID, msg.DeviceID, types.StreamingToken{PDUPosition: sp})
 }
 
-func (s *OutputRoomEventConsumer) onRetirePeek(
+func (s *OutputFrameEventConsumer) onRetirePeek(
 	ctx context.Context, msg api.OutputRetirePeek,
 ) {
-	sp, err := s.db.DeletePeek(ctx, msg.RoomID, msg.UserID, msg.DeviceID)
+	sp, err := s.db.DeletePeek(ctx, msg.FrameID, msg.UserID, msg.DeviceID)
 	if err != nil {
 		// panic rather than continue with an inconsistent database
 		log.WithFields(log.Fields{
 			log.ErrorKey: err,
-		}).Errorf("roomserver output log: write peek failure")
+		}).Errorf("dataframe output log: write peek failure")
 		return
 	}
 
@@ -515,24 +515,24 @@ func (s *OutputRoomEventConsumer) onRetirePeek(
 	// TODO: This only works because the peeks table is reusing the same
 	// index as PDUs, but we should fix this
 	s.pduStream.Advance(sp)
-	s.notifier.OnRetirePeek(msg.RoomID, msg.UserID, msg.DeviceID, types.StreamingToken{PDUPosition: sp})
+	s.notifier.OnRetirePeek(msg.FrameID, msg.UserID, msg.DeviceID, types.StreamingToken{PDUPosition: sp})
 }
 
-func (s *OutputRoomEventConsumer) onPurgeRoom(
-	ctx context.Context, req api.OutputPurgeRoom,
+func (s *OutputFrameEventConsumer) onPurgeFrame(
+	ctx context.Context, req api.OutputPurgeFrame,
 ) error {
-	logrus.WithField("room_id", req.RoomID).Warn("Purging room from sync API")
+	logrus.WithField("frame_id", req.FrameID).Warn("Purging frame from sync API")
 
-	if err := s.db.PurgeRoom(ctx, req.RoomID); err != nil {
-		logrus.WithField("room_id", req.RoomID).WithError(err).Error("Failed to purge room from sync API")
+	if err := s.db.PurgeFrame(ctx, req.FrameID); err != nil {
+		logrus.WithField("frame_id", req.FrameID).WithError(err).Error("Failed to purge frame from sync API")
 		return err
 	} else {
-		logrus.WithField("room_id", req.RoomID).Warn("Room purged from sync API")
+		logrus.WithField("frame_id", req.FrameID).Warn("Frame purged from sync API")
 		return nil
 	}
 }
 
-func (s *OutputRoomEventConsumer) updateStateEvent(event *rstypes.HeaderedEvent) (*rstypes.HeaderedEvent, error) {
+func (s *OutputFrameEventConsumer) updateStateEvent(event *rstypes.HeaderedEvent) (*rstypes.HeaderedEvent, error) {
 	event.StateKeyResolved = event.StateKey()
 	if event.StateKey() == nil {
 		return event, nil
@@ -546,7 +546,7 @@ func (s *OutputRoomEventConsumer) updateStateEvent(event *rstypes.HeaderedEvent)
 	var succeeded bool
 	defer sqlutil.EndTransactionWithCheck(snapshot, &succeeded, &err)
 
-	validRoomID, err := spec.NewRoomID(event.RoomID())
+	validFrameID, err := spec.NewFrameID(event.FrameID())
 	if err != nil {
 		return event, err
 	}
@@ -554,7 +554,7 @@ func (s *OutputRoomEventConsumer) updateStateEvent(event *rstypes.HeaderedEvent)
 	sKeyUser := ""
 	if stateKey != "" {
 		var sku *spec.UserID
-		sku, err = s.rsAPI.QueryUserIDForSender(s.ctx, *validRoomID, spec.SenderID(stateKey))
+		sku, err = s.rsAPI.QueryUserIDForSender(s.ctx, *validFrameID, spec.SenderID(stateKey))
 		if err == nil && sku != nil {
 			sKeyUser = sku.String()
 			event.StateKeyResolved = &sKeyUser
@@ -562,13 +562,13 @@ func (s *OutputRoomEventConsumer) updateStateEvent(event *rstypes.HeaderedEvent)
 	}
 
 	prevEvent, err := snapshot.GetStateEvent(
-		s.ctx, event.RoomID(), event.Type(), sKeyUser,
+		s.ctx, event.FrameID(), event.Type(), sKeyUser,
 	)
 	if err != nil {
 		return event, err
 	}
 
-	userID, err := s.rsAPI.QueryUserIDForSender(s.ctx, *validRoomID, event.SenderID())
+	userID, err := s.rsAPI.QueryUserIDForSender(s.ctx, *validFrameID, event.SenderID())
 	if err != nil {
 		return event, err
 	}
@@ -590,25 +590,25 @@ func (s *OutputRoomEventConsumer) updateStateEvent(event *rstypes.HeaderedEvent)
 	return event, err
 }
 
-func (s *OutputRoomEventConsumer) writeFTS(ev *rstypes.HeaderedEvent, pduPosition types.StreamPosition) error {
+func (s *OutputFrameEventConsumer) writeFTS(ev *rstypes.HeaderedEvent, pduPosition types.StreamPosition) error {
 	if !s.cfg.Fulltext.Enabled {
 		return nil
 	}
 	e := fulltext.IndexElement{
 		EventID:        ev.EventID(),
-		RoomID:         ev.RoomID(),
+		FrameID:         ev.FrameID(),
 		StreamPosition: int64(pduPosition),
 	}
 	e.SetContentType(ev.Type())
 
 	switch ev.Type() {
-	case "m.room.message":
+	case "m.frame.message":
 		e.Content = gjson.GetBytes(ev.Content(), "body").String()
-	case spec.MRoomName:
+	case spec.MFrameName:
 		e.Content = gjson.GetBytes(ev.Content(), "name").String()
-	case spec.MRoomTopic:
+	case spec.MFrameTopic:
 		e.Content = gjson.GetBytes(ev.Content(), "topic").String()
-	case spec.MRoomRedaction:
+	case spec.MFrameRedaction:
 		log.Tracef("Redacting event: %s", ev.Redacts())
 		if err := s.fts.Delete(ev.Redacts()); err != nil {
 			return fmt.Errorf("failed to delete entry from fulltext index: %w", err)

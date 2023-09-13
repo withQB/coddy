@@ -39,7 +39,7 @@ func main() {
 				"keyserver":     &cfg.KeyServer.Database,
 				"mscs":          &cfg.MSCs.Database,
 				"mediaapi":      &cfg.MediaAPI.Database,
-				"roomserver":    &cfg.RoomServer.Database,
+				"dataframe":    &cfg.DataFrame.Database,
 				"syncapi":       &cfg.SyncAPI.Database,
 				"userapi":       &cfg.UserAPI.AccountDatabase,
 				"relayapi":      &cfg.RelayAPI.Database,
@@ -71,7 +71,7 @@ func main() {
 			cfg.ClientAPI.RateLimiting.Enabled = false
 			cfg.FederationAPI.DisableTLSValidation = false
 			cfg.FederationAPI.DisableHTTPKeepalives = true
-			// don't hit matrix.org when running tests!!!
+			// don't hit when running tests!!!
 			cfg.FederationAPI.KeyPerspectives = config.KeyPerspectives{}
 			cfg.MediaAPI.BasePath = config.Path(filepath.Join(*dirPath, "media"))
 			cfg.MSCs.MSCs = []string{"msc2836", "msc2444", "msc2753"}

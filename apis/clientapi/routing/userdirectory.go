@@ -9,7 +9,7 @@ import (
 
 	"github.com/withqb/coddy/apis/clientapi/auth/authtypes"
 	userapi "github.com/withqb/coddy/apis/userapi/api"
-	"github.com/withqb/coddy/servers/roomserver/api"
+	"github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/xcore"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
@@ -25,7 +25,7 @@ type UserDirectoryResponse struct {
 func SearchUserDirectory(
 	ctx context.Context,
 	device *userapi.Device,
-	rsAPI api.ClientRoomserverAPI,
+	rsAPI api.ClientDataframeAPI,
 	provider userapi.QuerySearchProfilesAPI,
 	searchString string,
 	limit int,
@@ -42,7 +42,7 @@ func SearchUserDirectory(
 		Limited: false,
 	}
 
-	// Get users we share a room with
+	// Get users we share a frame with
 	knownUsersReq := &api.QueryKnownUsersRequest{
 		UserID: device.UserID,
 		Limit:  limit,

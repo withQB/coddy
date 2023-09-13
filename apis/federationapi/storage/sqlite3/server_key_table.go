@@ -28,7 +28,7 @@ import (
 const serverSigningKeysSchema = `
 -- A cache of signing keys downloaded from remote servers.
 CREATE TABLE IF NOT EXISTS keydb_server_keys (
-	-- The name of the matrix server the key is for.
+	-- The name of the coddy server the key is for.
 	server_name TEXT NOT NULL,
 	-- The ID of the server key.
 	server_key_id TEXT NOT NULL,

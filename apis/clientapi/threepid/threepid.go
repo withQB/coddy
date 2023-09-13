@@ -15,7 +15,7 @@ import (
 	"github.com/withqb/xtools/spec"
 )
 
-// EmailAssociationRequest represents the request defined at https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-register-email-requesttoken
+// EmailAssociationRequest represents the request defined
 type EmailAssociationRequest struct {
 	IDServer    string `json:"id_server"`
 	Secret      string `json:"client_secret"`
@@ -23,13 +23,13 @@ type EmailAssociationRequest struct {
 	SendAttempt int    `json:"send_attempt"`
 }
 
-// EmailAssociationCheckRequest represents the request defined at https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-account-3pid
+// EmailAssociationCheckRequest represents the request defined
 type EmailAssociationCheckRequest struct {
 	Creds Credentials `json:"three_pid_creds"`
 	Bind  bool        `json:"bind"`
 }
 
-// Credentials represents the "ThreePidCredentials" structure defined at https://matrix.org/docs/spec/client_server/r0.2.0.html#post-matrix-client-r0-account-3pid
+// Credentials represents the "ThreePidCredentials" structure defined 
 type Credentials struct {
 	SID      string `json:"sid"`
 	IDServer string `json:"id_server"`
@@ -52,7 +52,7 @@ func CreateSession(
 	}
 
 	// Create a session on the ID server
-	postURL := fmt.Sprintf("https://%s/_matrix/identity/api/v1/validate/email/requestToken", req.IDServer)
+	postURL := fmt.Sprintf("https://%s/_coddy/identity/api/v1/validate/email/requestToken", req.IDServer)
 
 	data := url.Values{}
 	data.Add("client_secret", req.Secret)
@@ -105,7 +105,7 @@ func CheckAssociation(
 		return false, "", "", err
 	}
 
-	requestURL := fmt.Sprintf("https://%s/_matrix/identity/api/v1/3pid/getValidated3pid?sid=%s&client_secret=%s", creds.IDServer, creds.SID, creds.Secret)
+	requestURL := fmt.Sprintf("https://%s/_coddy/identity/api/v1/3pid/getValidated3pid?sid=%s&client_secret=%s", creds.IDServer, creds.SID, creds.Secret)
 	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return false, "", "", err
@@ -138,7 +138,7 @@ func PublishAssociation(ctx context.Context, creds Credentials, userID string, c
 		return err
 	}
 
-	postURL := fmt.Sprintf("https://%s/_matrix/identity/api/v1/3pid/bind", creds.IDServer)
+	postURL := fmt.Sprintf("https://%s/_coddy/identity/api/v1/3pid/bind", creds.IDServer)
 
 	data := url.Values{}
 	data.Add("sid", creds.SID)

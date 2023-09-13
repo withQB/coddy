@@ -57,11 +57,11 @@ func (p *AccountDataStreamProvider) IncrementalSync(
 		return from
 	}
 
-	// Iterate over the rooms
-	for roomID, dataTypes := range dataTypes {
-		// For a complete sync, make sure we're only including this room if
-		// that room was present in the joined rooms.
-		if from == 0 && roomID != "" && !req.IsRoomPresent(roomID) {
+	// Iterate over the frames
+	for frameID, dataTypes := range dataTypes {
+		// For a complete sync, make sure we're only including this frame if
+		// that frame was present in the joined frames.
+		if from == 0 && frameID != "" && !req.IsFramePresent(frameID) {
 			continue
 		}
 
@@ -69,7 +69,7 @@ func (p *AccountDataStreamProvider) IncrementalSync(
 		for _, dataType := range dataTypes {
 			dataReq := userapi.QueryAccountDataRequest{
 				UserID:   req.Device.UserID,
-				RoomID:   roomID,
+				FrameID:   frameID,
 				DataType: dataType,
 			}
 			dataRes := userapi.QueryAccountDataResponse{}
@@ -78,7 +78,7 @@ func (p *AccountDataStreamProvider) IncrementalSync(
 				req.Log.WithError(err).Error("p.userAPI.QueryAccountData failed")
 				continue
 			}
-			if roomID == "" {
+			if frameID == "" {
 				if globalData, ok := dataRes.GlobalAccountData[dataType]; ok {
 					req.Response.AccountData.Events = append(
 						req.Response.AccountData.Events,
@@ -89,8 +89,8 @@ func (p *AccountDataStreamProvider) IncrementalSync(
 					)
 				}
 			} else {
-				if roomData, ok := dataRes.RoomAccountData[roomID][dataType]; ok {
-					joinData, ok := req.Response.Rooms.Join[roomID]
+				if frameData, ok := dataRes.FrameAccountData[frameID][dataType]; ok {
+					joinData, ok := req.Response.Frames.Join[frameID]
 					if !ok {
 						joinData = types.NewJoinResponse()
 					}
@@ -98,10 +98,10 @@ func (p *AccountDataStreamProvider) IncrementalSync(
 						joinData.AccountData.Events,
 						synctypes.ClientEvent{
 							Type:    dataType,
-							Content: spec.RawJSON(roomData),
+							Content: spec.RawJSON(frameData),
 						},
 					)
-					req.Response.Rooms.Join[roomID] = joinData
+					req.Response.Frames.Join[frameID] = joinData
 				}
 			}
 		}

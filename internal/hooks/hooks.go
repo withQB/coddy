@@ -8,12 +8,12 @@ import (
 
 const (
 	// KindNewEventPersisted is a hook which is called with *types.HeaderedEvent
-	// It is run when a new event is persisted in the roomserver.
+	// It is run when a new event is persisted in the dataframe.
 	// Usage:
 	//   hooks.Attach(hooks.KindNewEventPersisted, func(headeredEvent interface{}) { ... })
 	KindNewEventPersisted = "new_event_persisted"
 	// KindNewEventReceived is a hook which is called with *types.HeaderedEvent
-	// It is run before a new event is processed by the roomserver. This hook can be used
+	// It is run before a new event is processed by the dataframe. This hook can be used
 	// to modify the event before it is persisted by adding data to `unsigned`.
 	// Usage:
 	//   hooks.Attach(hooks.KindNewEventReceived, func(headeredEvent interface{}) {

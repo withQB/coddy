@@ -5,7 +5,7 @@ import (
 
 	"github.com/withqb/coddy/apis/federationapi/producers"
 	"github.com/withqb/coddy/apis/relayapi/storage"
-	rsAPI "github.com/withqb/coddy/servers/roomserver/api"
+	rsAPI "github.com/withqb/coddy/servers/dataframe/api"
 	"github.com/withqb/xtools"
 	"github.com/withqb/xtools/fclient"
 	"github.com/withqb/xtools/spec"
@@ -14,7 +14,7 @@ import (
 type RelayInternalAPI struct {
 	db                     storage.Database
 	fedClient              fclient.FederationClient
-	rsAPI                  rsAPI.RoomserverInternalAPI
+	rsAPI                  rsAPI.DataframeInternalAPI
 	keyRing                *xtools.KeyRing
 	producer               *producers.SyncAPIProducer
 	presenceEnabledInbound bool
@@ -26,7 +26,7 @@ type RelayInternalAPI struct {
 func NewRelayInternalAPI(
 	db storage.Database,
 	fedClient fclient.FederationClient,
-	rsAPI rsAPI.RoomserverInternalAPI,
+	rsAPI rsAPI.DataframeInternalAPI,
 	keyRing *xtools.KeyRing,
 	producer *producers.SyncAPIProducer,
 	presenceEnabledInbound bool,
